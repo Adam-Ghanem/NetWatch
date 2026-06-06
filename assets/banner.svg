@@ -1,0 +1,13 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="420" rx="34" fill="#0F172A"/>
+  <circle cx="1015" cy="72" r="130" fill="#1D4ED8" opacity="0.35"/>
+  <circle cx="165" cy="360" r="180" fill="#06B6D4" opacity="0.18"/>
+  <path d="M180 250C280 135 390 300 510 170C625 45 760 155 875 120C965 92 1032 140 1080 195" stroke="#38BDF8" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
+  <circle cx="180" cy="250" r="18" fill="#22C55E"/>
+  <circle cx="510" cy="170" r="18" fill="#22C55E"/>
+  <circle cx="875" cy="120" r="18" fill="#22C55E"/>
+  <path d="M945 238 l42 18 v43 c0 46 -32 75 -42 81 c-10 -6 -42 -35 -42 -81 v-43 l42 -18z" fill="#38BDF8" opacity="0.95"/>
+  <text x="90" y="145" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="700">NetWatch</text>
+  <text x="92" y="212" fill="#CBD5E1" font-family="Arial, Helvetica, sans-serif" font-size="30">Secure Network Monitoring Dashboard</text>
+  <text x="92" y="270" fill="#93C5FD" font-family="Arial, Helvetica, sans-serif" font-size="24">Ping • Local Scan • Port Assessment • Defensive Recommendations</text>
+</svg>

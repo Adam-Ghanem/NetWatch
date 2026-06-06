@@ -1,0 +1,35 @@
+"""NetWatch configuration.
+
+The defaults are intentionally conservative. NetWatch is designed for learning,
+lab environments, and authorized local-network administration.
+"""
+
+APP_NAME = "NetWatch"
+APP_VERSION = "1.0.0"
+
+MAX_HOSTS_PER_SCAN = 256
+MAX_WORKERS = 64
+DEFAULT_TIMEOUT = 0.6
+
+# Only these common service ports are scanned in the public UI.
+# This keeps the tool focused and avoids aggressive scanning behavior.
+COMMON_PORTS = {
+    20: "FTP Data",
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    8080: "HTTP Alternate",
+}
+
+HIGH_RISK_PORTS = {21, 23, 445, 3389, 3306, 5432}
+MEDIUM_RISK_PORTS = {22, 25, 53, 80, 110, 143, 8080}
