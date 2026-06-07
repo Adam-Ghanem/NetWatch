@@ -9,9 +9,31 @@ NetWatch is intended for authorized local-network monitoring, cybersecurity educ
 - Private/local IP target validation
 - Broad public scanning blocked by default
 - Conservative common-port scanning only
+- Maximum CIDR scan size
 - Explicit authorization checkbox before scan actions
 - Activity logging
 - Defensive recommendations only
+- Local AI Advisor with no external API calls
+- Dynamic UI text cleaned before entering custom HTML cards
+- CSV exports sanitized to reduce spreadsheet formula-injection risk
+- HTML report tables escaped before export
+- Generated local data ignored by Git
+
+## Local Data
+
+NetWatch may generate these local files while running:
+
+```text
+data/netwatch.db
+data/scan_history.csv
+logs/netwatch.log
+```
+
+These files can contain internal IP information and should not be committed or shared publicly.
+
+## Security Limits
+
+NetWatch is not a replacement for a full professional security audit. It does not include vulnerability exploitation, credential testing, stealth scanning, or brute-force logic.
 
 ## Reporting Issues
 
