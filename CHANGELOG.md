@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.1
+
+- Added Docker Compose deployment file.
+- Added company handover notes.
+- Added demo presentation script.
+- Added deployment guide.
+- Added acceptance checklist.
+- Added security review notes.
+- Added Kali/fish run guide.
+- Added GitHub issue templates for bugs and feature requests.
+- Updated README with company-ready documentation section.
+
 ## v0.3.0
 
 - Added SQLite-backed local asset inventory.
