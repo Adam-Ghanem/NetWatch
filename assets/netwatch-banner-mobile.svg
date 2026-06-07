@@ -1,0 +1,123 @@
+<svg width="1400" height="760" viewBox="0 0 1400 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(850 330) rotate(12) scale(520 340)">
+      <stop stop-color="#172554" stop-opacity="0.95"/>
+      <stop offset="0.45" stop-color="#581C87" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#030712" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blob" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(850 342) rotate(30) scale(240 150)">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.38" stop-color="#2563EB"/>
+      <stop offset="0.68" stop-color="#A855F7"/>
+      <stop offset="1" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="title" x1="156" y1="126" x2="650" y2="208" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.48" stop-color="#EAF2FF"/>
+      <stop offset="0.76" stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="line" x1="92" y1="0" x2="92" y2="170" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="0.52" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18" result="b"/>
+      <feBlend in="SourceGraphic" in2="b" mode="screen"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feBlend in="SourceGraphic" in2="b" mode="screen"/>
+    </filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" stroke="#1E3A5F" stroke-opacity="0.16"/>
+    </pattern>
+    <style>
+      .t{font-family:Inter,Arial,sans-serif}.b{font-family:Inter,Arial,sans-serif;font-weight:800}.muted{fill:#A9B8D3}.white{fill:#F8FAFC}.float{animation:float 6s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+    </style>
+  </defs>
+  <rect width="1400" height="760" rx="42" fill="#030712"/>
+  <rect width="1400" height="760" rx="42" fill="url(#grid)"/>
+  <rect width="1400" height="760" rx="42" fill="url(#bg)"/>
+
+  <g opacity="0.72">
+    <rect x="38" y="56" width="140" height="4" fill="#22D3EE" opacity="0.38"/>
+    <rect x="190" y="56" width="46" height="4" fill="#EC4899" opacity="0.48"/>
+    <rect x="690" y="82" width="120" height="4" fill="#8B5CF6" opacity="0.45"/>
+    <rect x="1080" y="625" width="170" height="4" fill="#22D3EE" opacity="0.30"/>
+    <rect x="1268" y="625" width="62" height="4" fill="#F97316" opacity="0.42"/>
+  </g>
+
+  <g transform="translate(90 84)">
+    <path d="M45 0L88 25V78L45 104L2 78V25L45 0Z" fill="#07111F" stroke="#DBEAFE" stroke-width="5"/>
+    <path d="M24 30L64 72M65 30L25 72" stroke="#F8FAFC" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="69" cy="23" r="8" fill="#A78BFA"/>
+    <circle cx="22" cy="80" r="8" fill="#22D3EE"/>
+    <circle cx="47" cy="52" r="6" fill="#C084FC"/>
+  </g>
+
+  <text x="210" y="174" fill="url(#title)" class="t" font-size="105" font-weight="900" letter-spacing="-4">NetWatch</text>
+  <line x1="92" y1="228" x2="92" y2="370" stroke="url(#line)" stroke-width="4"/>
+  <text x="126" y="266" class="t white" font-size="42" font-weight="600">Local network visibility</text>
+  <text x="126" y="322" class="t muted" font-size="27">Scan. Inspect. Understand.</text>
+  <text x="126" y="368" class="t muted" font-size="27">Private • Local • Safe</text>
+
+  <g filter="url(#glow)" class="float">
+    <path d="M806 118C900 68 1024 130 1038 232C1050 318 981 348 1025 428C1067 505 987 590 881 566C799 548 776 466 704 450C614 431 574 354 612 276C648 203 735 222 753 154C760 135 778 126 806 118Z" fill="url(#blob)" fill-opacity="0.62" stroke="#22D3EE" stroke-opacity="0.82" stroke-width="4"/>
+    <path d="M790 160C858 126 952 162 968 236C982 302 912 328 951 394C985 452 929 510 864 495C808 482 780 414 724 404C674 394 641 338 668 290C697 238 754 252 765 199C770 180 777 168 790 160Z" fill="#030712" fill-opacity="0.28" stroke="#A78BFA" stroke-opacity="0.58"/>
+  </g>
+
+  <g transform="translate(86 462)">
+    <g>
+      <rect width="250" height="146" rx="22" fill="#04130F" fill-opacity="0.78" stroke="#10B981" stroke-opacity="0.70"/>
+      <text x="25" y="42" fill="#34D399" class="b" font-size="18">HOSTS ONLINE</text>
+      <text x="25" y="102" class="t white" font-size="58" font-weight="900">18</text>
+      <text x="166" y="93" fill="#22C55E" class="b" font-size="24">↑12%</text>
+      <path d="M25 126C48 122 54 108 70 119C92 134 100 94 122 111C142 126 156 115 174 90C192 118 214 106 236 96" stroke="#22C55E" stroke-width="3" fill="none"/>
+      <circle cx="206" cy="46" r="8" fill="#22C55E" filter="url(#soft)"/>
+    </g>
+    <g transform="translate(280 0)">
+      <rect width="250" height="146" rx="22" fill="#06111F" fill-opacity="0.80" stroke="#0EA5E9" stroke-opacity="0.72"/>
+      <text x="25" y="42" fill="#93C5FD" class="b" font-size="18">PORT AUDIT</text>
+      <text x="25" y="102" class="t white" font-size="58" font-weight="900">7</text>
+      <text x="25" y="128" fill="#BBD4E8" class="t" font-size="18">Open Ports</text>
+      <path d="M128 126C144 134 154 100 168 119C181 140 192 100 206 108C222 118 232 88 244 74" stroke="#0EA5E9" stroke-width="3" fill="none"/>
+    </g>
+    <g transform="translate(560 0)">
+      <rect width="250" height="146" rx="22" fill="#12091D" fill-opacity="0.78" stroke="#A855F7" stroke-opacity="0.72"/>
+      <text x="25" y="42" fill="#D8B4FE" class="b" font-size="18">RISK SCORE</text>
+      <text x="25" y="102" class="t white" font-size="58" font-weight="900">Low</text>
+      <text x="25" y="128" fill="#D8B4FE" class="t" font-size="18">Advisor ready</text>
+    </g>
+  </g>
+
+  <g transform="translate(1025 420)">
+    <rect width="310" height="180" rx="24" fill="#06101C" fill-opacity="0.82" stroke="#22D3EE" stroke-opacity="0.55"/>
+    <text x="24" y="42" class="b white" font-size="22">NETWORK MAP</text>
+    <rect x="238" y="24" width="52" height="27" rx="14" fill="#06291F" stroke="#10B981" stroke-opacity="0.42"/>
+    <circle cx="253" cy="38" r="4" fill="#22F5A8"/>
+    <text x="264" y="44" fill="#22F5A8" class="b" font-size="13">LIVE</text>
+    <circle cx="156" cy="104" r="30" fill="#063B70" stroke="#22D3EE" stroke-width="2" filter="url(#soft)"/>
+    <rect x="142" y="94" width="28" height="19" rx="3" stroke="#22D3EE" stroke-width="3"/>
+    <g stroke="#0EA5E9" stroke-dasharray="4 6" opacity="0.72">
+      <path d="M156 104L82 76"/><path d="M156 104L234 76"/><path d="M156 104L90 140"/><path d="M156 104L232 140"/>
+    </g>
+    <circle cx="82" cy="76" r="17" fill="#29104D" stroke="#A855F7"/><circle cx="82" cy="76" r="6" fill="#A855F7"/>
+    <circle cx="234" cy="76" r="17" fill="#3A2209" stroke="#F59E0B"/><circle cx="234" cy="76" r="6" fill="#F59E0B"/>
+    <circle cx="90" cy="140" r="17" fill="#06345B" stroke="#0EA5E9"/><circle cx="90" cy="140" r="6" fill="#0EA5E9"/>
+    <circle cx="232" cy="140" r="17" fill="#063924" stroke="#10B981"/><circle cx="232" cy="140" r="6" fill="#10F2A2"/>
+  </g>
+
+  <g transform="translate(90 675)">
+    <text x="0" y="0" fill="#93A7C0" class="t" font-size="26">Python</text>
+    <text x="132" y="0" fill="#93A7C0" class="t" font-size="26">Streamlit</text>
+    <text x="312" y="0" fill="#93A7C0" class="t" font-size="26">SQLite</text>
+    <text x="456" y="0" fill="#93A7C0" class="t" font-size="26">Reports</text>
+  </g>
+  <g transform="translate(950 646)">
+    <rect width="360" height="52" rx="26" fill="#07111F" stroke="#8B5CF6" stroke-opacity="0.52"/>
+    <circle cx="34" cy="26" r="7" fill="#22C55E"/>
+    <text x="58" y="34" fill="#C7D2FE" class="t" font-size="22">Secure by default. Use responsibly.</text>
+  </g>
+</svg>
