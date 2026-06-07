@@ -1,35 +1,134 @@
-<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="360" rx="34" fill="#F7F4EE"/>
-  <rect x="1" y="1" width="1198" height="358" rx="33" stroke="#111111" stroke-width="2"/>
+<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(930 260) rotate(18) scale(520 270)">
+      <stop stop-color="#172BFF" stop-opacity="0.42"/>
+      <stop offset="0.46" stop-color="#4C1D95" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#02040A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="titleGrad" x1="160" y1="88" x2="710" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.42" stop-color="#DDEBFF"/>
+      <stop offset="0.68" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="blob" x1="860" y1="84" x2="1130" y2="424" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="0.42" stop-color="#06B6D4"/>
+      <stop offset="0.72" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
+    </filter>
+    <filter id="cardGlow" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
+    </filter>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" stroke="#14345A" stroke-opacity="0.18"/>
+    </pattern>
+  </defs>
 
-  <g transform="translate(54 42)">
-    <text x="0" y="0" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="3">NETWATCH / LOCAL NETWORK VISIBILITY</text>
-    <text x="0" y="98" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-5">Risk-aware</text>
-    <text x="0" y="182" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="86" font-weight="900" letter-spacing="-5">network checks</text>
-    <text x="2" y="232" fill="#333333" font-family="Inter, Arial, sans-serif" font-size="24">Host profile · port audit · inventory · reports</text>
+  <rect width="1600" height="520" rx="34" fill="#02040A"/>
+  <rect width="1600" height="520" rx="34" fill="url(#grid)" opacity="0.75"/>
+  <rect width="1600" height="520" rx="34" fill="url(#bgGlow)"/>
+
+  <g opacity="0.75">
+    <rect x="40" y="58" width="105" height="3" fill="#00E5FF" opacity="0.48"/>
+    <rect x="530" y="72" width="96" height="3" fill="#8B5CF6" opacity="0.55"/>
+    <rect x="1185" y="60" width="150" height="3" fill="#2563EB" opacity="0.42"/>
+    <rect x="1360" y="432" width="130" height="3" fill="#EC4899" opacity="0.42"/>
+    <rect x="730" y="444" width="112" height="3" fill="#00E5FF" opacity="0.50"/>
+    <rect x="84" y="445" width="184" height="3" fill="#7C3AED" opacity="0.32"/>
   </g>
 
-  <g transform="translate(760 48)">
-    <rect x="0" y="0" width="350" height="252" rx="26" fill="#FFFFFF" stroke="#111111" stroke-width="2"/>
-    <line x1="0" y1="64" x2="350" y2="64" stroke="#111111" stroke-width="2"/>
-    <text x="28" y="40" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">live sample</text>
-    <text x="28" y="104" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">192.168.1.1</text>
-    <text x="248" y="104" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">ONLINE</text>
-    <line x1="28" y1="126" x2="322" y2="126" stroke="#D8D2C8"/>
-    <text x="28" y="158" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15">Latency</text>
-    <text x="258" y="158" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">2.4 ms</text>
-    <text x="28" y="194" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15">Open services</text>
-    <text x="282" y="194" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">2</text>
-    <text x="28" y="230" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15">Exposure</text>
-    <text x="252" y="230" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700">Medium</text>
+  <g transform="translate(78 76)">
+    <path d="M44 0L87 25V77L44 102L0 77V25L44 0Z" fill="#07111F" stroke="#A5B4FC" stroke-width="5"/>
+    <path d="M27 30L61 69M61 30L27 69" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="67" cy="23" r="8" fill="#22D3EE"/>
+    <circle cx="20" cy="80" r="8" fill="#8B5CF6"/>
   </g>
 
-  <g transform="translate(54 304)">
-    <rect x="0" y="0" width="132" height="34" rx="17" fill="#111111"/>
-    <text x="24" y="23" fill="#F7F4EE" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="800">PRIVATE IP</text>
-    <rect x="148" y="0" width="142" height="34" rx="17" fill="#FFFFFF" stroke="#111111"/>
-    <text x="173" y="23" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="800">SAFE EXPORT</text>
-    <rect x="306" y="0" width="154" height="34" rx="17" fill="#FFFFFF" stroke="#111111"/>
-    <text x="331" y="23" fill="#111111" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="800">RISK ADVISOR</text>
+  <text x="205" y="154" fill="url(#titleGrad)" font-family="Inter, Arial, sans-serif" font-size="94" font-weight="900" letter-spacing="-4">NetWatch</text>
+  <text x="92" y="238" fill="#D6E3F8" font-family="Inter, Arial, sans-serif" font-size="35" font-weight="500">Local network monitor for lab and admin work</text>
+
+  <g transform="translate(92 285)">
+    <line x1="0" y1="0" x2="0" y2="54" stroke="#22D3EE" stroke-width="3"/>
+    <circle cx="44" cy="27" r="17" stroke="#00FFE0" stroke-width="4"/>
+    <circle cx="44" cy="27" r="5" fill="#00FFE0"/>
+    <text x="76" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Scan</text>
+    <circle cx="204" cy="27" r="17" stroke="#38BDF8" stroke-width="4"/>
+    <line x1="216" y1="39" x2="230" y2="53" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+    <text x="248" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Inspect</text>
+    <rect x="420" y="34" width="8" height="18" fill="#A855F7"/>
+    <rect x="434" y="22" width="8" height="30" fill="#A855F7"/>
+    <rect x="448" y="10" width="8" height="42" fill="#A855F7"/>
+    <text x="480" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Understand</text>
+  </g>
+
+  <g transform="translate(74 365)">
+    <g>
+      <rect width="196" height="112" rx="16" fill="#03130F" fill-opacity="0.72" stroke="#00FF99" stroke-opacity="0.62"/>
+      <text x="20" y="32" fill="#2EFFA8" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">HOSTS ONLINE</text>
+      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">18</text>
+      <text x="132" y="73" fill="#2EFFA8" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="800">↑ 12%</text>
+      <path d="M20 95C35 92 39 83 52 91C66 101 75 78 88 86C103 95 115 93 126 74C140 92 151 88 168 80" stroke="#00FF99" stroke-width="2" fill="none"/>
+    </g>
+    <g transform="translate(218 0)">
+      <rect width="196" height="112" rx="16" fill="#06111F" fill-opacity="0.76" stroke="#0EA5E9" stroke-opacity="0.66"/>
+      <text x="20" y="32" fill="#60C5FF" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">PORT AUDIT</text>
+      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">7</text>
+      <text x="20" y="100" fill="#BBD4E8" font-family="Inter, Arial, sans-serif" font-size="14">Open Ports</text>
+      <path d="M104 94C116 100 126 72 136 87C146 105 154 76 164 80C175 84 180 69 190 60" stroke="#0EA5E9" stroke-width="2" fill="none"/>
+    </g>
+    <g transform="translate(436 0)">
+      <rect width="196" height="112" rx="16" fill="#12091D" fill-opacity="0.75" stroke="#A855F7" stroke-opacity="0.70"/>
+      <text x="20" y="32" fill="#D57DFF" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">RISKS FOUND</text>
+      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">2</text>
+      <text x="20" y="100" fill="#D57DFF" font-family="Inter, Arial, sans-serif" font-size="14">Low Risk</text>
+      <path d="M104 98C114 90 124 100 134 84C144 103 152 66 164 90C174 77 184 85 190 70" stroke="#A855F7" stroke-width="2" fill="none"/>
+    </g>
+    <g transform="translate(654 0)">
+      <rect width="196" height="112" rx="16" fill="#160F08" fill-opacity="0.74" stroke="#F59E0B" stroke-opacity="0.64"/>
+      <text x="20" y="32" fill="#FBBF24" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">REPORT</text>
+      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">MD</text>
+      <text x="20" y="100" fill="#E8D7B8" font-family="Inter, Arial, sans-serif" font-size="14">Export ready</text>
+    </g>
+  </g>
+
+  <g filter="url(#softGlow)" opacity="0.88">
+    <path d="M944 76C1018 42 1106 78 1125 158C1140 221 1087 244 1117 304C1151 371 1082 438 1008 425C950 415 925 357 874 348C813 337 775 282 798 225C819 171 883 185 895 133C902 104 917 88 944 76Z" fill="url(#blob)" fill-opacity="0.35" stroke="#22D3EE" stroke-opacity="0.78" stroke-width="3"/>
+    <path d="M933 96C992 68 1063 96 1078 160C1092 217 1036 239 1066 295C1093 347 1043 395 989 385C942 376 919 320 873 313C830 307 802 268 820 226C839 182 890 191 900 145C905 120 913 105 933 96Z" fill="#050B18" fill-opacity="0.35" stroke="#8B5CF6" stroke-opacity="0.58"/>
+  </g>
+  <g opacity="0.64">
+    <circle cx="982" cy="198" r="2" fill="#22D3EE"/><circle cx="1012" cy="226" r="2" fill="#8B5CF6"/><circle cx="950" cy="276" r="2" fill="#22D3EE"/><circle cx="1032" cy="330" r="2" fill="#22D3EE"/><circle cx="888" cy="235" r="2" fill="#FFFFFF"/><circle cx="1084" cy="170" r="2" fill="#FFFFFF"/>
+  </g>
+
+  <g transform="translate(1170 86)">
+    <rect width="360" height="286" rx="18" fill="#06101C" fill-opacity="0.72" stroke="#22D3EE" stroke-opacity="0.55"/>
+    <text x="22" y="40" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800">NETWORK MAP</text>
+    <rect x="292" y="19" width="48" height="26" rx="13" fill="#06291F" stroke="#10B981" stroke-opacity="0.45"/>
+    <circle cx="307" cy="32" r="4" fill="#22F5A8"/>
+    <text x="316" y="38" fill="#22F5A8" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="800">LIVE</text>
+    <circle cx="180" cy="160" r="38" fill="#063B70" stroke="#00A3FF" stroke-width="2" filter="url(#cardGlow)"/>
+    <rect x="162" y="146" width="36" height="24" rx="3" stroke="#22D3EE" stroke-width="4"/>
+    <line x1="180" y1="170" x2="180" y2="183" stroke="#22D3EE" stroke-width="4"/>
+    <line x1="160" y1="185" x2="200" y2="185" stroke="#22D3EE" stroke-width="4" stroke-linecap="round"/>
+    <g stroke="#0EA5E9" stroke-dasharray="4 5" opacity="0.8">
+      <path d="M180 160L100 116"/><path d="M180 160L268 116"/><path d="M180 160L180 76"/><path d="M180 160L105 218"/><path d="M180 160L272 218"/>
+    </g>
+    <g>
+      <circle cx="180" cy="76" r="25" fill="#063924" stroke="#10B981"/><circle cx="180" cy="76" r="9" fill="#10F2A2"/>
+      <text x="211" y="82" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.10</text>
+      <circle cx="100" cy="116" r="25" fill="#29104D" stroke="#A855F7"/><circle cx="100" cy="116" r="9" fill="#A855F7"/>
+      <text x="129" y="121" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.23</text>
+      <circle cx="268" cy="116" r="25" fill="#3A2209" stroke="#F59E0B"/><circle cx="268" cy="116" r="9" fill="#F59E0B"/>
+      <text x="297" y="121" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.28</text>
+      <circle cx="105" cy="218" r="25" fill="#06345B" stroke="#0EA5E9"/><circle cx="105" cy="218" r="9" fill="#0EA5E9"/>
+      <text x="134" y="224" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.15</text>
+      <circle cx="272" cy="218" r="25" fill="#2C0D57" stroke="#7C3AED"/><circle cx="272" cy="218" r="9" fill="#7C3AED"/>
+      <text x="301" y="224" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.31</text>
+    </g>
   </g>
 </svg>
