@@ -13,7 +13,7 @@ NetWatch is intended for authorized local-network monitoring, cybersecurity educ
 - Explicit authorization checkbox before scan actions
 - Activity logging
 - Defensive recommendations only
-- Local AI Advisor with no external API calls
+- Local Risk Advisor with no external service calls
 - Dynamic UI text cleaned before entering custom HTML cards
 - CSV exports sanitized to reduce spreadsheet formula-injection risk
 - HTML report tables escaped before export
