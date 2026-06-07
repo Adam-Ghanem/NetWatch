@@ -26,15 +26,15 @@ st.set_page_config(page_title=APP_NAME, page_icon="🛡️", layout="wide")
 st.markdown(
     r"""
 <style>
-:root{--paper:#f7f4ee;--ink:#111;--muted:#756f66;--soft:#e8e1d7;--card:#fffdf8}
+:root{--paper:#f7f4ee;--ink:#111;--muted:#756f66;--card:#fffdf8}
 .stApp{background:linear-gradient(90deg,rgba(17,17,17,.045) 1px,transparent 1px),linear-gradient(180deg,rgba(17,17,17,.045) 1px,transparent 1px),var(--paper);background-size:44px 44px;color:var(--ink)}
 .block-container{max-width:1340px;padding-top:2rem}.main .block-container{padding-left:3rem;padding-right:3rem}
 div[data-testid="stSidebarContent"]{background:#fff;border-right:2px solid var(--ink);padding-top:1.2rem}div[data-testid="stSidebarContent"] img{display:none}div[data-testid="stSidebarContent"] *{color:var(--ink)!important}
 .brand-card{border:2px solid var(--ink);border-radius:18px;background:var(--paper);padding:1.2rem 1.25rem;margin:.5rem 0 1.4rem}.brand-title{font-size:1.55rem;font-weight:950;letter-spacing:-.05em}.brand-sub{color:var(--muted)!important;font-size:.92rem;margin-top:.2rem}
-div[role="radiogroup"] label{border-radius:999px;padding:.36rem .55rem;margin:.16rem 0}.hero{border-top:3px solid var(--ink);border-bottom:3px solid var(--ink);padding:1.9rem 0 1.4rem;margin-bottom:1.45rem}.hero-kicker{font-size:.86rem;font-weight:950;letter-spacing:.16em;text-transform:uppercase;margin-bottom:1.05rem}.hero-title-wrap{overflow:hidden;max-width:1020px}.hero-line{display:block;overflow:hidden;line-height:.88}.drop-word{display:inline-block;font-size:clamp(4rem,8.8vw,7.6rem);font-weight:950;line-height:.92;letter-spacing:-.08em;transform:translateY(-120%);opacity:0;animation:dropWord .95s cubic-bezier(.2,.9,.2,1) forwards;will-change:transform,opacity}.drop-word.space{margin-right:.22em}.w1{animation-delay:.02s}.w2{animation-delay:.18s}.w3{animation-delay:.34s}.w4{animation-delay:.50s}@keyframes dropWord{0%{transform:translateY(-120%);opacity:0}62%{transform:translateY(8%);opacity:1}82%{transform:translateY(-3%);opacity:1}100%{transform:translateY(0);opacity:1}}
+div[role="radiogroup"] label{border-radius:999px;padding:.36rem .55rem;margin:.16rem 0}.hero{border-top:3px solid var(--ink);border-bottom:3px solid var(--ink);padding:1.9rem 0 1.4rem;margin-bottom:1.45rem}.hero-kicker{font-size:.86rem;font-weight:950;letter-spacing:.16em;text-transform:uppercase;margin-bottom:1.05rem}.hero-title-wrap{overflow:hidden;max-width:1050px}.hero-line{display:block;overflow:hidden;line-height:.88}.letter{display:inline-block;font-size:clamp(4rem,8.8vw,7.6rem);font-weight:950;line-height:.92;letter-spacing:-.08em;transform:translateY(-145%) rotate(-2deg);filter:blur(8px);opacity:0;animation:letterDrop 1.6s cubic-bezier(.16,1,.24,1) forwards;animation-delay:calc(var(--i) * 70ms);will-change:transform,opacity,filter}.letter.space{width:.22em}.word-gap{display:inline-block;width:.26em}@keyframes letterDrop{0%{transform:translateY(-145%) rotate(-2deg);filter:blur(8px);opacity:0}55%{transform:translateY(12%) rotate(.5deg);filter:blur(0);opacity:1}75%{transform:translateY(-4%) rotate(0);opacity:1}100%{transform:translateY(0) rotate(0);filter:blur(0);opacity:1}}
 .hero-subtitle{color:var(--muted);font-size:clamp(1.2rem,2.2vw,1.7rem);line-height:1.3;max-width:980px;margin-top:1rem}.pill{display:inline-block;border:2px solid var(--ink);border-radius:999px;background:#fff;color:var(--ink);padding:.5rem .8rem;margin-right:.55rem;margin-top:1.25rem;font-size:.84rem;font-weight:950;text-transform:uppercase;letter-spacing:.04em}.pill.dark{background:var(--ink);color:var(--paper)}
 .metric-card{border:2px solid var(--ink);border-radius:20px;background:#fff;padding:1.2rem 1.35rem;min-height:135px;box-shadow:9px 9px 0 var(--ink)}.metric-label{color:var(--muted);font-size:.84rem;text-transform:uppercase;letter-spacing:.11em;font-weight:950}.metric-value{font-size:2.7rem;line-height:1;font-weight:950;letter-spacing:-.04em;margin-top:.5rem}.metric-note{color:var(--muted);font-size:1rem;margin-top:.45rem}.panel{border:2px solid var(--ink);border-radius:20px;background:var(--card);padding:1.2rem 1.35rem;margin-bottom:1rem}.section-title{font-size:1.05rem;letter-spacing:.13em;text-transform:uppercase;font-weight:950;margin:1.35rem 0 .8rem}.muted{color:var(--muted);line-height:1.5;font-size:1rem}.stButton>button,.stDownloadButton>button{border:2px solid var(--ink)!important;border-radius:999px!important;background:var(--ink)!important;color:var(--paper)!important;font-weight:900!important;text-transform:uppercase;letter-spacing:.04em}.stTextInput input{border:2px solid var(--ink)!important;border-radius:14px!important;background:#fff!important;color:var(--ink)!important}div[data-testid="stDataFrame"]{border:2px solid var(--ink);border-radius:18px;overflow:hidden;background:#fff}
-@media (prefers-reduced-motion: reduce){.drop-word{animation:none;transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.letter{animation:none;transform:none;opacity:1;filter:none}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -55,6 +55,18 @@ def init_state() -> None:
     st.session_state.setdefault("events", [])
 
 
+def letters(text: str, start: int = 0) -> str:
+    out = []
+    index = start
+    for ch in text:
+        if ch == " ":
+            out.append('<span class="word-gap"></span>')
+            continue
+        out.append(f'<span class="letter" style="--i:{index}">{clean_text(ch, 2)}</span>')
+        index += 1
+    return "".join(out)
+
+
 def metric_card(label: str, value: str | int | float, note: str = "") -> None:
     st.markdown(
         "<div class='metric-card'>"
@@ -67,13 +79,15 @@ def metric_card(label: str, value: str | int | float, note: str = "") -> None:
 
 
 def hero() -> None:
+    line1 = letters("Local network,", 0)
+    line2 = letters("clear signals.", 14)
     st.markdown(
         f"""
         <div class="hero">
             <div class="hero-kicker">NetWatch / Defensive Network Visibility</div>
             <div class="hero-title-wrap">
-                <span class="hero-line"><span class="drop-word w1 space">Local</span><span class="drop-word w2 space">network,</span></span>
-                <span class="hero-line"><span class="drop-word w3 space">clear</span><span class="drop-word w4">signals.</span></span>
+                <span class="hero-line">{line1}</span>
+                <span class="hero-line">{line2}</span>
             </div>
             <div class="hero-subtitle">Host profiling, service checks, inventory, risk scoring, and clean reports for authorized local networks.</div>
             <span class="pill dark">v{APP_VERSION}</span><span class="pill">Private IP Only</span><span class="pill">Risk Advisor</span><span class="pill">Safe Exports</span>
