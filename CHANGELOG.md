@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.5.2
+
+- Renamed the advisor feature to Risk Advisor.
+- Added `advisory_engine.py`.
+- Added `docs/advisory-engine.md`.
+- Added `tests/test_advisory_engine.py`.
+- Updated app labels and export file names.
+- Updated README and security notes with neutral advisor wording.
+
 ## v0.5.1
 
 - Added safe text helper for custom Streamlit HTML cards.
@@ -12,14 +21,14 @@
 
 ## v0.5.0
 
-- Added local AI Advisor engine.
-- Added AI Advisor page to the Streamlit sidebar.
-- Added AI-style defensive summary from scan, port and inventory results.
-- Added risk-level explanation, priority findings and suggested next steps.
-- Added Markdown export for AI advice.
-- Added AI Advisor documentation.
-- Added tests for AI Advisor logic.
-- Updated README with AI integration notes.
+- Added local advisory engine.
+- Added Risk Advisor page to the Streamlit sidebar.
+- Added summary output from scan, port and inventory results.
+- Added level explanation, priority findings and suggested next steps.
+- Added Markdown export for advisor notes.
+- Added advisor documentation.
+- Added tests for advisor logic.
+- Updated README with advisor integration notes.
 
 ## v0.4.0
 
