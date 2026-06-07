@@ -1,18 +1,14 @@
-"""NetWatch configuration.
-
-The defaults are intentionally conservative. NetWatch is designed for learning,
-lab environments, and authorized local-network administration.
-"""
+"""Basic configuration for NetWatch."""
 
 APP_NAME = "NetWatch"
-APP_VERSION = "1.0.0"
+APP_VERSION = "0.1.0"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
 DEFAULT_TIMEOUT = 0.6
 
-# Only these common service ports are scanned in the public UI.
-# This keeps the tool focused and avoids aggressive scanning behavior.
+# Common services checked by the app. The list is intentionally short
+# because this project is for local/admin practice, not aggressive scanning.
 COMMON_PORTS = {
     20: "FTP Data",
     21: "FTP",
