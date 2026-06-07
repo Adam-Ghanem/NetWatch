@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from ai_advisor import advice_to_markdown, build_ai_advice
+from advisory_engine import advice_to_markdown, build_advice
 from config import APP_NAME, APP_VERSION
 from export_utils import safe_csv_bytes
 from history_store import add_history, load_history
@@ -78,9 +78,9 @@ def hero() -> None:
         <div class="hero">
             <div class="hero-title">🛡️ {clean_text(APP_NAME, 40)}</div>
             <div class="hero-subtitle">
-                Local network visibility dashboard with host profiling, AI-style advisory summaries, service metadata, inventory storage, risk scoring, and reports.
+                Local network visibility dashboard with host profiling, advisory summaries, service metadata, inventory storage, risk scoring, and reports.
             </div>
-            <span class="pill">v{clean_text(APP_VERSION, 20)}</span><span class="pill">Private IP only</span><span class="pill">AI Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
+            <span class="pill">v{clean_text(APP_VERSION, 20)}</span><span class="pill">Private IP only</span><span class="pill">Risk Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -276,19 +276,19 @@ def show_port_audit() -> None:
     st.download_button("Download detailed port CSV", safe_csv_bytes(ports_df), "netwatch_detailed_ports.csv", "text/csv")
 
 
-def show_ai_advisor() -> None:
+def show_risk_advisor() -> None:
     hero()
-    st.markdown('<div class="section-title">AI Advisor</div>', unsafe_allow_html=True)
-    st.caption("Local AI-style advisor. It reads NetWatch results and generates a clear defensive summary without sending data to an external service.")
+    st.markdown('<div class="section-title">Risk Advisor</div>', unsafe_allow_html=True)
+    st.caption("Local rule-based advisor. It reads NetWatch results and generates a clear defensive summary without sending data to an external service.")
 
     hosts_df = st.session_state.network_results
     ports_df = st.session_state.port_results
     inventory = asset_inventory()
-    advice = build_ai_advice(hosts_df.to_dict("records"), ports_df.to_dict("records"), inventory)
+    advice = build_advice(hosts_df.to_dict("records"), ports_df.to_dict("records"), inventory)
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        metric_card("Risk level", advice.risk_level, "AI advisor output")
+        metric_card("Risk level", advice.risk_level, "Advisor output")
     with c2:
         metric_card("Confidence", advice.confidence, "Based on available data")
     with c3:
@@ -304,7 +304,7 @@ def show_ai_advisor() -> None:
 
     st.info(advice.note)
     markdown = advice_to_markdown(advice)
-    st.download_button("Download AI advice Markdown", markdown.encode("utf-8"), "netwatch_ai_advice.md", "text/markdown")
+    st.download_button("Download advisor notes", markdown.encode("utf-8"), "netwatch_advisor_notes.md", "text/markdown")
 
 
 def show_inventory() -> None:
@@ -387,8 +387,8 @@ def show_safety() -> None:
     - HTML reports escape table values before export.
     - Generated local database and logs are ignored by Git.
 
-    ### AI Advisor notes
-    - The AI Advisor is local and rule-based.
+    ### Advisor notes
+    - The Risk Advisor is local and rule-based.
     - It does not send scan results to an external service.
     - It explains risk and next steps from the data already shown in NetWatch.
     - It does not replace a full professional security audit.
@@ -406,7 +406,7 @@ with st.sidebar:
     st.image("assets/netwatch-banner-v2.svg", use_container_width=True)
     st.markdown(f"**{APP_NAME}**")
     st.caption(f"Local defensive dashboard · v{APP_VERSION}")
-    page = st.radio("Navigation", ["Overview", "Network Scan", "Host Check", "Port Audit", "AI Advisor", "Inventory", "Network Tools", "Reports", "Safety"])
+    page = st.radio("Navigation", ["Overview", "Network Scan", "Host Check", "Port Audit", "Risk Advisor", "Inventory", "Network Tools", "Reports", "Safety"])
     st.divider()
     st.caption("Private networks only. Keep it local and authorized.")
 
@@ -418,8 +418,8 @@ elif page == "Host Check":
     show_host_check()
 elif page == "Port Audit":
     show_port_audit()
-elif page == "AI Advisor":
-    show_ai_advisor()
+elif page == "Risk Advisor":
+    show_risk_advisor()
 elif page == "Inventory":
     show_inventory()
 elif page == "Network Tools":
