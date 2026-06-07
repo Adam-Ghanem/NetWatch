@@ -1,13 +1,53 @@
 <svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="420" rx="34" fill="#0F172A"/>
-  <circle cx="1015" cy="72" r="130" fill="#1D4ED8" opacity="0.35"/>
-  <circle cx="165" cy="360" r="180" fill="#06B6D4" opacity="0.18"/>
-  <path d="M180 250C280 135 390 300 510 170C625 45 760 155 875 120C965 92 1032 140 1080 195" stroke="#38BDF8" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
-  <circle cx="180" cy="250" r="18" fill="#22C55E"/>
-  <circle cx="510" cy="170" r="18" fill="#22C55E"/>
-  <circle cx="875" cy="120" r="18" fill="#22C55E"/>
-  <path d="M945 238 l42 18 v43 c0 46 -32 75 -42 81 c-10 -6 -42 -35 -42 -81 v-43 l42 -18z" fill="#38BDF8" opacity="0.95"/>
-  <text x="90" y="145" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="700">NetWatch</text>
-  <text x="92" y="212" fill="#CBD5E1" font-family="Arial, Helvetica, sans-serif" font-size="30">Secure Network Monitoring Dashboard</text>
-  <text x="92" y="270" fill="#93C5FD" font-family="Arial, Helvetica, sans-serif" font-size="24">Ping • Local Scan • Port Assessment • Defensive Recommendations</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="0.55" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="line" x1="130" y1="278" x2="1050" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="0.5" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <filter id="glow" x="-30" y="-30" width="1260" height="480" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="420" rx="34" fill="url(#bg)"/>
+  <circle cx="1040" cy="58" r="150" fill="#2563EB" opacity="0.20"/>
+  <circle cx="155" cy="345" r="210" fill="#06B6D4" opacity="0.13"/>
+  <circle cx="725" cy="365" r="150" fill="#22C55E" opacity="0.08"/>
+
+  <g opacity="0.20">
+    <path d="M70 322H1130" stroke="#94A3B8"/>
+    <path d="M70 262H1130" stroke="#94A3B8"/>
+    <path d="M70 202H1130" stroke="#94A3B8"/>
+    <path d="M70 142H1130" stroke="#94A3B8"/>
+    <path d="M170 70V350" stroke="#94A3B8"/>
+    <path d="M330 70V350" stroke="#94A3B8"/>
+    <path d="M490 70V350" stroke="#94A3B8"/>
+    <path d="M650 70V350" stroke="#94A3B8"/>
+    <path d="M810 70V350" stroke="#94A3B8"/>
+    <path d="M970 70V350" stroke="#94A3B8"/>
+  </g>
+
+  <path d="M125 278C230 175 333 330 455 214C570 112 642 170 752 138C876 101 962 134 1060 86" stroke="url(#line)" stroke-width="10" stroke-linecap="round" filter="url(#glow)"/>
+  <g>
+    <circle cx="125" cy="278" r="17" fill="#22C55E"/>
+    <circle cx="455" cy="214" r="17" fill="#38BDF8"/>
+    <circle cx="752" cy="138" r="17" fill="#A78BFA"/>
+    <circle cx="1060" cy="86" r="17" fill="#22C55E"/>
+  </g>
+
+  <g transform="translate(910 225)">
+    <path d="M72 0l58 24v63c0 58-43 94-58 103C57 181 14 145 14 87V24L72 0z" fill="#0EA5E9" opacity="0.92"/>
+    <path d="M72 39v78" stroke="#E0F2FE" stroke-width="10" stroke-linecap="round"/>
+    <path d="M39 75h66" stroke="#E0F2FE" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <text x="82" y="135" fill="#F8FAFC" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="800" letter-spacing="-2">NetWatch</text>
+  <text x="86" y="196" fill="#CBD5E1" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="500">Local Network Monitoring Dashboard</text>
+  <text x="86" y="252" fill="#7DD3FC" font-family="Inter, Arial, Helvetica, sans-serif" font-size="23">Ping sweep · Host check · Port audit · Scan history · Markdown reports</text>
 </svg>
