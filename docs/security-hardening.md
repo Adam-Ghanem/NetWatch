@@ -1,6 +1,6 @@
 # Security Hardening Notes
 
-This document records the defensive controls added to keep NetWatch safe for local demos and company review.
+This document records the defensive controls used in NetWatch.
 
 ## Target safety
 
@@ -11,9 +11,9 @@ This document records the defensive controls added to keep NetWatch safe for loc
 
 ## UI safety
 
-NetWatch uses custom Streamlit HTML for visual cards. Dynamic values are cleaned before being inserted into those cards.
+Custom Streamlit HTML cards use cleaned dynamic values.
 
-The helper is implemented in:
+Related file:
 
 ```text
 safe_text.py
@@ -21,9 +21,9 @@ safe_text.py
 
 ## Export safety
 
-CSV files can be opened in spreadsheet tools, so exported values are sanitized to reduce formula-injection risk.
+CSV exports are sanitized to reduce spreadsheet formula-injection risk.
 
-The helper is implemented in:
+Related file:
 
 ```text
 export_utils.py
@@ -31,16 +31,11 @@ export_utils.py
 
 ## Report safety
 
-HTML reports escape table values before exporting. Markdown reports are previewed through Streamlit without enabling unsafe HTML.
+HTML reports escape table values before export. Markdown reports are previewed through Streamlit without unsafe HTML.
 
-## AI Advisor privacy
+## Risk Advisor privacy
 
-The AI Advisor is local and rule-based:
-
-- No external API call
-- No API key
-- No Internet dependency
-- No scan data leaves the machine
+The Risk Advisor is a local rule-based module. It uses the current dashboard data and generated inventory files on the same machine.
 
 ## Local data
 
@@ -56,11 +51,4 @@ These files can contain internal IP information and should not be shared publicl
 
 ## Remaining production requirements
 
-For a real company deployment, add:
-
-- Organization authentication or SSO
-- Approved scan ranges from a config file
-- Role-based access control
-- Centralized logging
-- Report approval workflow
-- Retention policy for local scan history
+For a real company deployment, add organization authentication, approved scan ranges, role-based access control, centralized logging, report approval workflow, and retention policy.
