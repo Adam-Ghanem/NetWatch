@@ -21,6 +21,23 @@ def summarize_ports(port_rows: Iterable[dict]) -> dict[str, int]:
     }
 
 
+def _dataframe_to_markdown(df: pd.DataFrame) -> str:
+    """Build a small Markdown table without extra optional packages."""
+    if df.empty:
+        return "No data."
+
+    columns = [str(column) for column in df.columns]
+    header = "| " + " | ".join(columns) + " |"
+    divider = "| " + " | ".join(["---"] * len(columns)) + " |"
+    rows = []
+
+    for _, row in df.iterrows():
+        values = [str(row[column]).replace("\n", " ") for column in df.columns]
+        rows.append("| " + " | ".join(values) + " |")
+
+    return "\n".join([header, divider, *rows])
+
+
 def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
     """Create a simple Markdown report from the latest in-memory scan results."""
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -50,16 +67,16 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
     ]
 
     if not hosts_df.empty:
-        lines.extend(["## Online hosts", "", hosts_df.to_markdown(index=False), ""])
+        lines.extend(["## Online hosts", "", _dataframe_to_markdown(hosts_df), ""])
 
     if not ports_df.empty:
         open_ports = ports_df[ports_df["Status"] == "Open"]
-        lines.extend(["## Port assessment", "", ports_df.to_markdown(index=False), ""])
+        lines.extend(["## Port assessment", "", _dataframe_to_markdown(ports_df), ""])
         if not open_ports.empty:
             lines.extend([
                 "## Recommended checks",
                 "",
-                open_ports[["Port", "Service", "Risk", "Recommendation"]].to_markdown(index=False),
+                _dataframe_to_markdown(open_ports[["Port", "Service", "Risk", "Recommendation"]]),
                 "",
             ])
 
