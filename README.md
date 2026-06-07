@@ -1,46 +1,41 @@
-# NetWatch - Secure Network Monitoring Dashboard
+# NetWatch
 
-![NetWatch Banner](assets/banner.svg)
+NetWatch is a small Python/Streamlit project for basic local network monitoring.
 
-NetWatch is a professional, beginner-friendly cybersecurity and networking dashboard built with **Python** and **Streamlit**. It helps students, network technicians, and cybersecurity learners monitor authorized local networks, check host availability, assess common open ports, and export simple reports.
+I built it as a cybersecurity/networking portfolio project while practicing Python, network scanning concepts, and defensive security. The goal is simple: check devices on a local network, test one host with ping, scan a short list of common ports, and show the result in a clean dashboard.
 
-> **Ethical use only:** NetWatch is designed for private/local networks you own or have explicit permission to test.
+> Use this only on networks you own or where you have permission.
 
-## Highlights
+## What it does
 
-- Secure-by-default local/private target validation
-- Clean Streamlit dashboard
-- Authorized local network ping sweep
-- Single-host ping checker
-- Conservative common TCP port scanner
-- Risk classification for open services
-- Practical hardening recommendations
-- CSV export for findings
-- Local activity logging
-- Professional GitHub structure with tests, Dockerfile, CI, and security policy
+- Checks if a private/local IP is online using ping
+- Scans a local CIDR range such as `192.168.1.0/24`
+- Checks common TCP ports like SSH, HTTP, SMB, MySQL and RDP
+- Blocks public Internet targets from the app
+- Shows basic risk levels and simple hardening advice
+- Exports scan results as CSV
+- Keeps a local activity log in `logs/netwatch.log`
 
-## Screenshots
+## Why I made it
 
-Add screenshots after running the app:
+I wanted a practical project related to networking and cybersecurity, not just a static website. NetWatch helped me practice:
 
-```text
-screenshots/dashboard.png
-screenshots/network-scan.png
-screenshots/port-scan.png
-```
+- Python modules and clean file structure
+- Streamlit dashboards
+- IP/CIDR validation
+- Socket programming basics
+- Defensive security thinking
+- GitHub project organization
 
-## Tech Stack
+## Tech stack
 
 - Python
 - Streamlit
 - Pandas
 - Plotly
-- Socket
-- Subprocess
-- ThreadPoolExecutor
 - Pytest
 
-## Project Structure
+## Project structure
 
 ```text
 NetWatch/
@@ -58,44 +53,57 @@ NetWatch/
 ├── Dockerfile
 ├── Makefile
 ├── LICENSE
-├── .gitignore
-├── .streamlit/
-│   └── config.toml
-├── .github/
-│   └── workflows/
-│       └── python-ci.yml
 ├── assets/
 │   └── banner.svg
 ├── data/
 │   └── sample_hosts.csv
-├── screenshots/
-│   └── .gitkeep
 └── tests/
     └── test_security.py
 ```
 
 ## Installation
 
+Clone the repository:
+
 ```bash
 git clone https://github.com/Adam-Ghanem/NetWatch.git
 cd NetWatch
+```
+
+Create and activate a virtual environment:
+
+```bash
 python -m venv venv
 ```
 
-### Windows
+Windows:
 
 ```bash
 venv\Scripts\activate
-pip install -r requirements.txt
-streamlit run app.py
 ```
 
-### Linux/macOS
+Linux/macOS:
 
 ```bash
 source venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
+
+Run the app:
+
+```bash
 streamlit run app.py
+```
+
+Open the local URL shown by Streamlit, usually:
+
+```text
+http://localhost:8501
 ```
 
 ## Docker
@@ -105,48 +113,32 @@ docker build -t netwatch .
 docker run -p 8501:8501 netwatch
 ```
 
-Then open:
+## Safety notes
 
-```text
-http://localhost:8501
+NetWatch is intentionally limited:
+
+- It only accepts private/local IP ranges.
+- It limits the number of hosts in one scan.
+- It checks a short list of common ports only.
+- It does not include exploitation, brute force, password attacks, stealth, or evasion.
+- The port advice is basic and defensive.
+
+## Current limits
+
+This is still a beginner/portfolio project. Some things I want to improve later:
+
+- Add PDF report export
+- Save scan history in a small database
+- Add screenshots after running it on a lab network
+- Improve device naming/vendor detection
+- Add better error handling for Windows/Linux ping differences
+
+## Tests
+
+```bash
+pytest -q
 ```
-
-## Usage
-
-1. Open the Streamlit dashboard.
-2. Go to **Ping Checker** to test one private/local IP.
-3. Go to **Network Scan** and enter a CIDR such as `192.168.1.0/24`.
-4. Go to **Port Scanner** to check common ports on an authorized host.
-5. Return to **Dashboard** to review metrics and export CSV reports.
-
-## Security Safeguards
-
-NetWatch intentionally includes safety restrictions:
-
-- Private/local IP addresses only
-- Maximum network scan size limit
-- Conservative common port list
-- Explicit authorization checkbox before scanning
-- No exploitation, brute force, credential attacks, or stealth behavior
-- Risk-based defensive recommendations
-
-## Example Use Cases
-
-- Student cybersecurity lab
-- Home network visibility
-- Router/service check
-- Internship portfolio project
-- Basic network administration practice
-
-## Roadmap
-
-- PDF report export
-- Device history database
-- Authentication for shared deployments
-- Dark/light theme switch
-- More detailed local asset inventory
-- Optional Nmap import parser
 
 ## Disclaimer
 
-This tool is provided for educational and authorized defensive testing only. Do not scan networks or devices without permission.
+This project is for learning and authorized defensive testing only. Do not scan networks or devices without permission.
