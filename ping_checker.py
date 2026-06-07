@@ -15,9 +15,11 @@ def ping_host(ip: str, timeout: int = 3) -> Tuple[bool, str]:
 
     target = validation.value or ip.strip()
     system = platform.system().lower()
-    count_param = "-n" if system == "windows" else "-c"
-    timeout_param = "-w" if system == "windows" else "-W"
-    command = ["ping", count_param, "1", timeout_param, str(timeout), target]
+
+    if system == "windows":
+        command = ["ping", "-n", "1", "-w", str(timeout * 1000), target]
+    else:
+        command = ["ping", "-c", "1", "-W", str(timeout), target]
 
     try:
         result = subprocess.run(
