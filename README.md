@@ -8,15 +8,27 @@ I made it as a practical cybersecurity/networking portfolio project. It is not a
 
 > Use it only on networks you own or where you have clear permission.
 
-## What changed in v0.3.0
+## Company-ready documentation added
 
-- Added SQLite asset inventory in `data/netwatch.db`
-- Added an **Inventory** page for saved local devices
-- Added **Network Tools** page for CIDR profile, netmask, broadcast and gateway guess
-- Added a small risk engine with exposure score and exposure level
-- Added standalone HTML report export
-- Added more tests for risk scoring and network helper logic
-- Updated the sidebar to use the new banner path
+The repository includes handover and deployment material so the project can be reviewed more easily by a company or internship supervisor:
+
+- `docs/company-handover.md`
+- `docs/demo-script.md`
+- `docs/deployment.md`
+- `docs/security-review.md`
+- `docs/acceptance-checklist.md`
+- `docs/architecture.md`
+- `docker-compose.yml`
+- GitHub issue templates
+
+## What changed in v0.3.1
+
+- Added Docker Compose deployment file
+- Added company handover notes
+- Added demo presentation script
+- Added acceptance checklist
+- Added security review notes
+- Added bug report and feature request templates
 
 ## Main features
 
@@ -85,12 +97,22 @@ NetWatch/
 ├── README.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
+├── CHANGELOG.md
 ├── Dockerfile
+├── docker-compose.yml
 ├── Makefile
 ├── assets/
 │   └── netwatch-banner-v2.svg
 ├── data/
 │   └── sample_hosts.csv
+├── docs/
+│   ├── acceptance-checklist.md
+│   ├── architecture.md
+│   ├── company-handover.md
+│   ├── demo-script.md
+│   ├── deployment.md
+│   ├── run-on-kali.md
+│   └── security-review.md
 └── tests/
     ├── test_network_tools.py
     ├── test_report_builder.py
@@ -160,6 +182,12 @@ python -m streamlit run app.py
 ```bash
 docker build -t netwatch .
 docker run -p 8501:8501 netwatch
+```
+
+## Docker Compose
+
+```bash
+docker compose up -d --build
 ```
 
 ## Safety notes
