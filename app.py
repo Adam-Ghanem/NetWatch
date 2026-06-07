@@ -8,6 +8,7 @@ import streamlit as st
 
 from ai_advisor import advice_to_markdown, build_ai_advice
 from config import APP_NAME, APP_VERSION
+from export_utils import safe_csv_bytes
 from history_store import add_history, load_history
 from host_profiler import profile_host
 from inventory_store import add_scan_run, asset_inventory, init_db, recent_scan_runs, update_asset_ports, upsert_hosts
@@ -15,8 +16,9 @@ from logger import log_event
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
 from port_scanner import scan_ports
-from report_builder import build_html_report, build_markdown_report, summarize_ports
+from report_builder import build_html_report, build_markdown_report
 from risk_engine import risk_badge, summarize_exposure, top_recommendations
+from safe_text import clean_text
 from security import validate_cidr, validate_target_ip
 
 st.set_page_config(page_title=APP_NAME, page_icon="🛡️", layout="wide")
@@ -61,7 +63,11 @@ def init_state() -> None:
 
 def metric_card(label: str, value: str | int | float, note: str = "") -> None:
     st.markdown(
-        f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div><div class='metric-note'>{note}</div></div>",
+        "<div class='metric-card'>"
+        f"<div class='metric-label'>{clean_text(label, 80)}</div>"
+        f"<div class='metric-value'>{clean_text(value, 120)}</div>"
+        f"<div class='metric-note'>{clean_text(note, 220)}</div>"
+        "</div>",
         unsafe_allow_html=True,
     )
 
@@ -70,11 +76,11 @@ def hero() -> None:
     st.markdown(
         f"""
         <div class="hero">
-            <div class="hero-title">🛡️ {APP_NAME}</div>
+            <div class="hero-title">🛡️ {clean_text(APP_NAME, 40)}</div>
             <div class="hero-subtitle">
                 Local network visibility dashboard with host profiling, AI-style advisory summaries, service metadata, inventory storage, risk scoring, and reports.
             </div>
-            <span class="pill">v{APP_VERSION}</span><span class="pill">Private IP only</span><span class="pill">AI Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
+            <span class="pill">v{clean_text(APP_VERSION, 20)}</span><span class="pill">Private IP only</span><span class="pill">AI Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -82,7 +88,13 @@ def hero() -> None:
 
 
 def empty_panel(title: str, message: str) -> None:
-    st.markdown(f"<div class='panel'><div class='section-title'>{title}</div><div class='muted'>{message}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='panel'>"
+        f"<div class='section-title'>{clean_text(title, 120)}</div>"
+        f"<div class='muted'>{clean_text(message, 500)}</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def require_authorization(label: str) -> bool:
@@ -164,7 +176,7 @@ def show_network_scan() -> None:
         empty_panel("No hosts displayed", "Run a scan to populate the table.")
     else:
         st.dataframe(hosts_df, use_container_width=True, hide_index=True)
-        st.download_button("Download hosts CSV", hosts_df.to_csv(index=False).encode("utf-8"), "netwatch_hosts.csv", "text/csv")
+        st.download_button("Download hosts CSV", safe_csv_bytes(hosts_df), "netwatch_hosts.csv", "text/csv")
 
 
 def show_host_check() -> None:
@@ -261,7 +273,7 @@ def show_port_audit() -> None:
     risk_filter = st.multiselect("Filter by risk", sorted(ports_df["Risk"].unique()), default=list(sorted(ports_df["Risk"].unique())))
     filtered = ports_df[ports_df["Risk"].isin(risk_filter)] if risk_filter else ports_df
     st.dataframe(filtered, use_container_width=True, hide_index=True)
-    st.download_button("Download detailed port CSV", ports_df.to_csv(index=False).encode("utf-8"), "netwatch_detailed_ports.csv", "text/csv")
+    st.download_button("Download detailed port CSV", safe_csv_bytes(ports_df), "netwatch_detailed_ports.csv", "text/csv")
 
 
 def show_ai_advisor() -> None:
@@ -312,7 +324,7 @@ def show_inventory() -> None:
         metric_card("Highest score", int(df["exposure_score"].max()), "Local exposure")
     st.plotly_chart(px.bar(df.groupby("exposure_level").size().reset_index(name="Count"), x="exposure_level", y="Count", title="Inventory by exposure level"), use_container_width=True)
     st.dataframe(df, use_container_width=True, hide_index=True)
-    st.download_button("Download inventory CSV", df.to_csv(index=False).encode("utf-8"), "netwatch_inventory.csv", "text/csv")
+    st.download_button("Download inventory CSV", safe_csv_bytes(df), "netwatch_inventory.csv", "text/csv")
 
 
 def show_network_tools() -> None:
@@ -368,6 +380,12 @@ def show_safety() -> None:
     - Authorization checkbox before scan actions
     - No exploitation, brute force, password attacks, stealth, or evasion
     - Defensive recommendations only
+
+    ### UI and export safety
+    - Custom HTML cards escape dynamic text before rendering.
+    - CSV downloads reduce spreadsheet formula-injection risk.
+    - HTML reports escape table values before export.
+    - Generated local database and logs are ignored by Git.
 
     ### AI Advisor notes
     - The AI Advisor is local and rule-based.
