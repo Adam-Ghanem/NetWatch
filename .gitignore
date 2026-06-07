@@ -8,3 +8,5 @@ __pycache__/
 logs/
 reports/
 *.log
+data/netwatch.db
+data/scan_history.csv
