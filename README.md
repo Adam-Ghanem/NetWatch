@@ -8,6 +8,19 @@ I made it as a practical cybersecurity/networking portfolio project. It is not a
 
 > Use it only on networks you own or where you have clear permission.
 
+## What changed in v0.4.0
+
+This version focuses on more precise information:
+
+- Host profiling with latency in milliseconds
+- TTL extraction from ping replies
+- Basic OS hint from TTL value
+- Reverse DNS hostname lookup when available
+- Detailed port output with protocol and response time
+- Service descriptions and common role hints
+- Device role hint based on observed open services
+- Extra tests for host parsing and service catalog logic
+
 ## Company-ready documentation added
 
 The repository includes handover and deployment material so the project can be reviewed more easily by a company or internship supervisor:
@@ -21,20 +34,13 @@ The repository includes handover and deployment material so the project can be r
 - `docker-compose.yml`
 - GitHub issue templates
 
-## What changed in v0.3.1
-
-- Added Docker Compose deployment file
-- Added company handover notes
-- Added demo presentation script
-- Added acceptance checklist
-- Added security review notes
-- Added bug report and feature request templates
-
 ## Main features
 
 - Ping one private/local IP address
+- Show latency, TTL, hostname and OS hint for host checks
 - Scan a local CIDR range such as `192.168.1.0/24`
 - Audit common TCP ports such as SSH, HTTP, HTTPS, SMB, MySQL, RDP and PostgreSQL
+- Show service description, common role, response time and device role hint
 - Block public Internet targets from the app
 - Save local assets and last-seen data in SQLite
 - Show exposure score, level and top recommendations
@@ -42,12 +48,22 @@ The repository includes handover and deployment material so the project can be r
 - Generate Markdown and HTML reports
 - Keep a local history of checks
 
+## Accuracy notes
+
+NetWatch gives local visibility, not absolute truth:
+
+- Latency and TTL depend on ICMP replies.
+- Hostname depends on reverse DNS availability.
+- Device role is a hint based on open ports, not guaranteed identification.
+- Firewalls can make services appear closed or filtered.
+- The port list is intentionally short and defensive.
+
 ## Pages
 
 - **Overview**: latest metrics, risk chart and recent saved runs
 - **Network Scan**: checks which local hosts respond
-- **Host Check**: tests one IP address
-- **Port Audit**: checks common services and shows recommendations
+- **Host Check**: tests one IP address and shows profile details
+- **Port Audit**: checks common services and shows detailed recommendations
 - **Inventory**: saved local assets from previous checks
 - **Network Tools**: quick CIDR/subnet helper
 - **Reports**: Markdown and HTML report export
@@ -61,6 +77,8 @@ I wanted a project related to what I study: networks, security basics, and Pytho
 - Streamlit interface design
 - IP and CIDR validation
 - Socket basics
+- Ping output parsing
+- Service catalog mapping
 - SQLite storage
 - CSV/Markdown/HTML report generation
 - Defensive security thinking
@@ -84,6 +102,7 @@ NetWatch/
 ├── app.py
 ├── config.py
 ├── history_store.py
+├── host_profiler.py
 ├── inventory_store.py
 ├── logger.py
 ├── network_scanner.py
@@ -93,6 +112,7 @@ NetWatch/
 ├── report_builder.py
 ├── risk_engine.py
 ├── security.py
+├── service_catalog.py
 ├── requirements.txt
 ├── README.md
 ├── SECURITY.md
@@ -114,9 +134,11 @@ NetWatch/
 │   ├── run-on-kali.md
 │   └── security-review.md
 └── tests/
+    ├── test_host_profiler.py
     ├── test_network_tools.py
     ├── test_report_builder.py
     ├── test_risk_engine.py
+    ├── test_service_catalog.py
     └── test_security.py
 ```
 
@@ -210,9 +232,9 @@ pytest -q
 
 - Add PDF export after the HTML report
 - Add screenshots from a real lab run
-- Add device names/vendor lookup for local networks
 - Add optional authentication for shared deployments
 - Add a small SQLite cleanup/export tool
+- Add manually editable asset owner/location fields
 
 ## Disclaimer
 
