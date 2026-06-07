@@ -24,7 +24,7 @@ from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
 from port_scanner import scan_ports
 from report_builder import build_html_report, build_markdown_report
-from risk_engine import risk_badge, summarize_exposure, top_recommendations
+from risk_engine import summarize_exposure, top_recommendations
 from safe_text import clean_text
 from security import validate_cidr, validate_target_ip
 
@@ -34,41 +34,155 @@ st.markdown(
     """
     <style>
     :root{
-        --bg:#02040A;--card:rgba(7,16,31,.82);--line:rgba(148,163,184,.18);
-        --blue:#22D3EE;--purple:#A855F7;--orange:#FB923C;--green:#22F5A8;
-        --text:#F8FAFC;--muted:#94A3B8
+        --paper:#F7F4EE;
+        --ink:#111111;
+        --muted:#706A61;
+        --line:#111111;
+        --soft:#E6E0D6;
+        --card:#FFFDF8;
+        --accent:#111111;
     }
     .stApp{
-        background:radial-gradient(circle at 62% 16%,rgba(34,211,238,.16),transparent 23%),
-        radial-gradient(circle at 80% 42%,rgba(168,85,247,.15),transparent 20%),
-        radial-gradient(circle at 13% 84%,rgba(251,146,60,.10),transparent 19%),
-        linear-gradient(180deg,#030712,#02040A 55%,#010207);
-        color:var(--text)
+        background:
+            linear-gradient(90deg,rgba(17,17,17,.045) 1px,transparent 1px),
+            linear-gradient(180deg,rgba(17,17,17,.045) 1px,transparent 1px),
+            var(--paper);
+        background-size:44px 44px;
+        color:var(--ink);
     }
-    .stApp:before{
-        content:"";position:fixed;inset:0;pointer-events:none;
-        background:linear-gradient(90deg,rgba(56,189,248,.05) 1px,transparent 1px),
-        linear-gradient(180deg,rgba(56,189,248,.035) 1px,transparent 1px),
-        repeating-linear-gradient(0deg,transparent 0 54px,rgba(59,130,246,.13) 55px,transparent 57px);
-        background-size:44px 44px,44px 44px,100% 57px;opacity:.52;z-index:0
+    .block-container{max-width:1320px;padding-top:1.8rem;position:relative;z-index:2}
+    div[data-testid="stSidebarContent"]{
+        background:#FFFFFF;
+        border-right:2px solid var(--line);
+        padding-top:1.2rem;
     }
-    .block-container{position:relative;z-index:2;max-width:1440px;padding-top:1.2rem}
-    div[data-testid="stSidebarContent"]{background:rgba(3,7,18,.96);border-right:1px solid rgba(148,163,184,.16)}
-    div[data-testid="stSidebarContent"] img{border-radius:18px;border:1px solid rgba(34,211,238,.26);box-shadow:0 0 32px rgba(34,211,238,.14)}
-    .hero{position:relative;min-height:300px;overflow:hidden;border:1px solid rgba(34,211,238,.28);border-radius:26px;background:linear-gradient(135deg,rgba(7,16,31,.96),rgba(3,8,18,.70));box-shadow:0 22px 80px rgba(0,0,0,.42),inset 0 0 80px rgba(34,211,238,.06);padding:2rem 2.2rem;margin-bottom:1.1rem}
-    .hero:before{content:"";position:absolute;right:110px;top:38px;width:290px;height:205px;border-radius:43% 57% 61% 39%/48% 40% 60% 52%;background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.30),transparent 18%),linear-gradient(135deg,rgba(251,146,60,.65),rgba(168,85,247,.48),rgba(34,211,238,.56));filter:drop-shadow(0 0 38px rgba(34,211,238,.36));opacity:.80;border:1px solid rgba(34,211,238,.38)}
-    .hero:after{content:"";position:absolute;right:55px;top:185px;width:110px;height:84px;border-radius:48% 52% 41% 59%;background:linear-gradient(135deg,rgba(168,85,247,.62),rgba(34,211,238,.50));filter:drop-shadow(0 0 24px rgba(168,85,247,.36));border:1px solid rgba(168,85,247,.40)}
-    .hero-kicker{color:var(--muted);font-size:.78rem;letter-spacing:.18em;text-transform:uppercase;font-weight:800;margin-bottom:.75rem}
-    .hero-title{position:relative;z-index:3;color:#fff;font-size:clamp(3.1rem,6.4vw,6.2rem);font-weight:950;line-height:.9;letter-spacing:-.065em;max-width:780px;text-shadow:2px 0 rgba(34,211,238,.55),-2px 0 rgba(249,115,22,.42),0 0 30px rgba(255,255,255,.12)}
-    .hero-subtitle{position:relative;z-index:3;color:#B8C4D8;font-size:1.15rem;line-height:1.55;max-width:680px;margin-top:1.1rem}
-    .pill{display:inline-block;position:relative;z-index:3;border:1px solid rgba(148,163,184,.22);background:rgba(7,17,34,.74);color:#DDEBFF;padding:.5rem .78rem;border-radius:13px;margin-right:.55rem;margin-top:1.2rem;font-size:.84rem}.pill b{color:var(--green)}
-    .metric-card,.panel{border:1px solid var(--line);background:linear-gradient(180deg,rgba(7,16,31,.86),rgba(3,8,18,.72));border-radius:20px;box-shadow:inset 0 0 36px rgba(34,211,238,.035),0 16px 48px rgba(0,0,0,.22)}
-    .metric-card{min-height:132px;padding:1.15rem 1.25rem;position:relative;overflow:hidden}
-    .metric-card:after{content:"";position:absolute;left:14px;right:14px;bottom:14px;height:42px;background:linear-gradient(90deg,rgba(34,211,238,.12),rgba(168,85,247,.11),rgba(251,146,60,.12));clip-path:polygon(0 75%,10% 55%,20% 70%,32% 38%,45% 64%,58% 50%,70% 76%,84% 34%,100% 58%,100% 100%,0 100%);opacity:.72}
-    .metric-label{color:#B6C4D9;font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;font-weight:800}.metric-value{color:#fff;font-size:2.35rem;line-height:1;font-weight:900;margin-top:.55rem}.metric-note{color:var(--muted);font-size:.88rem;margin-top:.45rem}
-    .panel{padding:1.15rem 1.25rem;margin-bottom:1rem}.section-title{font-size:.86rem;letter-spacing:.16em;text-transform:uppercase;font-weight:900;color:#BFD2EA;margin:1rem 0 .65rem}.muted{color:var(--muted);line-height:1.55}
-    .stButton>button,.stDownloadButton>button{border-radius:13px!important;border:1px solid rgba(34,211,238,.28)!important;background:rgba(8,21,42,.92)!important;color:#EAF6FF!important;box-shadow:0 0 20px rgba(34,211,238,.10)}
-    div[data-testid="stDataFrame"]{border:1px solid rgba(148,163,184,.16);border-radius:18px;overflow:hidden;background:rgba(3,8,18,.78)}
+    div[data-testid="stSidebarContent"] img{display:none}
+    div[data-testid="stSidebarContent"] h1,
+    div[data-testid="stSidebarContent"] h2,
+    div[data-testid="stSidebarContent"] h3,
+    div[data-testid="stSidebarContent"] p,
+    div[data-testid="stSidebarContent"] span,
+    div[data-testid="stSidebarContent"] label{color:var(--ink)!important}
+    div[role="radiogroup"] label{
+        border-radius:999px;
+        padding:.38rem .55rem;
+        margin:.2rem 0;
+    }
+    .brand-card{
+        border:2px solid var(--ink);
+        border-radius:18px;
+        background:var(--paper);
+        padding:1.2rem 1.25rem;
+        margin:.5rem 0 1.5rem 0;
+    }
+    .brand-title{font-size:1.5rem;font-weight:950;letter-spacing:-.04em;color:var(--ink)}
+    .brand-sub{color:var(--muted);font-size:.92rem;margin-top:.2rem}
+    .hero{
+        padding:1.9rem 0 1.35rem 0;
+        border-top:3px solid var(--ink);
+        border-bottom:3px solid var(--ink);
+        margin-bottom:1.35rem;
+    }
+    .hero-kicker{
+        font-size:.86rem;
+        letter-spacing:.16em;
+        text-transform:uppercase;
+        font-weight:950;
+        color:var(--ink);
+        margin-bottom:1.05rem;
+    }
+    .hero-title{
+        color:var(--ink);
+        font-size:clamp(4rem,8.6vw,7.4rem);
+        line-height:.9;
+        letter-spacing:-.075em;
+        font-weight:950;
+        max-width:900px;
+    }
+    .hero-subtitle{
+        color:var(--muted);
+        font-size:clamp(1.25rem,2.2vw,1.75rem);
+        line-height:1.28;
+        max-width:980px;
+        margin-top:1rem;
+    }
+    .pill{
+        display:inline-block;
+        border:2px solid var(--ink);
+        background:#FFFFFF;
+        color:var(--ink);
+        padding:.5rem .8rem;
+        border-radius:999px;
+        margin-right:.55rem;
+        margin-top:1.25rem;
+        font-size:.85rem;
+        font-weight:950;
+        text-transform:uppercase;
+        letter-spacing:.04em;
+    }
+    .pill.dark{background:var(--ink);color:var(--paper)}
+    .metric-card{
+        border:2px solid var(--ink);
+        border-radius:20px;
+        background:#FFFFFF;
+        padding:1.2rem 1.35rem;
+        min-height:135px;
+        box-shadow:9px 9px 0 var(--ink);
+    }
+    .metric-label{
+        color:var(--muted);
+        font-size:.86rem;
+        text-transform:uppercase;
+        letter-spacing:.11em;
+        font-weight:950;
+    }
+    .metric-value{
+        color:var(--ink);
+        font-size:2.75rem;
+        line-height:1;
+        font-weight:950;
+        margin-top:.5rem;
+        letter-spacing:-.04em;
+        word-break:break-word;
+    }
+    .metric-note{color:var(--muted);font-size:1rem;margin-top:.45rem}
+    .panel{
+        border:2px solid var(--ink);
+        border-radius:20px;
+        background:#FFFDF8;
+        padding:1.2rem 1.35rem;
+        margin-bottom:1rem;
+    }
+    .section-title{
+        color:var(--ink);
+        font-size:1.05rem;
+        letter-spacing:.13em;
+        text-transform:uppercase;
+        font-weight:950;
+        margin:1.3rem 0 .8rem 0;
+    }
+    .muted{color:var(--muted);line-height:1.5;font-size:1rem}
+    .stButton>button,.stDownloadButton>button{
+        border:2px solid var(--ink)!important;
+        border-radius:999px!important;
+        background:var(--ink)!important;
+        color:var(--paper)!important;
+        font-weight:900!important;
+        text-transform:uppercase;
+        letter-spacing:.04em;
+    }
+    .stTextInput input{
+        border:2px solid var(--ink)!important;
+        border-radius:14px!important;
+        background:#FFFFFF!important;
+        color:var(--ink)!important;
+    }
+    div[data-testid="stDataFrame"]{
+        border:2px solid var(--ink);
+        border-radius:18px;
+        overflow:hidden;
+        background:#FFFFFF;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -104,12 +218,13 @@ def hero() -> None:
     st.markdown(
         """
         <div class="hero">
-            <div class="hero-kicker">Defensive Network Visibility</div>
-            <div class="hero-title">local network,<br>clear signals.</div>
-            <div class="hero-subtitle">Scan. Inspect. Understand. Everything you need to keep your local network visible and under control.</div>
-            <span class="pill"><b>●</b> Private IP Only</span>
-            <span class="pill">Local Processing</span>
-            <span class="pill">No Data Sharing</span>
+            <div class="hero-kicker">NetWatch / Defensive Network Visibility</div>
+            <div class="hero-title">Local network,<br>clear signals.</div>
+            <div class="hero-subtitle">Host profiling, service checks, inventory, risk scoring, and clean reports for authorized local networks.</div>
+            <span class="pill dark">v0.6.2</span>
+            <span class="pill">Private IP Only</span>
+            <span class="pill">Risk Advisor</span>
+            <span class="pill">Safe Exports</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -143,15 +258,15 @@ def show_overview() -> None:
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        metric_card("Online hosts", len(hosts_df), "Latest check")
+        metric_card("Online hosts", len(hosts_df), "Latest scan")
     with c2:
-        metric_card("Open ports", exposure.open_ports, "From audit")
-    with c3:
         metric_card("Inventory", len(inventory), "Saved assets")
+    with c3:
+        metric_card("Open ports", exposure.open_ports, "Review needed")
     with c4:
-        metric_card("Risk score", exposure.score, f"Level: {exposure.level}")
+        metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
 
-    left, right = st.columns([1.35, 0.9])
+    left, right = st.columns([1.05, 0.95])
     with left:
         st.markdown('<div class="section-title">Risk overview</div>', unsafe_allow_html=True)
         if ports_df.empty:
@@ -160,14 +275,14 @@ def show_overview() -> None:
             chart_df = ports_df.groupby(["Status", "Risk"]).size().reset_index(name="Count")
             fig = px.bar(chart_df, x="Status", y="Count", color="Risk", barmode="group", title="Port status by risk")
             fig.update_layout(
-                height=360,
+                height=330,
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#DDEBFF",
+                font_color="#111111",
             )
             st.plotly_chart(fig, use_container_width=True)
     with right:
-        st.markdown('<div class="section-title">Recent activity</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Recent saved runs</div>', unsafe_allow_html=True)
         if runs:
             st.dataframe(pd.DataFrame(runs), use_container_width=True, hide_index=True)
         else:
@@ -413,15 +528,22 @@ def show_safety() -> None:
 init_state()
 
 with st.sidebar:
-    st.image("assets/netwatch-banner-v2.svg", use_container_width=True)
-    st.markdown(f"**{APP_NAME}**")
-    st.caption(f"Defensive visibility · v{APP_VERSION}")
+    st.markdown(
+        """
+        <div class="brand-card">
+            <div class="brand-title">NetWatch</div>
+            <div class="brand-sub">Local defensive dashboard</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(f"v{APP_VERSION}")
     page = st.radio(
         "Navigation",
         ["Overview", "Network Scan", "Host Check", "Port Audit", "Risk Advisor", "Inventory", "Network Tools", "Reports", "Safety"],
     )
     st.divider()
-    st.caption("Private · Local · Safe")
+    st.caption("Private networks only. Keep it local and authorized.")
 
 if page == "Overview":
     show_overview()
