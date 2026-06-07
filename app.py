@@ -26,20 +26,144 @@ st.set_page_config(page_title=APP_NAME, page_icon="🛡️", layout="wide")
 st.markdown(
     """
     <style>
-    :root {--card-bg:rgba(15,23,42,.78);--card-border:rgba(148,163,184,.18);--soft:#94a3b8;}
-    .stApp {background: radial-gradient(circle at top left, rgba(45,212,191,.14), transparent 34%), radial-gradient(circle at 80% 10%, rgba(56,189,248,.12), transparent 28%), linear-gradient(135deg,#020617 0%,#0f172a 52%,#111827 100%);}
-    .hero {padding:1.65rem 1.85rem;border:1px solid var(--card-border);border-radius:24px;background:linear-gradient(135deg,rgba(15,23,42,.94),rgba(30,41,59,.72));box-shadow:0 22px 70px rgba(0,0,0,.32);margin-bottom:1.1rem;}
-    .hero-title {font-size:2.55rem;font-weight:850;letter-spacing:-.05em;margin:0;}
-    .hero-subtitle {color:#cbd5e1;font-size:1.03rem;margin-top:.35rem;max-width:950px;}
-    .pill {display:inline-block;border:1px solid rgba(56,189,248,.28);background:rgba(14,165,233,.09);color:#bae6fd;padding:.33rem .65rem;border-radius:999px;margin-right:.42rem;margin-top:.75rem;font-size:.84rem;}
-    .metric-card {border:1px solid var(--card-border);border-radius:20px;background:var(--card-bg);padding:1rem 1.1rem;min-height:118px;}
-    .metric-label {color:var(--soft);font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;}
-    .metric-value {font-size:1.85rem;line-height:1.1;font-weight:800;margin-top:.25rem;word-break:break-word;}
-    .metric-note {color:#cbd5e1;font-size:.86rem;margin-top:.35rem;}
-    .panel {border:1px solid var(--card-border);border-radius:20px;background:rgba(15,23,42,.70);padding:1.1rem;margin-bottom:1rem;}
-    .section-title {font-size:1.35rem;font-weight:750;margin-bottom:.25rem;}
-    .muted {color:var(--soft);}.small-code{color:#93c5fd;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86rem;}
-    div[data-testid="stSidebarContent"] {background:rgba(2,6,23,.38);}
+    :root {
+        --paper: #F7F4EE;
+        --ink: #111111;
+        --muted: #6B645C;
+        --line: #111111;
+        --soft-line: #D9D2C7;
+        --card: #FFFFFF;
+        --card-soft: #FBF8F2;
+    }
+    .stApp {
+        background:
+            linear-gradient(90deg, rgba(17,17,17,0.035) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(17,17,17,0.035) 1px, transparent 1px),
+            var(--paper);
+        background-size: 44px 44px;
+        color: var(--ink);
+    }
+    .block-container {
+        padding-top: 2.2rem;
+        max-width: 1280px;
+    }
+    .hero {
+        padding: 2rem 0 1.55rem 0;
+        border-top: 2px solid var(--line);
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 1.25rem;
+    }
+    .hero-kicker {
+        font-size: .78rem;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        font-weight: 900;
+        color: var(--ink);
+        margin-bottom: .65rem;
+    }
+    .hero-title {
+        font-size: clamp(3.2rem, 8vw, 7.6rem);
+        font-weight: 950;
+        letter-spacing: -.075em;
+        line-height: .86;
+        margin: 0;
+        color: var(--ink);
+    }
+    .hero-subtitle {
+        color: var(--muted);
+        font-size: clamp(1.02rem, 2.2vw, 1.35rem);
+        line-height: 1.45;
+        max-width: 780px;
+        margin-top: 1.1rem;
+    }
+    .pill {
+        display: inline-block;
+        border: 1.5px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        padding: .38rem .74rem;
+        border-radius: 999px;
+        margin-right: .45rem;
+        margin-top: 1rem;
+        font-size: .78rem;
+        font-weight: 900;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .pill-dark {
+        background: var(--ink);
+        color: var(--paper);
+    }
+    .metric-card {
+        border: 1.5px solid var(--line);
+        border-radius: 22px;
+        background: var(--card);
+        padding: 1rem 1.1rem;
+        min-height: 128px;
+        box-shadow: 7px 7px 0 var(--ink);
+    }
+    .metric-label {
+        color: var(--muted);
+        font-size: .74rem;
+        text-transform: uppercase;
+        letter-spacing: .14em;
+        font-weight: 900;
+    }
+    .metric-value {
+        font-size: 2rem;
+        line-height: 1.02;
+        font-weight: 950;
+        margin-top: .35rem;
+        word-break: break-word;
+        color: var(--ink);
+    }
+    .metric-note {
+        color: var(--muted);
+        font-size: .84rem;
+        margin-top: .48rem;
+        line-height: 1.35;
+    }
+    .panel {
+        border: 1.5px solid var(--line);
+        border-radius: 22px;
+        background: var(--card-soft);
+        padding: 1.15rem;
+        margin-bottom: 1rem;
+    }
+    .section-title {
+        font-size: 1.1rem;
+        text-transform: uppercase;
+        letter-spacing: .13em;
+        font-weight: 950;
+        margin: 1rem 0 .6rem 0;
+        color: var(--ink);
+    }
+    .muted {color: var(--muted); line-height: 1.5;}
+    .small-code {color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86rem;}
+    div[data-testid="stSidebarContent"] {
+        background: #FFFFFF;
+        border-right: 1.5px solid var(--line);
+    }
+    div[data-testid="stSidebarContent"] img {
+        border: 1.5px solid var(--line);
+        border-radius: 18px;
+        background: var(--paper);
+    }
+    .stButton > button, .stDownloadButton > button {
+        border: 1.5px solid var(--line) !important;
+        border-radius: 999px !important;
+        background: var(--ink) !important;
+        color: var(--paper) !important;
+        font-weight: 900 !important;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .stDataFrame, div[data-testid="stDataFrame"] {
+        border: 1.5px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        background: #FFFFFF;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -76,11 +200,12 @@ def hero() -> None:
     st.markdown(
         f"""
         <div class="hero">
-            <div class="hero-title">🛡️ {clean_text(APP_NAME, 40)}</div>
+            <div class="hero-kicker">NetWatch / defensive network visibility</div>
+            <div class="hero-title">Local network,<br>clear signals.</div>
             <div class="hero-subtitle">
-                Local network visibility dashboard with host profiling, advisory summaries, service metadata, inventory storage, risk scoring, and reports.
+                Host profiling, service checks, inventory, risk scoring, and clean reports for authorized local networks.
             </div>
-            <span class="pill">v{clean_text(APP_VERSION, 20)}</span><span class="pill">Private IP only</span><span class="pill">Risk Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
+            <span class="pill pill-dark">v{clean_text(APP_VERSION, 20)}</span><span class="pill">Private IP only</span><span class="pill">Risk Advisor</span><span class="pill">Safe exports</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -127,7 +252,7 @@ def show_overview() -> None:
         else:
             chart_df = ports_df.groupby(["Status", "Risk"]).size().reset_index(name="Count")
             fig = px.bar(chart_df, x="Status", y="Count", color="Risk", barmode="group", title="Port status by risk")
-            fig.update_layout(height=380, margin=dict(l=10, r=10, t=45, b=10))
+            fig.update_layout(height=380, margin=dict(l=10, r=10, t=45, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig, use_container_width=True)
     with right:
         st.markdown('<div class="section-title">Recent saved runs</div>', unsafe_allow_html=True)
