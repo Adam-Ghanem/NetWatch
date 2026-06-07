@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from ai_advisor import advice_to_markdown, build_ai_advice
 from config import APP_NAME, APP_VERSION
 from history_store import add_history, load_history
 from host_profiler import profile_host
@@ -71,9 +72,9 @@ def hero() -> None:
         <div class="hero">
             <div class="hero-title">🛡️ {APP_NAME}</div>
             <div class="hero-subtitle">
-                Local network visibility dashboard with host profiling, latency details, service metadata, inventory storage, risk scoring, and reports.
+                Local network visibility dashboard with host profiling, AI-style advisory summaries, service metadata, inventory storage, risk scoring, and reports.
             </div>
-            <span class="pill">v{APP_VERSION}</span><span class="pill">Private IP only</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
+            <span class="pill">v{APP_VERSION}</span><span class="pill">Private IP only</span><span class="pill">AI Advisor</span><span class="pill">Latency + TTL</span><span class="pill">Service catalog</span><span class="pill">SQLite inventory</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -97,10 +98,14 @@ def show_overview() -> None:
     runs = recent_scan_runs(limit=8)
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Online hosts", len(hosts_df), "Latest scan")
-    with c2: metric_card("Inventory", len(inventory), "Saved assets")
-    with c3: metric_card("Open ports", exposure.open_ports, risk_badge(exposure.level))
-    with c4: metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
+    with c1:
+        metric_card("Online hosts", len(hosts_df), "Latest scan")
+    with c2:
+        metric_card("Inventory", len(inventory), "Saved assets")
+    with c3:
+        metric_card("Open ports", exposure.open_ports, risk_badge(exposure.level))
+    with c4:
+        metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
 
     left, right = st.columns([1.2, .85])
     with left:
@@ -134,7 +139,8 @@ def show_network_scan() -> None:
         cidr = st.text_input("Local CIDR range", "192.168.1.0/24")
         validation = validate_cidr(cidr)
         st.success(f"Valid local range: {validation.value}") if validation.ok else st.warning(validation.error)
-        start = st.button("Start scan", type="primary", disabled=(not require_authorization("I have permission to check this local network.") or not validation.ok))
+        authorized = require_authorization("I have permission to check this local network.")
+        start = st.button("Start scan", type="primary", disabled=(not authorized or not validation.ok))
     with col_help:
         profile = network_profile(cidr)
         empty_panel("CIDR quick profile", f"Network: {profile.cidr} | Usable: {profile.usable_hosts} | Gateway guess: {guess_gateway(cidr)} | {profile.message}")
@@ -182,10 +188,14 @@ def show_host_check() -> None:
             st.error(profile.notes)
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: metric_card("Status", status, profile.notes)
-        with c2: metric_card("Latency", profile.latency_ms if profile.latency_ms is not None else "-", "milliseconds")
-        with c3: metric_card("TTL", profile.ttl if profile.ttl is not None else "-", profile.os_hint)
-        with c4: metric_card("Hostname", profile.hostname, "reverse DNS")
+        with c1:
+            metric_card("Status", status, profile.notes)
+        with c2:
+            metric_card("Latency", profile.latency_ms if profile.latency_ms is not None else "-", "milliseconds")
+        with c3:
+            metric_card("TTL", profile.ttl if profile.ttl is not None else "-", profile.os_hint)
+        with c4:
+            metric_card("Hostname", profile.hostname, "reverse DNS")
 
         st.dataframe(pd.DataFrame([profile.__dict__]), use_container_width=True, hide_index=True)
 
@@ -200,9 +210,10 @@ def show_port_audit() -> None:
         ip = st.text_input("Target private/local IP", "192.168.1.1")
         validation = validate_target_ip(ip)
         st.success(f"Target accepted: {validation.value}") if validation.ok else st.warning(validation.error)
-        scan = st.button("Audit common ports", type="primary", disabled=(not require_authorization("I have permission to check this host.") or not validation.ok))
+        authorized = require_authorization("I have permission to check this host.")
+        scan = st.button("Audit common ports", type="primary", disabled=(not authorized or not validation.ok))
     with col2:
-        empty_panel("More detailed output", "Each port now includes protocol, response time, service description, common role, recommendation, and device role hint.")
+        empty_panel("More detailed output", "Each port includes protocol, response time, service description, common role, recommendation, and device role hint.")
 
     if scan:
         with st.spinner("Auditing common ports..."):
@@ -225,10 +236,14 @@ def show_port_audit() -> None:
 
     exposure = summarize_exposure(ports_df.to_dict("records"))
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Checked", exposure.checked, "Ports in list")
-    with c2: metric_card("Open", exposure.open_ports, "Detected open")
-    with c3: metric_card("High", exposure.high, "Needs review")
-    with c4: metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
+    with c1:
+        metric_card("Checked", exposure.checked, "Ports in list")
+    with c2:
+        metric_card("Open", exposure.open_ports, "Detected open")
+    with c3:
+        metric_card("High", exposure.high, "Needs review")
+    with c4:
+        metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
 
     chart_left, chart_right = st.columns(2)
     with chart_left:
@@ -249,6 +264,37 @@ def show_port_audit() -> None:
     st.download_button("Download detailed port CSV", ports_df.to_csv(index=False).encode("utf-8"), "netwatch_detailed_ports.csv", "text/csv")
 
 
+def show_ai_advisor() -> None:
+    hero()
+    st.markdown('<div class="section-title">AI Advisor</div>', unsafe_allow_html=True)
+    st.caption("Local AI-style advisor. It reads NetWatch results and generates a clear defensive summary without sending data to an external service.")
+
+    hosts_df = st.session_state.network_results
+    ports_df = st.session_state.port_results
+    inventory = asset_inventory()
+    advice = build_ai_advice(hosts_df.to_dict("records"), ports_df.to_dict("records"), inventory)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        metric_card("Risk level", advice.risk_level, "AI advisor output")
+    with c2:
+        metric_card("Confidence", advice.confidence, "Based on available data")
+    with c3:
+        metric_card("Inventory", len(inventory), "Saved assets")
+
+    empty_panel("Advisor summary", advice.summary)
+
+    st.markdown('<div class="section-title">Priority findings</div>', unsafe_allow_html=True)
+    st.write(pd.DataFrame({"Priority": advice.priorities}))
+
+    st.markdown('<div class="section-title">Suggested next steps</div>', unsafe_allow_html=True)
+    st.write(pd.DataFrame({"Next step": advice.next_steps}))
+
+    st.info(advice.note)
+    markdown = advice_to_markdown(advice)
+    st.download_button("Download AI advice Markdown", markdown.encode("utf-8"), "netwatch_ai_advice.md", "text/markdown")
+
+
 def show_inventory() -> None:
     hero()
     st.markdown('<div class="section-title">Asset Inventory</div>', unsafe_allow_html=True)
@@ -258,9 +304,12 @@ def show_inventory() -> None:
         return
     df = pd.DataFrame(inventory)
     c1, c2, c3 = st.columns(3)
-    with c1: metric_card("Assets", len(df), "Saved in SQLite")
-    with c2: metric_card("With open ports", int((df["open_port_count"] > 0).sum()), "From port audits")
-    with c3: metric_card("Highest score", int(df["exposure_score"].max()), "Local exposure")
+    with c1:
+        metric_card("Assets", len(df), "Saved in SQLite")
+    with c2:
+        metric_card("With open ports", int((df["open_port_count"] > 0).sum()), "From port audits")
+    with c3:
+        metric_card("Highest score", int(df["exposure_score"].max()), "Local exposure")
     st.plotly_chart(px.bar(df.groupby("exposure_level").size().reset_index(name="Count"), x="exposure_level", y="Count", title="Inventory by exposure level"), use_container_width=True)
     st.dataframe(df, use_container_width=True, hide_index=True)
     st.download_button("Download inventory CSV", df.to_csv(index=False).encode("utf-8"), "netwatch_inventory.csv", "text/csv")
@@ -273,10 +322,14 @@ def show_network_tools() -> None:
     profile = network_profile(cidr, sample_size=12)
     st.success(profile.message) if profile.scan_allowed else st.warning(profile.message)
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Network", profile.network_address, f"/{profile.prefix_length}")
-    with c2: metric_card("Netmask", profile.netmask, "IPv4 mask")
-    with c3: metric_card("Broadcast", profile.broadcast_address, "Last address")
-    with c4: metric_card("Usable", profile.usable_hosts, "Host addresses")
+    with c1:
+        metric_card("Network", profile.network_address, f"/{profile.prefix_length}")
+    with c2:
+        metric_card("Netmask", profile.netmask, "IPv4 mask")
+    with c3:
+        metric_card("Broadcast", profile.broadcast_address, "Last address")
+    with c4:
+        metric_card("Usable", profile.usable_hosts, "Host addresses")
     st.markdown('<div class="section-title">First host addresses</div>', unsafe_allow_html=True)
     st.code("\n".join(profile.first_hosts) if profile.first_hosts else "No sample", language="text")
 
@@ -289,9 +342,12 @@ def show_reports() -> None:
     md = build_markdown_report(hosts_df, ports_df)
     html = build_html_report(hosts_df, ports_df)
     c1, c2 = st.columns(2)
-    with c1: st.download_button("Download Markdown report", md.encode("utf-8"), "netwatch_report.md", "text/markdown")
-    with c2: st.download_button("Download HTML report", html.encode("utf-8"), "netwatch_report.html", "text/html")
-    with st.expander("Preview Markdown report", expanded=True): st.markdown(md)
+    with c1:
+        st.download_button("Download Markdown report", md.encode("utf-8"), "netwatch_report.md", "text/markdown")
+    with c2:
+        st.download_button("Download HTML report", html.encode("utf-8"), "netwatch_report.html", "text/html")
+    with st.expander("Preview Markdown report", expanded=True):
+        st.markdown(md)
     runs = recent_scan_runs(limit=50)
     if runs:
         st.markdown('<div class="section-title">SQLite scan runs</div>', unsafe_allow_html=True)
@@ -313,6 +369,12 @@ def show_safety() -> None:
     - No exploitation, brute force, password attacks, stealth, or evasion
     - Defensive recommendations only
 
+    ### AI Advisor notes
+    - The AI Advisor is local and rule-based.
+    - It does not send scan results to an external service.
+    - It explains risk and next steps from the data already shown in NetWatch.
+    - It does not replace a full professional security audit.
+
     ### Accuracy notes
     - Latency and TTL come from the local ping response.
     - Hostname depends on reverse DNS availability.
@@ -326,15 +388,25 @@ with st.sidebar:
     st.image("assets/netwatch-banner-v2.svg", use_container_width=True)
     st.markdown(f"**{APP_NAME}**")
     st.caption(f"Local defensive dashboard · v{APP_VERSION}")
-    page = st.radio("Navigation", ["Overview", "Network Scan", "Host Check", "Port Audit", "Inventory", "Network Tools", "Reports", "Safety"])
+    page = st.radio("Navigation", ["Overview", "Network Scan", "Host Check", "Port Audit", "AI Advisor", "Inventory", "Network Tools", "Reports", "Safety"])
     st.divider()
     st.caption("Private networks only. Keep it local and authorized.")
 
-if page == "Overview": show_overview()
-elif page == "Network Scan": show_network_scan()
-elif page == "Host Check": show_host_check()
-elif page == "Port Audit": show_port_audit()
-elif page == "Inventory": show_inventory()
-elif page == "Network Tools": show_network_tools()
-elif page == "Reports": show_reports()
-elif page == "Safety": show_safety()
+if page == "Overview":
+    show_overview()
+elif page == "Network Scan":
+    show_network_scan()
+elif page == "Host Check":
+    show_host_check()
+elif page == "Port Audit":
+    show_port_audit()
+elif page == "AI Advisor":
+    show_ai_advisor()
+elif page == "Inventory":
+    show_inventory()
+elif page == "Network Tools":
+    show_network_tools()
+elif page == "Reports":
+    show_reports()
+elif page == "Safety":
+    show_safety()
