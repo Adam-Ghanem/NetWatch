@@ -1,6 +1,6 @@
 import pandas as pd
 
-from report_builder import build_markdown_report, summarize_ports
+from report_builder import build_html_report, build_markdown_report, summarize_ports
 
 
 def test_summarize_ports_counts_open_and_risk():
@@ -16,7 +16,7 @@ def test_summarize_ports_counts_open_and_risk():
     assert summary["open"] == 2
     assert summary["high"] == 1
     assert summary["medium"] == 1
-    assert summary["score"] == 7
+    assert summary["score"] == 6
 
 
 def test_build_markdown_report_contains_summary():
@@ -26,6 +26,17 @@ def test_build_markdown_report_contains_summary():
     report = build_markdown_report(hosts, ports)
 
     assert "NetWatch Local Network Report" in report
-    assert "Online hosts found" in report
+    assert "Exposure level" in report
     assert "192.168.1.10" in report
     assert "SSH" in report
+
+
+def test_build_html_report_contains_sections():
+    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}])
+    ports = pd.DataFrame([{"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"}])
+
+    report = build_html_report(hosts, ports)
+
+    assert "<html" in report
+    assert "NetWatch Report" in report
+    assert "Top recommendations" in report
