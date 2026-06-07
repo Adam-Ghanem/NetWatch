@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.0
+
+- Added host profiler with latency, TTL, hostname and OS hint.
+- Added raw ping output support for more precise host checks.
+- Added service catalog with protocol, description, common role and review guidance.
+- Added response time measurement for TCP port checks.
+- Added device role hint based on observed open services.
+- Updated Streamlit UI to show detailed host and service information.
+- Added tests for host output parsing and service catalog logic.
+- Updated README with accuracy notes and v0.4.0 feature list.
+
 ## v0.3.1
 
 - Added Docker Compose deployment file.
