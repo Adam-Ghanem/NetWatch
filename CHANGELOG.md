@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.0
+
+- Switched the app to an editorial light theme.
+- Added oversized hero typography.
+- Added paper background with a subtle grid.
+- Redesigned metric cards with strong borders and shadow.
+- Updated buttons, sidebar and table containers.
+- Replaced the README banner with a minimal product-style banner.
+- Kept the neutral Risk Advisor wording.
+
 ## v0.5.2
 
 - Renamed the advisor feature to Risk Advisor.
