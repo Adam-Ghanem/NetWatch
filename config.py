@@ -1,7 +1,7 @@
 """Basic configuration for NetWatch."""
 
 APP_NAME = "NetWatch"
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.6.1"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
