@@ -2,32 +2,44 @@
 
 ![NetWatch Banner](assets/netwatch-banner-v2.svg)
 
-NetWatch is a small local network monitoring dashboard built with Python and Streamlit.
+NetWatch is a local network monitoring dashboard built with Python and Streamlit.
 
-I made it as a practical cybersecurity/networking portfolio project. It is not a hacking tool; it is a simple admin-style dashboard for checking a local network, seeing which hosts respond, checking a short list of common ports, and exporting a basic report.
+I made it as a practical cybersecurity/networking portfolio project. It is not a hacking tool; it is an admin-style dashboard for checking a local network, seeing which hosts respond, reviewing a short list of common services, saving a local inventory, and exporting reports.
 
 > Use it only on networks you own or where you have clear permission.
 
-## What changed in v0.2.0
+## What changed in v0.3.0
 
-- New dark dashboard design
-- Overview page with cards and charts
-- Separate pages for network scan, host check, port audit, reports, and safety notes
-- Local scan history saved to `data/scan_history.csv`
-- Markdown report download from the latest results
-- Cleaner banner and Streamlit theme
-- Extra tests for report summary logic
+- Added SQLite asset inventory in `data/netwatch.db`
+- Added an **Inventory** page for saved local devices
+- Added **Network Tools** page for CIDR profile, netmask, broadcast and gateway guess
+- Added a small risk engine with exposure score and exposure level
+- Added standalone HTML report export
+- Added more tests for risk scoring and network helper logic
+- Updated the sidebar to use the new banner path
 
 ## Main features
 
 - Ping one private/local IP address
 - Scan a local CIDR range such as `192.168.1.0/24`
-- Audit common TCP ports such as SSH, HTTP, HTTPS, SMB, MySQL, RDP, PostgreSQL
+- Audit common TCP ports such as SSH, HTTP, HTTPS, SMB, MySQL, RDP and PostgreSQL
 - Block public Internet targets from the app
-- Show basic risk levels and simple hardening advice
-- Export hosts and port results as CSV
-- Generate a Markdown report
-- Keep a local history of scans
+- Save local assets and last-seen data in SQLite
+- Show exposure score, level and top recommendations
+- Export hosts, ports and inventory as CSV
+- Generate Markdown and HTML reports
+- Keep a local history of checks
+
+## Pages
+
+- **Overview**: latest metrics, risk chart and recent saved runs
+- **Network Scan**: checks which local hosts respond
+- **Host Check**: tests one IP address
+- **Port Audit**: checks common services and shows recommendations
+- **Inventory**: saved local assets from previous checks
+- **Network Tools**: quick CIDR/subnet helper
+- **Reports**: Markdown and HTML report export
+- **Safety**: project limits and allowed use cases
 
 ## Why I built it
 
@@ -37,8 +49,9 @@ I wanted a project related to what I study: networks, security basics, and Pytho
 - Streamlit interface design
 - IP and CIDR validation
 - Socket basics
+- SQLite storage
+- CSV/Markdown/HTML report generation
 - Defensive security thinking
-- CSV/report generation
 - GitHub project organization
 
 ## Tech stack
@@ -47,6 +60,7 @@ I wanted a project related to what I study: networks, security basics, and Pytho
 - Streamlit
 - Pandas
 - Plotly
+- SQLite
 - Pytest
 - GitHub Actions
 - Docker
@@ -58,11 +72,14 @@ NetWatch/
 ├── app.py
 ├── config.py
 ├── history_store.py
+├── inventory_store.py
 ├── logger.py
 ├── network_scanner.py
+├── network_tools.py
 ├── ping_checker.py
 ├── port_scanner.py
 ├── report_builder.py
+├── risk_engine.py
 ├── security.py
 ├── requirements.txt
 ├── README.md
@@ -75,7 +92,9 @@ NetWatch/
 ├── data/
 │   └── sample_hosts.csv
 └── tests/
+    ├── test_network_tools.py
     ├── test_report_builder.py
+    ├── test_risk_engine.py
     └── test_security.py
 ```
 
@@ -126,6 +145,16 @@ Open the local URL shown by Streamlit, usually:
 http://localhost:8501
 ```
 
+## Kali / fish shell quick run
+
+```fish
+python3 -m venv venv
+source venv/bin/activate.fish
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
 ## Docker
 
 ```bash
@@ -151,12 +180,12 @@ pytest -q
 
 ## Next improvements
 
-- Add PDF export after the Markdown report
-- Save scan history in SQLite instead of CSV
+- Add PDF export after the HTML report
 - Add screenshots from a real lab run
 - Add device names/vendor lookup for local networks
-- Improve Windows/Linux ping handling even more
+- Add optional authentication for shared deployments
+- Add a small SQLite cleanup/export tool
 
 ## Disclaimer
 
-This project is for learning and authorized defensive testing only. Do not scan networks or devices without permission.
+This project is for learning and authorized defensive testing only. Do not check networks or devices without permission.
