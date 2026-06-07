@@ -1,53 +1,75 @@
-<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#020617"/>
-      <stop offset="0.55" stop-color="#0F172A"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#05070D"/>
+      <stop offset="0.55" stop-color="#0B1120"/>
       <stop offset="1" stop-color="#111827"/>
     </linearGradient>
-    <linearGradient id="line" x1="130" y1="278" x2="1050" y2="118" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#22C55E"/>
-      <stop offset="0.5" stop-color="#38BDF8"/>
-      <stop offset="1" stop-color="#A78BFA"/>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#38BDF8"/>
     </linearGradient>
-    <filter id="glow" x="-30" y="-30" width="1260" height="480" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="18" result="blur"/>
-      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
-    </filter>
   </defs>
-  <rect width="1200" height="420" rx="34" fill="url(#bg)"/>
-  <circle cx="1040" cy="58" r="150" fill="#2563EB" opacity="0.20"/>
-  <circle cx="155" cy="345" r="210" fill="#06B6D4" opacity="0.13"/>
-  <circle cx="725" cy="365" r="150" fill="#22C55E" opacity="0.08"/>
 
-  <g opacity="0.20">
-    <path d="M70 322H1130" stroke="#94A3B8"/>
-    <path d="M70 262H1130" stroke="#94A3B8"/>
-    <path d="M70 202H1130" stroke="#94A3B8"/>
-    <path d="M70 142H1130" stroke="#94A3B8"/>
-    <path d="M170 70V350" stroke="#94A3B8"/>
-    <path d="M330 70V350" stroke="#94A3B8"/>
-    <path d="M490 70V350" stroke="#94A3B8"/>
-    <path d="M650 70V350" stroke="#94A3B8"/>
-    <path d="M810 70V350" stroke="#94A3B8"/>
-    <path d="M970 70V350" stroke="#94A3B8"/>
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1198" height="358" rx="27" stroke="#1F2937" stroke-width="2"/>
+
+  <g opacity="0.16">
+    <path d="M70 70H1130" stroke="#94A3B8"/>
+    <path d="M70 130H1130" stroke="#94A3B8"/>
+    <path d="M70 190H1130" stroke="#94A3B8"/>
+    <path d="M70 250H1130" stroke="#94A3B8"/>
+    <path d="M70 310H1130" stroke="#94A3B8"/>
+    <path d="M160 42V318" stroke="#94A3B8"/>
+    <path d="M320 42V318" stroke="#94A3B8"/>
+    <path d="M480 42V318" stroke="#94A3B8"/>
+    <path d="M640 42V318" stroke="#94A3B8"/>
+    <path d="M800 42V318" stroke="#94A3B8"/>
+    <path d="M960 42V318" stroke="#94A3B8"/>
   </g>
 
-  <path d="M125 278C230 175 333 330 455 214C570 112 642 170 752 138C876 101 962 134 1060 86" stroke="url(#line)" stroke-width="10" stroke-linecap="round" filter="url(#glow)"/>
-  <g>
-    <circle cx="125" cy="278" r="17" fill="#22C55E"/>
-    <circle cx="455" cy="214" r="17" fill="#38BDF8"/>
-    <circle cx="752" cy="138" r="17" fill="#A78BFA"/>
-    <circle cx="1060" cy="86" r="17" fill="#22C55E"/>
+  <g transform="translate(72 74)">
+    <rect width="520" height="218" rx="20" fill="#020617" stroke="#1E293B"/>
+    <rect width="520" height="42" rx="20" fill="#0F172A"/>
+    <circle cx="28" cy="21" r="6" fill="#EF4444"/>
+    <circle cx="50" cy="21" r="6" fill="#F59E0B"/>
+    <circle cx="72" cy="21" r="6" fill="#22C55E"/>
+    <text x="96" y="27" fill="#94A3B8" font-family="Consolas, Menlo, monospace" font-size="14">netwatch.local</text>
+
+    <text x="28" y="79" fill="#38BDF8" font-family="Consolas, Menlo, monospace" font-size="18">$ python -m streamlit run app.py</text>
+    <text x="28" y="116" fill="#E5E7EB" font-family="Consolas, Menlo, monospace" font-size="16">scan 192.168.1.0/24</text>
+    <text x="28" y="148" fill="#22C55E" font-family="Consolas, Menlo, monospace" font-size="16">✓ 5 hosts online</text>
+    <text x="28" y="180" fill="#FBBF24" font-family="Consolas, Menlo, monospace" font-size="16">! 2 open services need review</text>
+    <rect x="28" y="198" width="320" height="3" rx="1.5" fill="url(#accent)"/>
   </g>
 
-  <g transform="translate(910 225)">
-    <path d="M72 0l58 24v63c0 58-43 94-58 103C57 181 14 145 14 87V24L72 0z" fill="#0EA5E9" opacity="0.92"/>
-    <path d="M72 39v78" stroke="#E0F2FE" stroke-width="10" stroke-linecap="round"/>
-    <path d="M39 75h66" stroke="#E0F2FE" stroke-width="10" stroke-linecap="round"/>
-  </g>
+  <g transform="translate(650 74)">
+    <text x="0" y="0" fill="#F8FAFC" font-family="Inter, Arial, Helvetica, sans-serif" font-size="66" font-weight="800" letter-spacing="-2">NetWatch</text>
+    <text x="2" y="46" fill="#CBD5E1" font-family="Inter, Arial, Helvetica, sans-serif" font-size="24">Local network monitor for lab and admin work</text>
 
-  <text x="82" y="135" fill="#F8FAFC" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="800" letter-spacing="-2">NetWatch</text>
-  <text x="86" y="196" fill="#CBD5E1" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="500">Local Network Monitoring Dashboard</text>
-  <text x="86" y="252" fill="#7DD3FC" font-family="Inter, Arial, Helvetica, sans-serif" font-size="23">Ping sweep · Host check · Port audit · Scan history · Markdown reports</text>
+    <g transform="translate(2 82)">
+      <rect width="148" height="76" rx="16" fill="#0F172A" stroke="#1E293B"/>
+      <text x="18" y="30" fill="#94A3B8" font-family="Inter, Arial, Helvetica, sans-serif" font-size="13">HOSTS</text>
+      <text x="18" y="58" fill="#22C55E" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="800">Online</text>
+    </g>
+    <g transform="translate(170 82)">
+      <rect width="148" height="76" rx="16" fill="#0F172A" stroke="#1E293B"/>
+      <text x="18" y="30" fill="#94A3B8" font-family="Inter, Arial, Helvetica, sans-serif" font-size="13">PORTS</text>
+      <text x="18" y="58" fill="#38BDF8" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="800">Audit</text>
+    </g>
+    <g transform="translate(338 82)">
+      <rect width="148" height="76" rx="16" fill="#0F172A" stroke="#1E293B"/>
+      <text x="18" y="30" fill="#94A3B8" font-family="Inter, Arial, Helvetica, sans-serif" font-size="13">REPORT</text>
+      <text x="18" y="58" fill="#FBBF24" font-family="Inter, Arial, Helvetica, sans-serif" font-size="30" font-weight="800">MD</text>
+    </g>
+
+    <g transform="translate(0 190)">
+      <circle cx="12" cy="12" r="7" fill="#2DD4BF"/>
+      <path d="M22 12H114" stroke="#2DD4BF" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="124" cy="12" r="7" fill="#38BDF8"/>
+      <path d="M134 12H226" stroke="#38BDF8" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="236" cy="12" r="7" fill="#22C55E"/>
+      <text x="0" y="52" fill="#94A3B8" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18">Ping sweep · host check · port audit · history</text>
+    </g>
+  </g>
 </svg>
