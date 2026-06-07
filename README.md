@@ -1,6 +1,6 @@
 # NetWatch
 
-![NetWatch Banner](assets/netwatch-banner-mobile.svg)
+![NetWatch Banner](a_high_tech_dark_ui_marketing_banner_dashboard_p_1.png)
 
 NetWatch is a local network monitoring dashboard built with Python and Streamlit.
 
