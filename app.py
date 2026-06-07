@@ -20,6 +20,7 @@ from report_builder import build_html_report, build_markdown_report
 from risk_engine import summarize_exposure, top_recommendations
 from safe_text import clean_text
 from security import validate_cidr, validate_target_ip
+from ui_components import premium_css, premium_hero, premium_sidebar
 
 st.set_page_config(page_title=APP_NAME, page_icon="🛡️", layout="wide")
 
@@ -31,14 +32,12 @@ st.markdown(
 .block-container{max-width:1340px;padding-top:2rem}.main .block-container{padding-left:3rem;padding-right:3rem}
 div[data-testid="stSidebarContent"]{background:#fff;border-right:2px solid var(--ink);padding-top:1.2rem}div[data-testid="stSidebarContent"] img{display:none}div[data-testid="stSidebarContent"] *{color:var(--ink)!important}
 .brand-card{border:2px solid var(--ink);border-radius:18px;background:var(--paper);padding:1.2rem 1.25rem;margin:.5rem 0 1.4rem}.brand-title{font-size:1.55rem;font-weight:950;letter-spacing:-.05em}.brand-sub{color:var(--muted)!important;font-size:.92rem;margin-top:.2rem}
-div[role="radiogroup"] label{border-radius:999px;padding:.36rem .55rem;margin:.16rem 0}.hero{border-top:3px solid var(--ink);border-bottom:3px solid var(--ink);padding:1.9rem 0 1.4rem;margin-bottom:1.45rem}.hero-kicker{font-size:.86rem;font-weight:950;letter-spacing:.16em;text-transform:uppercase;margin-bottom:1.05rem}.hero-title-wrap{overflow:hidden;max-width:1050px}.hero-line{display:block;overflow:hidden;line-height:.88}.letter{display:inline-block;font-size:clamp(4rem,8.8vw,7.6rem);font-weight:950;line-height:.92;letter-spacing:-.08em;transform:translateY(-145%) rotate(-2deg);filter:blur(8px);opacity:0;animation:letterDrop 1.6s cubic-bezier(.16,1,.24,1) forwards;animation-delay:calc(var(--i) * 70ms);will-change:transform,opacity,filter}.letter.space{width:.22em}.word-gap{display:inline-block;width:.26em}@keyframes letterDrop{0%{transform:translateY(-145%) rotate(-2deg);filter:blur(8px);opacity:0}55%{transform:translateY(12%) rotate(.5deg);filter:blur(0);opacity:1}75%{transform:translateY(-4%) rotate(0);opacity:1}100%{transform:translateY(0) rotate(0);filter:blur(0);opacity:1}}
-.hero-subtitle{color:var(--muted);font-size:clamp(1.2rem,2.2vw,1.7rem);line-height:1.3;max-width:980px;margin-top:1rem}.pill{display:inline-block;border:2px solid var(--ink);border-radius:999px;background:#fff;color:var(--ink);padding:.5rem .8rem;margin-right:.55rem;margin-top:1.25rem;font-size:.84rem;font-weight:950;text-transform:uppercase;letter-spacing:.04em}.pill.dark{background:var(--ink);color:var(--paper)}
 .metric-card{border:2px solid var(--ink);border-radius:20px;background:#fff;padding:1.2rem 1.35rem;min-height:135px;box-shadow:9px 9px 0 var(--ink)}.metric-label{color:var(--muted);font-size:.84rem;text-transform:uppercase;letter-spacing:.11em;font-weight:950}.metric-value{font-size:2.7rem;line-height:1;font-weight:950;letter-spacing:-.04em;margin-top:.5rem}.metric-note{color:var(--muted);font-size:1rem;margin-top:.45rem}.panel{border:2px solid var(--ink);border-radius:20px;background:var(--card);padding:1.2rem 1.35rem;margin-bottom:1rem}.section-title{font-size:1.05rem;letter-spacing:.13em;text-transform:uppercase;font-weight:950;margin:1.35rem 0 .8rem}.muted{color:var(--muted);line-height:1.5;font-size:1rem}.stButton>button,.stDownloadButton>button{border:2px solid var(--ink)!important;border-radius:999px!important;background:var(--ink)!important;color:var(--paper)!important;font-weight:900!important;text-transform:uppercase;letter-spacing:.04em}.stTextInput input{border:2px solid var(--ink)!important;border-radius:14px!important;background:#fff!important;color:var(--ink)!important}div[data-testid="stDataFrame"]{border:2px solid var(--ink);border-radius:18px;overflow:hidden;background:#fff}
-@media (prefers-reduced-motion: reduce){.letter{animation:none;transform:none;opacity:1;filter:none}}
 </style>
 """,
     unsafe_allow_html=True,
 )
+st.markdown(premium_css(), unsafe_allow_html=True)
 
 
 def add_event(event: str) -> None:
@@ -55,18 +54,6 @@ def init_state() -> None:
     st.session_state.setdefault("events", [])
 
 
-def letters(text: str, start: int = 0) -> str:
-    out = []
-    index = start
-    for ch in text:
-        if ch == " ":
-            out.append('<span class="word-gap"></span>')
-            continue
-        out.append(f'<span class="letter" style="--i:{index}">{clean_text(ch, 2)}</span>')
-        index += 1
-    return "".join(out)
-
-
 def metric_card(label: str, value: str | int | float, note: str = "") -> None:
     st.markdown(
         "<div class='metric-card'>"
@@ -79,22 +66,7 @@ def metric_card(label: str, value: str | int | float, note: str = "") -> None:
 
 
 def hero() -> None:
-    line1 = letters("Local network,", 0)
-    line2 = letters("clear signals.", 14)
-    st.markdown(
-        f"""
-        <div class="hero">
-            <div class="hero-kicker">NetWatch / Defensive Network Visibility</div>
-            <div class="hero-title-wrap">
-                <span class="hero-line">{line1}</span>
-                <span class="hero-line">{line2}</span>
-            </div>
-            <div class="hero-subtitle">Host profiling, service checks, inventory, risk scoring, and clean reports for authorized local networks.</div>
-            <span class="pill dark">v{APP_VERSION}</span><span class="pill">Private IP Only</span><span class="pill">Risk Advisor</span><span class="pill">Safe Exports</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(premium_hero(APP_VERSION), unsafe_allow_html=True)
 
 
 def empty_panel(title: str, message: str) -> None:
@@ -105,6 +77,10 @@ def empty_panel(title: str, message: str) -> None:
         "</div>",
         unsafe_allow_html=True,
     )
+
+
+def section_title(title: str) -> None:
+    st.markdown(f'<div class="section-title">{clean_text(title, 100)}</div>', unsafe_allow_html=True)
 
 
 def require_authorization(label: str) -> bool:
@@ -137,7 +113,7 @@ def show_overview() -> None:
 
     left, right = st.columns([1.05, 0.95])
     with left:
-        st.markdown('<div class="section-title">Risk overview</div>', unsafe_allow_html=True)
+        section_title("Risk overview")
         ports_df = st.session_state.port_results
         if ports_df.empty:
             empty_panel("No port audit yet", "Run a Port Audit to build risk charts and recommendations.")
@@ -147,7 +123,7 @@ def show_overview() -> None:
             fig.update_layout(height=330, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#111111")
             st.plotly_chart(fig, use_container_width=True)
     with right:
-        st.markdown('<div class="section-title">Recent saved runs</div>', unsafe_allow_html=True)
+        section_title("Recent saved runs")
         if runs:
             st.dataframe(pd.DataFrame(runs), use_container_width=True, hide_index=True)
         else:
@@ -156,7 +132,7 @@ def show_overview() -> None:
 
 def show_network_scan() -> None:
     hero()
-    st.markdown('<div class="section-title">Network Scan</div>', unsafe_allow_html=True)
+    section_title("Network Scan")
     col_form, col_help = st.columns([1.1, 0.9])
     with col_form:
         cidr = st.text_input("Local CIDR range", "192.168.1.0/24")
@@ -195,7 +171,7 @@ def show_network_scan() -> None:
 
 def show_host_check() -> None:
     hero()
-    st.markdown('<div class="section-title">Host Check + Profile</div>', unsafe_allow_html=True)
+    section_title("Host Check + Profile")
     ip = st.text_input("Private/local IP address", "192.168.1.1")
     validation = validate_target_ip(ip)
     if validation.ok:
@@ -228,7 +204,7 @@ def show_host_check() -> None:
 
 def show_port_audit() -> None:
     hero()
-    st.markdown('<div class="section-title">Port Audit + Service Details</div>', unsafe_allow_html=True)
+    section_title("Port Audit + Service Details")
     col1, col2 = st.columns([1, 1])
     with col1:
         ip = st.text_input("Target private/local IP", "192.168.1.1")
@@ -269,7 +245,7 @@ def show_port_audit() -> None:
         metric_card("Exposure", exposure.level, f"Score: {exposure.score}")
     top_items = top_recommendations(ports_df.to_dict("records"))
     if top_items:
-        st.markdown('<div class="section-title">Top recommendations</div>', unsafe_allow_html=True)
+        section_title("Top recommendations")
         st.dataframe(pd.DataFrame(top_items), use_container_width=True, hide_index=True)
     st.dataframe(ports_df, use_container_width=True, hide_index=True)
     st.download_button("Download detailed port CSV", safe_csv_bytes(ports_df), "netwatch_detailed_ports.csv", "text/csv")
@@ -277,7 +253,7 @@ def show_port_audit() -> None:
 
 def show_risk_advisor() -> None:
     hero()
-    st.markdown('<div class="section-title">Risk Advisor</div>', unsafe_allow_html=True)
+    section_title("Risk Advisor")
     hosts_df = st.session_state.network_results
     ports_df = st.session_state.port_results
     inventory = asset_inventory()
@@ -290,9 +266,9 @@ def show_risk_advisor() -> None:
     with c3:
         metric_card("Inventory", len(inventory), "Saved assets")
     empty_panel("Advisor summary", advice.summary)
-    st.markdown('<div class="section-title">Priority findings</div>', unsafe_allow_html=True)
+    section_title("Priority findings")
     st.dataframe(pd.DataFrame({"Priority": advice.priorities}), use_container_width=True, hide_index=True)
-    st.markdown('<div class="section-title">Suggested next steps</div>', unsafe_allow_html=True)
+    section_title("Suggested next steps")
     st.dataframe(pd.DataFrame({"Next step": advice.next_steps}), use_container_width=True, hide_index=True)
     markdown = advice_to_markdown(advice)
     st.download_button("Download advisor notes", markdown.encode("utf-8"), "netwatch_advisor_notes.md", "text/markdown")
@@ -300,7 +276,7 @@ def show_risk_advisor() -> None:
 
 def show_inventory() -> None:
     hero()
-    st.markdown('<div class="section-title">Asset Inventory</div>', unsafe_allow_html=True)
+    section_title("Asset Inventory")
     inventory = asset_inventory()
     if not inventory:
         empty_panel("Inventory is empty", "Run checks to save local assets here.")
@@ -312,7 +288,7 @@ def show_inventory() -> None:
 
 def show_network_tools() -> None:
     hero()
-    st.markdown('<div class="section-title">Network Tools</div>', unsafe_allow_html=True)
+    section_title("Network Tools")
     cidr = st.text_input("CIDR to analyze", "192.168.1.0/24")
     profile = network_profile(cidr, sample_size=12)
     if profile.scan_allowed:
@@ -334,7 +310,7 @@ def show_network_tools() -> None:
 
 def show_reports() -> None:
     hero()
-    st.markdown('<div class="section-title">Reports & History</div>', unsafe_allow_html=True)
+    section_title("Reports & History")
     hosts_df = st.session_state.network_results
     ports_df = st.session_state.port_results
     markdown_report = build_markdown_report(hosts_df, ports_df)
@@ -368,12 +344,7 @@ def show_safety() -> None:
 
 init_state()
 with st.sidebar:
-    st.markdown("""
-    <div class="brand-card">
-        <div class="brand-title">NetWatch</div>
-        <div class="brand-sub">Local defensive dashboard</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(premium_sidebar(), unsafe_allow_html=True)
     st.caption(f"v{APP_VERSION}")
     page = st.radio("Navigation", ["Overview", "Network Scan", "Host Check", "Port Audit", "Risk Advisor", "Inventory", "Network Tools", "Reports", "Safety"])
     st.divider()
