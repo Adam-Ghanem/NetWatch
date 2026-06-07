@@ -1,373 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="512" viewBox="0 0 1536 512" role="img" aria-labelledby="title desc">
   <title id="title">NetWatch README Banner</title>
-  <desc id="desc">Dark futuristic cyber-style GitHub README banner for NetWatch, a local network monitor for lab and admin work.</desc>
-
+  <desc id="desc">Premium dark cyber README banner for NetWatch.</desc>
   <defs>
-    <radialGradient id="bgRadial" cx="58%" cy="43%" r="70%">
-      <stop offset="0%" stop-color="#111a4d"/>
-      <stop offset="35%" stop-color="#07102b"/>
-      <stop offset="72%" stop-color="#030713"/>
-      <stop offset="100%" stop-color="#01040b"/>
-    </radialGradient>
-
-    <linearGradient id="titleGrad" x1="175" y1="85" x2="535" y2="85" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="46%" stop-color="#f7f9ff"/>
-      <stop offset="64%" stop-color="#7b6cff"/>
-      <stop offset="82%" stop-color="#31c9ff"/>
-      <stop offset="100%" stop-color="#6179ff"/>
-    </linearGradient>
-
-    <linearGradient id="cyanPurple" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#19fff2"/>
-      <stop offset="35%" stop-color="#1977ff"/>
-      <stop offset="68%" stop-color="#8738ff"/>
-      <stop offset="100%" stop-color="#ff7bf4"/>
-    </linearGradient>
-
-    <linearGradient id="panelStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4beeff" stop-opacity=".65"/>
-      <stop offset="45%" stop-color="#775cff" stop-opacity=".45"/>
-      <stop offset="100%" stop-color="#ff9e48" stop-opacity=".48"/>
-    </linearGradient>
-
-    <linearGradient id="greenStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#46ffbb" stop-opacity=".7"/>
-      <stop offset="100%" stop-color="#11ff59" stop-opacity=".35"/>
-    </linearGradient>
-
-    <linearGradient id="blueStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#52d8ff" stop-opacity=".75"/>
-      <stop offset="100%" stop-color="#324cff" stop-opacity=".35"/>
-    </linearGradient>
-
-    <linearGradient id="purpleStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#c45cff" stop-opacity=".75"/>
-      <stop offset="100%" stop-color="#5d22ff" stop-opacity=".35"/>
-    </linearGradient>
-
-    <linearGradient id="orangeStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffb85b" stop-opacity=".75"/>
-      <stop offset="100%" stop-color="#ff7a1a" stop-opacity=".35"/>
-    </linearGradient>
-
-    <radialGradient id="blobCore" cx="62%" cy="57%" r="56%">
-      <stop offset="0%" stop-color="#39f8ff" stop-opacity=".96"/>
-      <stop offset="13%" stop-color="#20cfff" stop-opacity=".86"/>
-      <stop offset="35%" stop-color="#2455ff" stop-opacity=".72"/>
-      <stop offset="58%" stop-color="#3510a8" stop-opacity=".64"/>
-      <stop offset="79%" stop-color="#12064c" stop-opacity=".7"/>
-      <stop offset="100%" stop-color="#050323" stop-opacity=".96"/>
-    </radialGradient>
-
-    <linearGradient id="blobRim" x1="490" y1="120" x2="1010" y2="490" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#42f5ff" stop-opacity=".2"/>
-      <stop offset="20%" stop-color="#915dff" stop-opacity=".86"/>
-      <stop offset="42%" stop-color="#244bff" stop-opacity=".78"/>
-      <stop offset="72%" stop-color="#16eaff" stop-opacity=".98"/>
-      <stop offset="100%" stop-color="#60fff2" stop-opacity=".96"/>
-    </linearGradient>
-
-    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.12 0 0 0 0 0.65 0 0 0 0 1 0 0 0 .85 0" result="glow"/>
-      <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
-      <feGaussianBlur stdDeviation="13" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.18 0 0 0 0 0.62 0 0 0 0 1 0 0 0 1 0" result="glow"/>
-      <feMerge>
-        <feMergeNode in="glow"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-
-    <filter id="cardGlow" x="-45%" y="-45%" width="190%" height="190%">
-      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#207cff" flood-opacity=".24"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#853dff" flood-opacity=".18"/>
-    </filter>
-
-    <filter id="greenGlow" x="-70%" y="-70%" width="240%" height="240%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#12ff8a" flood-opacity=".75"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#12ff8a" flood-opacity=".22"/>
-    </filter>
-
-    <filter id="purpleGlow" x="-70%" y="-70%" width="240%" height="240%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#8b35ff" flood-opacity=".82"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#8b35ff" flood-opacity=".24"/>
-    </filter>
-
-    <filter id="orangeGlow" x="-70%" y="-70%" width="240%" height="240%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#ff9e43" flood-opacity=".82"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#ff7b1e" flood-opacity=".24"/>
-    </filter>
-
-    <filter id="blueGlow" x="-70%" y="-70%" width="240%" height="240%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#27c9ff" flood-opacity=".82"/>
-      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#2457ff" flood-opacity=".24"/>
-    </filter>
-
-    <filter id="textGlow" x="-20%" y="-50%" width="140%" height="200%">
-      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#6aa9ff" flood-opacity=".55"/>
-    </filter>
-
-    <pattern id="dotPattern" width="11" height="11" patternUnits="userSpaceOnUse">
-      <circle cx="1.2" cy="1.2" r=".65" fill="#7bf4ff" opacity=".24"/>
-    </pattern>
-
-    <pattern id="grid" width="70" height="70" patternUnits="userSpaceOnUse">
-      <path d="M70 0H0V70" fill="none" stroke="#4dbfff" stroke-opacity=".055" stroke-width="1"/>
-    </pattern>
-
-    <clipPath id="blobClip">
-      <path d="M758 96 C804 72 858 81 884 120 C909 157 899 197 936 224 C971 249 1026 245 1052 284 C1084 332 1050 395 999 415 C958 431 925 418 895 450 C865 481 880 528 839 548 C790 572 729 525 714 478 C700 434 735 405 710 365 C682 320 617 329 596 281 C574 229 616 181 663 168 C703 157 718 117 758 96Z"/>
-    </clipPath>
-
-    <linearGradient id="logoGrad" x1="58" y1="65" x2="135" y2="145" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="35%" stop-color="#e9edff"/>
-      <stop offset="62%" stop-color="#796dff"/>
-      <stop offset="100%" stop-color="#00eaff"/>
-    </linearGradient>
+    <radialGradient id="bg" cx="58%" cy="48%" r="72%"><stop offset="0" stop-color="#101a51"/><stop offset=".42" stop-color="#07102a"/><stop offset="1" stop-color="#02050d"/></radialGradient>
+    <linearGradient id="brand" x1="175" y1="75" x2="545" y2="125" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".48" stop-color="#f3f6ff"/><stop offset=".64" stop-color="#8568ff"/><stop offset=".83" stop-color="#25c8ff"/><stop offset="1" stop-color="#6174ff"/></linearGradient>
+    <linearGradient id="neon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#18fff2"/><stop offset=".42" stop-color="#236dff"/><stop offset=".72" stop-color="#8b39ff"/><stop offset="1" stop-color="#ff73dc"/></linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6ffaff" stop-opacity=".65"/><stop offset=".55" stop-color="#745cff" stop-opacity=".42"/><stop offset="1" stop-color="#ff9a38" stop-opacity=".5"/></linearGradient>
+    <linearGradient id="logo" x1="55" y1="53" x2="142" y2="143" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".42" stop-color="#eeeaff"/><stop offset=".68" stop-color="#856cff"/><stop offset="1" stop-color="#14edff"/></linearGradient>
+    <radialGradient id="blobFill" cx="62%" cy="56%" r="58%"><stop stop-color="#47ffff"/><stop offset=".16" stop-color="#20bfff" stop-opacity=".92"/><stop offset=".39" stop-color="#204dff" stop-opacity=".78"/><stop offset=".64" stop-color="#35128f" stop-opacity=".8"/><stop offset="1" stop-color="#04031b"/></radialGradient>
+    <linearGradient id="blobEdge" x1="620" y1="78" x2="1165" y2="426" gradientUnits="userSpaceOnUse"><stop stop-color="#44fbff" stop-opacity=".18"/><stop offset=".22" stop-color="#8c58ff"/><stop offset=".52" stop-color="#224eff"/><stop offset=".82" stop-color="#14f2ff"/><stop offset="1" stop-color="#66fff3"/></linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7" result="b"/><feColorMatrix in="b" type="matrix" values="0 0 0 0 .13 0 0 0 0 .55 0 0 0 0 1 0 0 0 .9 0" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="bigGlow" x="-80%" y="-80%" width="260%" height="260%"><feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#22dfff" flood-opacity=".72"/><feDropShadow dx="0" dy="0" stdDeviation="22" flood-color="#723cff" flood-opacity=".5"/></filter>
+    <filter id="cardGlow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#167eff" flood-opacity=".22"/><feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#873dff" flood-opacity=".16"/></filter>
+    <pattern id="grid" width="68" height="68" patternUnits="userSpaceOnUse"><path d="M68 0H0V68" fill="none" stroke="#5fe6ff" stroke-opacity=".045"/></pattern>
+    <pattern id="dots" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="1.1" cy="1.1" r=".7" fill="#8ff8ff" opacity=".22"/></pattern>
+    <clipPath id="blobClip"><path d="M866 44C917 21 965 39 990 83c22 38 15 73 54 99 40 26 94 24 119 65 31 50-2 108-52 127-40 16-76 3-105 35-28 31-9 72-50 92-52 25-111-20-126-66-14-42 19-69-7-109-30-45-94-33-116-81-25-56 20-105 70-117 40-10 48-62 89-84z"/></clipPath>
   </defs>
+  <rect width="1536" height="512" fill="url(#bg)"/>
+  <rect width="1536" height="512" fill="url(#grid)"/>
+  <rect width="1536" height="512" fill="url(#dots)" opacity=".06"/>
+  <g opacity=".32" stroke-width="2"><path d="M10 38h95M132 38h28M676 38h75M776 38h28M1376 14h75M1470 14h38" stroke="#22eaff"/><path d="M1436 18h42M700 42h36M18 496h70M109 496h31" stroke="#ff3edb"/><path d="M0 258h1536M0 452h1536M64 0v512M608 0v512M1058 0v512M1330 0v512" stroke="#64d6ff" stroke-opacity=".12" stroke-width="1"/></g>
 
-  <rect width="1400" height="760" fill="url(#bgRadial)"/>
-  <rect width="1400" height="760" fill="url(#grid)" opacity=".9"/>
-  <rect width="1400" height="760" fill="url(#dotPattern)" opacity=".08"/>
-
-  <g opacity=".45">
-    <path d="M0 108H1400M0 521H1400M0 704H1400" stroke="#63d8ff" stroke-opacity=".06"/>
-    <path d="M66 0V760M604 0V760M1062 0V760M1326 0V760" stroke="#8a6cff" stroke-opacity=".05"/>
-    <path d="M1090 63h67M1167 63h18M1233 63h48" stroke="#2fefff" stroke-width="2" stroke-opacity=".28"/>
-    <path d="M1187 66h37" stroke="#ff3edb" stroke-width="2" stroke-opacity=".35"/>
-    <path d="M15 713h85M126 713h26M1214 711h84M1320 711h26" stroke="#2fefff" stroke-width="2" stroke-opacity=".2"/>
-    <path d="M117 103h88M270 103h35M575 83h44M646 83h26" stroke="#a86cff" stroke-width="2" stroke-opacity=".18"/>
-    <path d="M15 594h54M93 594h18M1285 164h57M1360 164h21" stroke="#ff3edb" stroke-width="2" stroke-opacity=".18"/>
-    <path d="M1100 242h24M1133 242h11M1248 508h80M1345 508h22" stroke="#2fefff" stroke-width="2" stroke-opacity=".16"/>
+  <g transform="translate(64 65)" filter="url(#glow)"><path d="M4 37V13C4 6 10 1 17 1l22 21" fill="none" stroke="url(#logo)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M72 3c8 0 13 6 13 14v70L23 24" fill="none" stroke="url(#logo)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 83V55l34 33c-13 4-25 3-34-5z" fill="none" stroke="url(#logo)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M47 3h12" stroke="#fff" stroke-width="9" stroke-linecap="round"/><circle cx="38" cy="15" r="5" fill="#fff"/><circle cx="75" cy="44" r="4" fill="#a98cff"/></g>
+  <text x="181" y="135" font-family="Arial, Helvetica, sans-serif" font-size="82" font-weight="900" letter-spacing="-4" fill="url(#brand)" filter="url(#glow)">NetWatch</text>
+  <path d="M70 172v76" stroke="url(#neon)" stroke-width="3" stroke-linecap="round"/>
+  <text x="90" y="195" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#e6ecff">Local network monitor for lab and admin work</text>
+  <g transform="translate(105 223)" font-family="Arial, Helvetica, sans-serif" fill="#cbd4e8">
+    <g filter="url(#glow)"><circle cx="14" cy="11" r="9" fill="none" stroke="#1ffff2" stroke-width="3"/><path d="M14 3v5M14 15v6M6 11h5M18 11h5" stroke="#1ffff2" stroke-width="2" stroke-linecap="round"/></g><text x="38" y="18" font-size="20">Scan.</text>
+    <g transform="translate(142)" filter="url(#glow)"><circle cx="12" cy="10" r="8" fill="none" stroke="#4ba3ff" stroke-width="3"/><path d="M18 16l9 9" stroke="#4ba3ff" stroke-width="3" stroke-linecap="round"/></g><text x="177" y="18" font-size="20">Inspect.</text>
+    <g transform="translate(292)" filter="url(#glow)"><path d="M5 22V13M14 22V6M23 22V10M32 22V2" stroke="#9e56ff" stroke-width="4" stroke-linecap="round"/><path d="M2 22h33" stroke="#9e56ff" stroke-width="2" opacity=".7"/></g><text x="341" y="18" font-size="20">Understand.</text>
   </g>
 
-  <g opacity=".22">
-    <rect x="1" y="1" width="1398" height="758" rx="26" fill="none" stroke="#2f6eff" stroke-opacity=".22"/>
-    <rect x="20" y="21" width="1360" height="718" rx="20" fill="none" stroke="#60f7ff" stroke-opacity=".045"/>
+  <g filter="url(#bigGlow)"><path d="M866 44C917 21 965 39 990 83c22 38 15 73 54 99 40 26 94 24 119 65 31 50-2 108-52 127-40 16-76 3-105 35-28 31-9 72-50 92-52 25-111-20-126-66-14-42 19-69-7-109-30-45-94-33-116-81-25-56 20-105 70-117 40-10 48-62 89-84z" fill="url(#blobFill)" stroke="url(#blobEdge)" stroke-width="4"/></g>
+  <g clip-path="url(#blobClip)" opacity=".65"><rect x="680" y="20" width="540" height="480" fill="url(#dots)"/><path d="M712 232c78-59 144-30 222-72 76-42 145 8 218 82M790 327c78-54 137-14 202-63 55-41 113-21 169 32M820 430c53-45 102-20 163-66 58-44 103-12 149 0" fill="none" stroke="#65f9ff" stroke-opacity=".28" stroke-width="1.5"/><ellipse cx="845" cy="80" rx="72" ry="18" fill="#fff" opacity=".06" transform="rotate(20 845 80)"/><ellipse cx="1112" cy="363" rx="75" ry="30" fill="#28f4ff" opacity=".12" transform="rotate(-23 1112 363)"/></g>
+  <g filter="url(#bigGlow)"><path d="M1040 25c22-19 57-7 60 24 31 7 31 52 1 58-12 27-54 21-57-8-31-8-31-54-4-74z" fill="#070735" stroke="url(#neon)" stroke-width="3"/><path d="M918 366c20-31 62-23 70 12 28 11 17 52-14 53-21 28-67 14-66-21-25-18-17-46 10-44z" fill="#070735" stroke="url(#neon)" stroke-width="3"/></g>
+
+  <g transform="translate(68 282)" font-family="Arial, Helvetica, sans-serif">
+    <g filter="url(#cardGlow)"><rect width="182" height="139" rx="12" fill="#071114" fill-opacity=".72" stroke="#33ff9c" stroke-opacity=".45"/><text x="16" y="28" fill="#63ffc6" font-size="13">HOSTS ONLINE</text><circle cx="156" cy="29" r="5" fill="#1fff83" filter="url(#glow)"/><text x="16" y="77" fill="#fff" font-size="39" font-weight="800">18</text><text x="119" y="75" fill="#22ff87" font-size="17" font-weight="700">↑12%</text><path d="M17 124c17-2 25-14 38-5 13 9 20-32 36-9 13 20 25-5 35 2 9 6 13 18 23-10 9 22 17-3 27 4" fill="none" stroke="#22ff75" stroke-width="2" opacity=".8"/></g>
+    <g transform="translate(205)" filter="url(#cardGlow)"><rect width="182" height="139" rx="12" fill="#060b1d" fill-opacity=".72" stroke="#3aa5ff" stroke-opacity=".45"/><text x="16" y="28" fill="#aecbff" font-size="13">PORT AUDIT</text><rect x="137" y="13" width="33" height="33" rx="9" fill="#0c265f" filter="url(#glow)"/><path d="M154 20l12 7v13l-12 7-12-7V27z" fill="none" stroke="#4bd4ff" stroke-width="2"/><text x="16" y="77" fill="#fff" font-size="39" font-weight="800">7</text><text x="16" y="107" fill="#aeb8d2" font-size="15">Open Ports</text><path d="M88 124c10-17 16-3 22-16 7-19 15 22 23 1 7-17 14 4 22-7 7 18 13-3 22 0" fill="none" stroke="#3977ff" stroke-width="2" opacity=".84"/></g>
+    <g transform="translate(410)" filter="url(#cardGlow)"><rect width="182" height="139" rx="12" fill="#0d061d" fill-opacity=".72" stroke="#9947ff" stroke-opacity=".45"/><text x="16" y="28" fill="#d3b2ff" font-size="13">RISKS FOUND</text><rect x="137" y="13" width="33" height="33" rx="9" fill="#2b0a4d" filter="url(#glow)"/><path d="M154 20l12 7v13l-12 7-12-7V27zM154 29v8M154 41h.1" fill="none" stroke="#c955ff" stroke-width="2" stroke-linecap="round"/><text x="16" y="77" fill="#fff" font-size="39" font-weight="800">2</text><text x="16" y="107" fill="#cb85ff" font-size="15">Low Risk</text><path d="M93 124c9-18 16 4 21-16 6-25 14 28 22 3 7-21 14 5 22-8 6 20 12-5 20 0" fill="none" stroke="#9635ff" stroke-width="2" opacity=".85"/></g>
+    <g transform="translate(615)" filter="url(#cardGlow)"><rect width="190" height="139" rx="12" fill="#140d0a" fill-opacity=".72" stroke="#ff9f45" stroke-opacity=".48"/><text x="16" y="28" fill="#e5d4c4" font-size="13">REPORT</text><rect x="145" y="13" width="33" height="33" rx="9" fill="#4a250a" filter="url(#glow)"/><path d="M155 21h12l7 7v16h-19zM166 21v8h8M159 35h10M159 40h11" fill="none" stroke="#ffb156" stroke-width="2"/><text x="16" y="77" fill="#fff" font-size="39" font-weight="800">MD</text><text x="16" y="107" fill="#c9b6a7" font-size="15">Export ready</text></g>
   </g>
 
-  <g transform="translate(60 62)" filter="url(#softGlow)">
-    <path d="M2 38 L2 12 C2 5 8 0 15 0 L35 20" fill="none" stroke="url(#logoGrad)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M70 2 C80 2 85 9 85 19 L85 80 L22 22" fill="none" stroke="url(#logoGrad)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M2 79 L2 52 L36 85 C29 87 20 87 14 82 Z" fill="none" stroke="url(#logoGrad)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M45 2 L59 2" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
-    <circle cx="36" cy="14" r="5" fill="#fff"/>
-    <circle cx="74" cy="43" r="4" fill="#8d7bff"/>
-  </g>
+  <g transform="translate(68 451)" font-family="Arial, Helvetica, sans-serif" fill="#aeb7ca" opacity=".85"><path d="M13 0l13 6v12c0 13-13 20-13 20S0 31 0 18V6z" fill="none" stroke="#5aa8ff" stroke-width="2.2" filter="url(#glow)"/><path d="M8 18l4 4 8-10" fill="none" stroke="#5aa8ff" stroke-width="2.2" stroke-linecap="round"/><text x="33" y="26" font-size="18">Private • Local • Safe</text><path d="M236 1v34" stroke="#69738d"/><text x="291" y="26" font-size="18">Python</text><text x="466" y="26" font-size="18">Streamlit</text><path d="M421 1v34" stroke="#69738d"/><path d="M260 7c9 0 7 8 7 15h-16c-6 0-8-22 9-22zM270 12h-8" stroke="#4ba3ff" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/><path d="M452 7l-10 19h10l-4 14 18-23h-12z" fill="#8f54ff" filter="url(#glow)"/></g>
 
-  <g filter="url(#textGlow)">
-    <text x="170" y="129" font-family="Arial, Helvetica, sans-serif" font-size="78" font-weight="800" letter-spacing="-3" fill="url(#titleGrad)">NetWatch</text>
-  </g>
-
-  <path d="M66 168V246" stroke="url(#cyanPurple)" stroke-width="3" stroke-linecap="round" opacity=".78"/>
-  <text x="86" y="194" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="500" fill="#e7edff" opacity=".92">Local network monitor for lab and admin work</text>
-
-  <g transform="translate(98 220)" font-family="Arial, Helvetica, sans-serif">
-    <g filter="url(#softGlow)">
-      <circle cx="15" cy="12" r="10" fill="none" stroke="#20fff0" stroke-width="3"/>
-      <path d="M15 3v6M15 15v6M6 12h5M19 12h5" stroke="#20fff0" stroke-width="2" stroke-linecap="round"/>
-    </g>
-    <text x="39" y="20" font-size="20" fill="#c9d1e9">Scan.</text>
-
-    <g transform="translate(132 0)" filter="url(#softGlow)">
-      <circle cx="15" cy="11" r="8" fill="none" stroke="#4ba3ff" stroke-width="3"/>
-      <path d="M21 17l9 9" stroke="#4ba3ff" stroke-width="3" stroke-linecap="round"/>
-    </g>
-    <text x="171" y="20" font-size="20" fill="#c9d1e9">Inspect.</text>
-
-    <g transform="translate(278 0)" filter="url(#softGlow)">
-      <path d="M6 22V12M14 22V5M22 22V9M30 22V1" stroke="#9b5cff" stroke-width="4" stroke-linecap="round"/>
-      <path d="M3 22h31" stroke="#9b5cff" stroke-width="2" stroke-linecap="round" opacity=".65"/>
-    </g>
-    <text x="328" y="20" font-size="20" fill="#c9d1e9">Understand.</text>
-  </g>
-
-  <g filter="url(#strongGlow)">
-    <path d="M758 96 C804 72 858 81 884 120 C909 157 899 197 936 224 C971 249 1026 245 1052 284 C1084 332 1050 395 999 415 C958 431 925 418 895 450 C865 481 880 528 839 548 C790 572 729 525 714 478 C700 434 735 405 710 365 C682 320 617 329 596 281 C574 229 616 181 663 168 C703 157 718 117 758 96Z" fill="url(#blobCore)" stroke="url(#blobRim)" stroke-width="4" opacity=".96"/>
-  </g>
-
-  <g clip-path="url(#blobClip)" opacity=".58">
-    <rect x="570" y="70" width="520" height="520" fill="url(#dotPattern)" opacity=".8"/>
-    <path d="M615 267 C690 214 752 234 827 199 C902 165 956 205 1026 284" fill="none" stroke="#6dfcff" stroke-width="1.4" stroke-opacity=".26"/>
-    <path d="M692 366 C760 308 828 337 884 294 C934 256 991 271 1046 337" fill="none" stroke="#9b60ff" stroke-width="1.2" stroke-opacity=".35"/>
-    <path d="M707 470 C756 420 807 443 869 397 C930 352 978 381 1026 401" fill="none" stroke="#27f7ff" stroke-width="1.1" stroke-opacity=".3"/>
-    <path d="M654 177 C706 204 759 164 810 118" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity=".18"/>
-    <path d="M925 447 C953 411 1013 427 1052 369" fill="none" stroke="#5ffff0" stroke-width="1.6" stroke-opacity=".32"/>
-  </g>
-
-  <g opacity=".72" filter="url(#softGlow)">
-    <ellipse cx="650" cy="292" rx="65" ry="24" fill="#0d1c7d" opacity=".4" transform="rotate(-18 650 292)"/>
-    <ellipse cx="1009" cy="372" rx="62" ry="28" fill="#22e6ff" opacity=".15" transform="rotate(-24 1009 372)"/>
-    <ellipse cx="802" cy="126" rx="56" ry="18" fill="#ffffff" opacity=".05" transform="rotate(20 802 126)"/>
-  </g>
-
-  <g filter="url(#strongGlow)">
-    <path d="M934 52 C956 33 990 45 993 76 C1023 83 1024 127 994 133 C982 161 941 155 938 126 C908 118 906 74 934 52Z" fill="#08073b" stroke="url(#cyanPurple)" stroke-width="3"/>
-    <rect x="952" y="72" width="29" height="29" rx="10" fill="#1c0d76" opacity=".45"/>
-    <path d="M838 522 C858 493 900 502 907 535 C933 546 923 586 894 588 C874 615 831 602 831 567 C806 550 812 521 838 522Z" fill="#08073b" stroke="url(#cyanPurple)" stroke-width="3"/>
-    <path d="M855 544 C875 525 899 536 894 563 C875 579 846 570 855 544Z" fill="#1737c9" opacity=".25"/>
-  </g>
-
-  <g transform="translate(64 281)" font-family="Arial, Helvetica, sans-serif">
-    <g filter="url(#cardGlow)">
-      <rect x="0" y="0" width="180" height="139" rx="12" fill="#061014" fill-opacity=".68" stroke="url(#greenStroke)" stroke-width="1.2"/>
-      <text x="16" y="29" fill="#65ffc6" font-size="13" letter-spacing=".4">HOSTS ONLINE</text>
-      <circle cx="154" cy="30" r="5" fill="#19ff82" filter="url(#greenGlow)"/>
-      <text x="16" y="77" fill="#ffffff" font-size="39" font-weight="800">18</text>
-      <text x="117" y="75" fill="#1eff83" font-size="17" font-weight="700">↑12%</text>
-      <path d="M18 124 C31 122 37 112 48 119 C60 126 65 91 80 112 C91 127 103 107 112 113 C119 118 124 128 133 102 C143 124 150 100 160 105 C166 110 171 96 176 96" fill="none" stroke="#23ff75" stroke-width="2" opacity=".78"/>
-      <path d="M18 125H176" stroke="#1aff78" stroke-opacity=".1"/>
-    </g>
-
-    <g transform="translate(205 0)" filter="url(#cardGlow)">
-      <rect x="0" y="0" width="180" height="139" rx="12" fill="#060b1d" fill-opacity=".7" stroke="url(#blueStroke)" stroke-width="1.2"/>
-      <text x="16" y="29" fill="#a9c8ff" font-size="13" letter-spacing=".4">PORT AUDIT</text>
-      <rect x="136" y="13" width="32" height="32" rx="9" fill="#0c265f" opacity=".9" filter="url(#blueGlow)"/>
-      <path d="M152 20 L164 26 V38 L152 45 L140 38 V26 Z" fill="none" stroke="#46caff" stroke-width="2"/>
-      <text x="16" y="77" fill="#ffffff" font-size="39" font-weight="800">7</text>
-      <text x="16" y="107" fill="#9fb5d8" font-size="15">Open Ports</text>
-      <path d="M92 124 C99 112 103 124 108 117 C113 108 118 94 125 110 C132 134 137 107 142 104 C149 100 151 119 158 111 C164 100 168 108 174 97" fill="none" stroke="#3e74ff" stroke-width="2" opacity=".82"/>
-    </g>
-
-    <g transform="translate(410 0)" filter="url(#cardGlow)">
-      <rect x="0" y="0" width="180" height="139" rx="12" fill="#0d061d" fill-opacity=".7" stroke="url(#purpleStroke)" stroke-width="1.2"/>
-      <text x="16" y="29" fill="#d1b2ff" font-size="13" letter-spacing=".4">RISKS FOUND</text>
-      <rect x="136" y="13" width="32" height="32" rx="9" fill="#2b0a4d" opacity=".9" filter="url(#purpleGlow)"/>
-      <path d="M152 20 L164 26 V38 L152 45 L140 38 V26 Z" fill="none" stroke="#c54dff" stroke-width="2"/>
-      <path d="M152 29v9M152 41h.1" stroke="#c54dff" stroke-width="2.4" stroke-linecap="round"/>
-      <text x="16" y="77" fill="#ffffff" font-size="39" font-weight="800">2</text>
-      <text x="16" y="107" fill="#c889ff" font-size="15">Low Risk</text>
-      <path d="M93 124 C100 110 104 116 108 106 C114 88 121 125 126 112 C132 95 139 104 143 96 C148 117 153 103 158 107 C164 119 169 101 176 104" fill="none" stroke="#9738ff" stroke-width="2" opacity=".85"/>
-    </g>
-
-    <g transform="translate(615 0)" filter="url(#cardGlow)">
-      <rect x="0" y="0" width="180" height="139" rx="12" fill="#140d0a" fill-opacity=".72" stroke="url(#orangeStroke)" stroke-width="1.2"/>
-      <text x="16" y="29" fill="#e6d3bf" font-size="13" letter-spacing=".4">REPORT</text>
-      <rect x="136" y="13" width="32" height="32" rx="9" fill="#4a250a" opacity=".9" filter="url(#orangeGlow)"/>
-      <path d="M147 21h12l7 7v16h-19z" fill="none" stroke="#ffb15a" stroke-width="2"/>
-      <path d="M158 21v8h8M151 35h10M151 40h11" stroke="#ffb15a" stroke-width="1.5" stroke-linecap="round"/>
-      <text x="16" y="77" fill="#ffffff" font-size="39" font-weight="800">MD</text>
-      <text x="16" y="107" fill="#c8b4a4" font-size="15">Export ready</text>
-    </g>
-  </g>
-
-  <g transform="translate(66 456)" font-family="Arial, Helvetica, sans-serif" opacity=".82">
-    <g filter="url(#softGlow)">
-      <path d="M13 0 L26 6 V18 C26 31 13 38 13 38 C13 38 0 31 0 18 V6 Z" fill="none" stroke="#5ba9ff" stroke-width="2.3"/>
-      <path d="M8 18l4 4 8-10" fill="none" stroke="#5ba9ff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
-    <text x="32" y="26" fill="#aab4ca" font-size="18">Private • Local • Safe</text>
-    <path d="M238 1V35" stroke="#6b7594" stroke-opacity=".45"/>
-    <text x="291" y="26" fill="#aab4ca" font-size="18">Python</text>
-    <g transform="translate(258 6)" filter="url(#softGlow)">
-      <path d="M16 0 C8 0 8 5 8 9v5h14c4 0 6 3 6 7s-2 7-6 7h-6v-5h6c1 0 2-.8 2-2s-1-2-2-2H8c-4 0-8-2.5-8-7V9C0 4 4 0 9 0Z" fill="#4aa7ff"/>
-      <path d="M16 33 C24 33 24 28 24 24v-5H10c-4 0-6-3-6-7s2-7 6-7h6v5h-6c-1 0-2 .8-2 2s1 2 2 2h14c4 0 8 2.5 8 7v3c0 5-4 9-9 9Z" fill="#8366ff"/>
-      <circle cx="11" cy="6" r="1.8" fill="#fff"/>
-      <circle cx="21" cy="27" r="1.8" fill="#fff"/>
-    </g>
-    <path d="M419 1V35" stroke="#6b7594" stroke-opacity=".45"/>
-    <g transform="translate(456 7)" filter="url(#purpleGlow)">
-      <path d="M16 0 L5 20h11l-4 17 18-24H18z" fill="#8f54ff"/>
-    </g>
-    <text x="490" y="26" fill="#aab4ca" font-size="18">Streamlit</text>
-  </g>
-
-  <g transform="translate(1092 58)" filter="url(#cardGlow)">
-    <rect x="0" y="0" width="345" height="360" rx="16" fill="#06101c" fill-opacity=".62" stroke="url(#panelStroke)" stroke-width="1.1"/>
-    <rect x="14" y="15" width="317" height="330" rx="12" fill="#07131f" fill-opacity=".2" stroke="#7bdfff" stroke-opacity=".06"/>
-    <text x="31" y="35" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#d9e2f3" letter-spacing=".8">NETWORK MAP</text>
-    <g transform="translate(275 19)">
-      <rect x="0" y="0" width="55" height="24" rx="12" fill="#071a20" stroke="#2dffad" stroke-opacity=".22"/>
-      <circle cx="14" cy="12" r="3" fill="#25ff9b" filter="url(#greenGlow)"/>
-      <text x="24" y="16" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#9fffd3">Live</text>
-      <path d="M45 10l3 3 3-3" stroke="#9fffd3" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-    </g>
-
-    <g opacity=".75">
-      <path d="M177 168 L156 87" stroke="#5cefff" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-      <path d="M177 168 L62 145" stroke="#8b5cff" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-      <path d="M177 168 L76 253" stroke="#4b91ff" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-      <path d="M177 168 L263 145" stroke="#ff9f4f" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-      <path d="M177 168 L246 253" stroke="#8f4dff" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-      <path d="M177 168 L175 287" stroke="#34ffc3" stroke-width="1" stroke-opacity=".45" stroke-dasharray="3 4"/>
-    </g>
-
-    <g transform="translate(177 168)" filter="url(#blueGlow)">
-      <circle r="31" fill="#0a2a74" stroke="#1aa7ff" stroke-width="2"/>
-      <circle r="21" fill="#0b1250" opacity=".85"/>
-      <path d="M-13 -9h26v17h-26zM-6 14h12M-14 18h28" fill="none" stroke="#4deaff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-    </g>
-
-    <g transform="translate(156 85)" filter="url(#greenGlow)">
-      <circle r="17" fill="#063322" stroke="#1dff9b" stroke-width="2"/>
-      <circle r="7" fill="#13ff91"/>
-    </g>
-    <text x="174" y="91" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.10</text>
-
-    <g transform="translate(62 145)" filter="url(#purpleGlow)">
-      <circle r="17" fill="#240646" stroke="#8d42ff" stroke-width="2"/>
-      <circle r="7" fill="#9a48ff"/>
-    </g>
-    <text x="80" y="151" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.25</text>
-
-    <g transform="translate(76 253)" filter="url(#blueGlow)">
-      <circle r="17" fill="#071d44" stroke="#299bff" stroke-width="2"/>
-      <circle r="7" fill="#22a5ff"/>
-    </g>
-    <text x="94" y="259" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.8</text>
-
-    <g transform="translate(263 145)" filter="url(#orangeGlow)">
-      <circle r="17" fill="#3c1c08" stroke="#ff9a3d" stroke-width="2"/>
-      <circle r="7" fill="#ff9b3d"/>
-    </g>
-    <text x="281" y="151" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.25</text>
-
-    <g transform="translate(246 253)" filter="url(#purpleGlow)">
-      <circle r="17" fill="#210542" stroke="#7439ff" stroke-width="2"/>
-      <circle r="7" fill="#7439ff"/>
-    </g>
-    <text x="264" y="259" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.30</text>
-
-    <g transform="translate(175 287)" filter="url(#greenGlow)">
-      <circle r="16" fill="#063327" stroke="#22ffc7" stroke-width="1.8"/>
-      <circle r="6.5" fill="#17e7b6"/>
-    </g>
-    <text x="193" y="293" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#cae6e9">192.168.1.30</text>
-  </g>
-
-  <g transform="translate(1203 439)" filter="url(#cardGlow)">
-    <rect x="0" y="0" width="253" height="35" rx="10" fill="#06131e" fill-opacity=".88" stroke="#3ccfff" stroke-opacity=".25"/>
-    <circle cx="18" cy="17.5" r="4" fill="#1fff93" filter="url(#greenGlow)"/>
-    <text x="35" y="22" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#c7d2e2">Secure by default. Use responsibly.</text>
-  </g>
-
-  <g opacity=".28">
-    <path d="M28 486h35M75 486h10M114 486h66M204 486h16M1310 487h55" stroke="#ff3edb" stroke-width="2"/>
-    <path d="M1115 488h53M1188 488h13M565 487h45" stroke="#20efff" stroke-width="2"/>
-    <path d="M647 33h40M714 33h18M1254 35h64M1340 35h22" stroke="#20efff" stroke-width="2"/>
-    <path d="M1321 35h15" stroke="#ff3edb" stroke-width="2"/>
-    <path d="M1030 626h63M1116 626h24M1165 626h84" stroke="#4a68ff" stroke-width="2" opacity=".45"/>
-  </g>
-
-  <g opacity=".14">
-    <rect x="583" y="187" width="50" height="2" fill="#23f3ff"/>
-    <rect x="594" y="197" width="22" height="2" fill="#ff44d7"/>
-    <rect x="1003" y="209" width="37" height="2" fill="#23f3ff"/>
-    <rect x="1015" y="219" width="17" height="2" fill="#ff44d7"/>
-    <rect x="1260" y="512" width="56" height="2" fill="#23f3ff"/>
-    <rect x="1334" y="518" width="31" height="2" fill="#ff44d7"/>
-    <rect x="302" y="50" width="44" height="2" fill="#23f3ff"/>
-    <rect x="356" y="55" width="18" height="2" fill="#ff44d7"/>
-  </g>
-
-  <rect x="0" y="0" width="1400" height="760" fill="none" stroke="#ffffff" stroke-opacity=".025"/>
+  <g transform="translate(1128 58)" font-family="Arial, Helvetica, sans-serif" filter="url(#cardGlow)"><rect width="364" height="360" rx="16" fill="#06101c" fill-opacity=".64" stroke="url(#panel)"/><text x="29" y="35" font-size="15" font-weight="700" letter-spacing=".8" fill="#dbe4f4">NETWORK MAP</text><g transform="translate(286 19)"><rect width="58" height="24" rx="12" fill="#071a20" stroke="#2dffad" stroke-opacity=".25"/><circle cx="14" cy="12" r="3" fill="#25ff9b"/><text x="24" y="16" font-size="10" fill="#a6ffd9">Live</text></g><path d="M182 168 160 86M182 168 64 145M182 168 78 253M182 168 270 145M182 168 252 253M182 168 180 287" stroke="#70f4ff" stroke-opacity=".35" stroke-dasharray="3 4"/><g filter="url(#glow)"><circle cx="182" cy="168" r="31" fill="#0b2a73" stroke="#1aa7ff" stroke-width="2"/><path d="M169 158h26v18h-26zM176 182h12M168 187h28" fill="none" stroke="#54ecff" stroke-width="2.2" stroke-linecap="round"/></g><g><circle cx="160" cy="86" r="17" fill="#063322" stroke="#1dff9b" stroke-width="2"/><circle cx="160" cy="86" r="7" fill="#12ff91"/><text x="179" y="92" font-size="11" fill="#cae6e9">192.168.1.10</text><circle cx="64" cy="145" r="17" fill="#240646" stroke="#8d42ff" stroke-width="2"/><circle cx="64" cy="145" r="7" fill="#9a48ff"/><text x="83" y="151" font-size="11" fill="#cae6e9">192.168.1.25</text><circle cx="78" cy="253" r="17" fill="#071d44" stroke="#299bff" stroke-width="2"/><circle cx="78" cy="253" r="7" fill="#22a5ff"/><text x="97" y="259" font-size="11" fill="#cae6e9">192.168.1.8</text><circle cx="270" cy="145" r="17" fill="#3c1c08" stroke="#ff9a3d" stroke-width="2"/><circle cx="270" cy="145" r="7" fill="#ff9b3d"/><text x="289" y="151" font-size="11" fill="#cae6e9">192.168.1.25</text><circle cx="252" cy="253" r="17" fill="#210542" stroke="#7439ff" stroke-width="2"/><circle cx="252" cy="253" r="7" fill="#7439ff"/><text x="271" y="259" font-size="11" fill="#cae6e9">192.168.1.30</text><circle cx="180" cy="287" r="16" fill="#063327" stroke="#22ffc7" stroke-width="2"/><circle cx="180" cy="287" r="6" fill="#17e7b6"/><text x="199" y="293" font-size="11" fill="#cae6e9">192.168.1.30</text></g></g>
+  <g transform="translate(1231 439)" font-family="Arial, Helvetica, sans-serif" filter="url(#cardGlow)"><rect width="262" height="35" rx="10" fill="#06131e" fill-opacity=".9" stroke="#3ccfff" stroke-opacity=".27"/><circle cx="18" cy="18" r="4" fill="#1fff93" filter="url(#glow)"/><text x="35" y="22" font-size="13" fill="#cbd4e2">Secure by default. Use responsibly.</text></g>
+  <rect width="1536" height="512" fill="none" stroke="#fff" stroke-opacity=".035"/>
 </svg>
