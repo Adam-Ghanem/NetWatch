@@ -8,6 +8,17 @@ I made it as a practical cybersecurity/networking portfolio project. It is not a
 
 > Use it only on networks you own or where you have clear permission.
 
+## What changed in v0.5.1
+
+This version focuses on security hardening:
+
+- Dynamic text is cleaned before entering custom Streamlit HTML cards
+- CSV exports are sanitized to reduce spreadsheet formula-injection risk
+- Safety page now documents UI/export safety controls
+- Added `safe_text.py` and `export_utils.py`
+- Added tests for safe text rendering and safe CSV export
+- Added `docs/security-hardening.md`
+
 ## What changed in v0.5.0
 
 This version adds an integrated **AI Advisor**:
@@ -42,6 +53,7 @@ The repository includes handover and deployment material so the project can be r
 - `docs/demo-script.md`
 - `docs/deployment.md`
 - `docs/security-review.md`
+- `docs/security-hardening.md`
 - `docs/acceptance-checklist.md`
 - `docs/architecture.md`
 - `docs/ai-advisor.md`
@@ -62,6 +74,19 @@ The repository includes handover and deployment material so the project can be r
 - Export hosts, ports, inventory and AI advice
 - Generate Markdown and HTML reports
 - Keep a local history of checks
+
+## Security notes
+
+NetWatch includes several defensive controls:
+
+- Public IP targets are blocked by validation logic.
+- CIDR scans have a maximum host limit.
+- Scan actions require explicit permission confirmation.
+- Dynamic values used in custom UI cards are cleaned first.
+- CSV exports reduce spreadsheet formula-injection risk.
+- HTML reports escape table values before export.
+- Generated local files are ignored by Git.
+- The AI Advisor is local and does not send data outside the machine.
 
 ## Accuracy notes
 
@@ -120,6 +145,7 @@ NetWatch/
 ├── ai_advisor.py
 ├── app.py
 ├── config.py
+├── export_utils.py
 ├── history_store.py
 ├── host_profiler.py
 ├── inventory_store.py
@@ -130,6 +156,7 @@ NetWatch/
 ├── port_scanner.py
 ├── report_builder.py
 ├── risk_engine.py
+├── safe_text.py
 ├── security.py
 ├── service_catalog.py
 ├── requirements.txt
@@ -152,13 +179,16 @@ NetWatch/
 │   ├── demo-script.md
 │   ├── deployment.md
 │   ├── run-on-kali.md
+│   ├── security-hardening.md
 │   └── security-review.md
 └── tests/
     ├── test_ai_advisor.py
+    ├── test_export_utils.py
     ├── test_host_profiler.py
     ├── test_network_tools.py
     ├── test_report_builder.py
     ├── test_risk_engine.py
+    ├── test_safe_text.py
     ├── test_service_catalog.py
     └── test_security.py
 ```
@@ -232,17 +262,6 @@ docker run -p 8501:8501 netwatch
 ```bash
 docker compose up -d --build
 ```
-
-## Safety notes
-
-NetWatch is intentionally limited:
-
-- It only accepts private/local IP ranges.
-- It limits the number of hosts in one scan.
-- It checks a short list of common ports only.
-- It does not include exploitation, brute force, password attacks, stealth, or evasion.
-- The recommendations are basic and defensive.
-- The AI Advisor uses local project data and does not send results outside the machine.
 
 ## Tests
 
