@@ -4,9 +4,20 @@
 
 NetWatch is a local network monitoring dashboard built with Python and Streamlit.
 
-I made it as a practical cybersecurity/networking portfolio project. It is not a hacking tool; it is an admin-style dashboard for checking a local network, seeing which hosts respond, reviewing a short list of common services, saving a local inventory, exporting reports, and generating local AI-style advice.
+I made it as a practical cybersecurity/networking portfolio project. It is not a hacking tool; it is an admin-style dashboard for checking a local network, seeing which hosts respond, reviewing a short list of common services, saving a local inventory, exporting reports, and generating local advisory notes.
 
 > Use it only on networks you own or where you have clear permission.
+
+## What changed in v0.5.2
+
+This version keeps the advisory feature neutral and product-style:
+
+- Renamed the advisor page to **Risk Advisor**
+- Added `advisory_engine.py`
+- Added `docs/advisory-engine.md`
+- Added `tests/test_advisory_engine.py`
+- Updated exports to `netwatch_advisor_notes.md`
+- Updated app labels, documentation, and security notes
 
 ## What changed in v0.5.1
 
@@ -14,51 +25,10 @@ This version focuses on security hardening:
 
 - Dynamic text is cleaned before entering custom Streamlit HTML cards
 - CSV exports are sanitized to reduce spreadsheet formula-injection risk
-- Safety page now documents UI/export safety controls
+- Safety page documents UI/export safety controls
 - Added `safe_text.py` and `export_utils.py`
 - Added tests for safe text rendering and safe CSV export
 - Added `docs/security-hardening.md`
-
-## What changed in v0.5.0
-
-This version adds an integrated **AI Advisor**:
-
-- New **AI Advisor** page in the Streamlit sidebar
-- Local AI-style summary of scan results
-- Risk level explanation
-- Priority findings generated from the latest Port Audit
-- Suggested next steps for the technical team
-- Confidence level based on available data
-- Markdown export: `netwatch_ai_advice.md`
-- No external API calls and no API key required
-
-## What changed in v0.4.0
-
-This version focuses on more precise information:
-
-- Host profiling with latency in milliseconds
-- TTL extraction from ping replies
-- Basic OS hint from TTL value
-- Reverse DNS hostname lookup when available
-- Detailed port output with protocol and response time
-- Service descriptions and common role hints
-- Device role hint based on observed open services
-- Extra tests for host parsing and service catalog logic
-
-## Company-ready documentation added
-
-The repository includes handover and deployment material so the project can be reviewed more easily by a company or internship supervisor:
-
-- `docs/company-handover.md`
-- `docs/demo-script.md`
-- `docs/deployment.md`
-- `docs/security-review.md`
-- `docs/security-hardening.md`
-- `docs/acceptance-checklist.md`
-- `docs/architecture.md`
-- `docs/ai-advisor.md`
-- `docker-compose.yml`
-- GitHub issue templates
 
 ## Main features
 
@@ -67,11 +37,11 @@ The repository includes handover and deployment material so the project can be r
 - Scan a local CIDR range such as `192.168.1.0/24`
 - Audit common TCP ports such as SSH, HTTP, HTTPS, SMB, MySQL, RDP and PostgreSQL
 - Show service description, common role, response time and device role hint
-- Use AI Advisor to summarize risk and next actions
+- Use Risk Advisor to summarize risk and next actions
 - Block public Internet targets from the app
 - Save local assets and last-seen data in SQLite
 - Show exposure score, level and top recommendations
-- Export hosts, ports, inventory and AI advice
+- Export hosts, ports, inventory and advisor notes
 - Generate Markdown and HTML reports
 - Keep a local history of checks
 
@@ -86,7 +56,22 @@ NetWatch includes several defensive controls:
 - CSV exports reduce spreadsheet formula-injection risk.
 - HTML reports escape table values before export.
 - Generated local files are ignored by Git.
-- The AI Advisor is local and does not send data outside the machine.
+- The Risk Advisor is local and does not send data outside the machine.
+
+## Company-ready documentation
+
+The repository includes handover and deployment material so the project can be reviewed more easily by a company or internship supervisor:
+
+- `docs/company-handover.md`
+- `docs/demo-script.md`
+- `docs/deployment.md`
+- `docs/security-review.md`
+- `docs/security-hardening.md`
+- `docs/acceptance-checklist.md`
+- `docs/architecture.md`
+- `docs/advisory-engine.md`
+- `docker-compose.yml`
+- GitHub issue templates
 
 ## Accuracy notes
 
@@ -96,7 +81,7 @@ NetWatch gives local visibility, not absolute truth:
 - Hostname depends on reverse DNS availability.
 - Device role is a hint based on open ports, not guaranteed identification.
 - Firewalls can make services appear closed or filtered.
-- The AI Advisor is local and rule-based; it helps explain results but does not replace a full security audit.
+- The Risk Advisor is local and rule-based; it helps explain results but does not replace a full security audit.
 - The port list is intentionally short and defensive.
 
 ## Pages
@@ -105,7 +90,7 @@ NetWatch gives local visibility, not absolute truth:
 - **Network Scan**: checks which local hosts respond
 - **Host Check**: tests one IP address and shows profile details
 - **Port Audit**: checks common services and shows detailed recommendations
-- **AI Advisor**: summarizes results, priorities and next steps
+- **Risk Advisor**: summarizes results, priorities and next steps
 - **Inventory**: saved local assets from previous checks
 - **Network Tools**: quick CIDR/subnet helper
 - **Reports**: Markdown and HTML report export
@@ -122,7 +107,7 @@ I wanted a project related to what I study: networks, security basics, and Pytho
 - Ping output parsing
 - Service catalog mapping
 - SQLite storage
-- Local AI-style advisory logic
+- Local advisory logic
 - CSV/Markdown/HTML report generation
 - Defensive security thinking
 - GitHub project organization
@@ -142,7 +127,7 @@ I wanted a project related to what I study: networks, security basics, and Pytho
 
 ```text
 NetWatch/
-├── ai_advisor.py
+├── advisory_engine.py
 ├── app.py
 ├── config.py
 ├── export_utils.py
@@ -173,7 +158,7 @@ NetWatch/
 │   └── sample_hosts.csv
 ├── docs/
 │   ├── acceptance-checklist.md
-│   ├── ai-advisor.md
+│   ├── advisory-engine.md
 │   ├── architecture.md
 │   ├── company-handover.md
 │   ├── demo-script.md
@@ -182,7 +167,7 @@ NetWatch/
 │   ├── security-hardening.md
 │   └── security-review.md
 └── tests/
-    ├── test_ai_advisor.py
+    ├── test_advisory_engine.py
     ├── test_export_utils.py
     ├── test_host_profiler.py
     ├── test_network_tools.py
@@ -276,7 +261,7 @@ pytest -q
 - Add optional authentication for shared deployments
 - Add a small SQLite cleanup/export tool
 - Add manually editable asset owner/location fields
-- Add optional external LLM integration for private company deployments
+- Add company policy mapping for private deployments
 
 ## Disclaimer
 
