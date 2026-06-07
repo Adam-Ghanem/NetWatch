@@ -8,6 +8,18 @@ I made it as a practical cybersecurity/networking portfolio project. It is not a
 
 > Use it only on networks you own or where you have clear permission.
 
+## What changed in v0.6.0
+
+This version focuses on the visual identity and product feel:
+
+- Switched the app to an editorial light theme
+- Added oversized hero typography
+- Added paper background with a subtle grid
+- Redesigned metric cards with strong borders and shadow
+- Updated buttons, sidebar and table containers
+- Replaced the README banner with a minimal product-style banner
+- Kept the neutral **Risk Advisor** wording
+
 ## What changed in v0.5.2
 
 This version keeps the advisory feature neutral and product-style:
