@@ -1,30 +1,44 @@
 # NetWatch
 
-NetWatch is a small Python/Streamlit project for basic local network monitoring.
+![NetWatch Banner](assets/banner.svg)
 
-I built it as a cybersecurity/networking portfolio project while practicing Python, network scanning concepts, and defensive security. The goal is simple: check devices on a local network, test one host with ping, scan a short list of common ports, and show the result in a clean dashboard.
+NetWatch is a small local network monitoring dashboard built with Python and Streamlit.
 
-> Use this only on networks you own or where you have permission.
+I made it as a practical cybersecurity/networking portfolio project. It is not a hacking tool; it is a simple admin-style dashboard for checking a local network, seeing which hosts respond, checking a short list of common ports, and exporting a basic report.
 
-## What it does
+> Use it only on networks you own or where you have clear permission.
 
-- Checks if a private/local IP is online using ping
-- Scans a local CIDR range such as `192.168.1.0/24`
-- Checks common TCP ports like SSH, HTTP, SMB, MySQL and RDP
-- Blocks public Internet targets from the app
-- Shows basic risk levels and simple hardening advice
-- Exports scan results as CSV
-- Keeps a local activity log in `logs/netwatch.log`
+## What changed in v0.2.0
 
-## Why I made it
+- New dark dashboard design
+- Overview page with cards and charts
+- Separate pages for network scan, host check, port audit, reports, and safety notes
+- Local scan history saved to `data/scan_history.csv`
+- Markdown report download from the latest results
+- Cleaner banner and Streamlit theme
+- Extra tests for report summary logic
 
-I wanted a practical project related to networking and cybersecurity, not just a static website. NetWatch helped me practice:
+## Main features
+
+- Ping one private/local IP address
+- Scan a local CIDR range such as `192.168.1.0/24`
+- Audit common TCP ports such as SSH, HTTP, HTTPS, SMB, MySQL, RDP, PostgreSQL
+- Block public Internet targets from the app
+- Show basic risk levels and simple hardening advice
+- Export hosts and port results as CSV
+- Generate a Markdown report
+- Keep a local history of scans
+
+## Why I built it
+
+I wanted a project related to what I study: networks, security basics, and Python. NetWatch helped me practice:
 
 - Python modules and clean file structure
-- Streamlit dashboards
-- IP/CIDR validation
-- Socket programming basics
+- Streamlit interface design
+- IP and CIDR validation
+- Socket basics
 - Defensive security thinking
+- CSV/report generation
 - GitHub project organization
 
 ## Tech stack
@@ -34,6 +48,8 @@ I wanted a practical project related to networking and cybersecurity, not just a
 - Pandas
 - Plotly
 - Pytest
+- GitHub Actions
+- Docker
 
 ## Project structure
 
@@ -41,10 +57,12 @@ I wanted a practical project related to networking and cybersecurity, not just a
 NetWatch/
 ├── app.py
 ├── config.py
+├── history_store.py
 ├── logger.py
 ├── network_scanner.py
 ├── ping_checker.py
 ├── port_scanner.py
+├── report_builder.py
 ├── security.py
 ├── requirements.txt
 ├── README.md
@@ -52,12 +70,12 @@ NetWatch/
 ├── CONTRIBUTING.md
 ├── Dockerfile
 ├── Makefile
-├── LICENSE
 ├── assets/
 │   └── banner.svg
 ├── data/
 │   └── sample_hosts.csv
 └── tests/
+    ├── test_report_builder.py
     └── test_security.py
 ```
 
@@ -70,11 +88,13 @@ git clone https://github.com/Adam-Ghanem/NetWatch.git
 cd NetWatch
 ```
 
-Create and activate a virtual environment:
+Create a virtual environment:
 
 ```bash
 python -m venv venv
 ```
+
+Activate it.
 
 Windows:
 
@@ -121,23 +141,21 @@ NetWatch is intentionally limited:
 - It limits the number of hosts in one scan.
 - It checks a short list of common ports only.
 - It does not include exploitation, brute force, password attacks, stealth, or evasion.
-- The port advice is basic and defensive.
-
-## Current limits
-
-This is still a beginner/portfolio project. Some things I want to improve later:
-
-- Add PDF report export
-- Save scan history in a small database
-- Add screenshots after running it on a lab network
-- Improve device naming/vendor detection
-- Add better error handling for Windows/Linux ping differences
+- The recommendations are basic and defensive.
 
 ## Tests
 
 ```bash
 pytest -q
 ```
+
+## Next improvements
+
+- Add PDF export after the Markdown report
+- Save scan history in SQLite instead of CSV
+- Add screenshots from a real lab run
+- Add device names/vendor lookup for local networks
+- Improve Windows/Linux ping handling even more
 
 ## Disclaimer
 
