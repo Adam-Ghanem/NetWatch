@@ -1,6 +1,6 @@
 # NetWatch
 
-![NetWatch Banner](assets/banner.svg)
+![NetWatch Banner](assets/netwatch-banner-v2.svg)
 
 NetWatch is a small local network monitoring dashboard built with Python and Streamlit.
 
@@ -71,7 +71,7 @@ NetWatch/
 ├── Dockerfile
 ├── Makefile
 ├── assets/
-│   └── banner.svg
+│   └── netwatch-banner-v2.svg
 ├── data/
 │   └── sample_hosts.csv
 └── tests/
