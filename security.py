@@ -36,6 +36,13 @@ def validate_target_ip(target: str) -> ValidationResult:
     return ValidationResult(True, value=str(ip))
 
 
+def _usable_host_count(network: ipaddress._BaseNetwork) -> int:
+    """Return an approximate usable-host count without iterating over every IP."""
+    if network.version == 4 and network.prefixlen <= 30:
+        return max(network.num_addresses - 2, 0)
+    return network.num_addresses
+
+
 def validate_cidr(cidr: str) -> ValidationResult:
     """Validate CIDR and enforce a conservative maximum scan size."""
     try:
@@ -46,7 +53,7 @@ def validate_cidr(cidr: str) -> ValidationResult:
     if not _is_allowed_ip(network.network_address):
         return ValidationResult(False, error="Only private/local networks are allowed.")
 
-    host_count = sum(1 for _ in network.hosts())
+    host_count = _usable_host_count(network)
     if host_count > MAX_HOSTS_PER_SCAN:
         return ValidationResult(
             False,
