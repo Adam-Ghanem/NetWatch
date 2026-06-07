@@ -1,0 +1,29 @@
+# Changelog
+
+## v0.3.0
+
+- Added SQLite-backed local asset inventory.
+- Added Inventory page with saved devices, exposure score and open port count.
+- Added Network Tools page for CIDR profile, gateway guess, netmask and broadcast address.
+- Added risk engine for exposure scoring and top recommendations.
+- Added standalone HTML report export.
+- Added extra tests for risk scoring, reports and network helper logic.
+- Updated README and project structure.
+
+## v0.2.0
+
+- Redesigned Streamlit dashboard with dark interface.
+- Added Overview, Reports and Safety pages.
+- Added local scan history CSV.
+- Added Markdown report generation.
+- Updated README with more natural project notes.
+- Added report tests.
+
+## v0.1.0
+
+- Initial Streamlit dashboard.
+- Added host ping checker.
+- Added local CIDR scan.
+- Added common port audit.
+- Added defensive recommendations.
+- Added basic tests and GitHub Actions workflow.
