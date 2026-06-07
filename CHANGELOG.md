@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.1
+
+- Added safe text helper for custom Streamlit HTML cards.
+- Added safe CSV export helper to reduce spreadsheet formula-injection risk.
+- Updated app exports to use sanitized CSV output.
+- Updated UI metric cards and custom panels to clean dynamic values before rendering.
+- Added security hardening documentation.
+- Added tests for safe text and safe CSV helpers.
+- Updated README with security notes and v0.5.1 details.
+
 ## v0.5.0
 
 - Added local AI Advisor engine.
