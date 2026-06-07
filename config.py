@@ -1,14 +1,12 @@
 """Basic configuration for NetWatch."""
 
 APP_NAME = "NetWatch"
-APP_VERSION = "0.6.4"
+APP_VERSION = "0.7.0"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
 DEFAULT_TIMEOUT = 0.6
 
-# Common services checked by the app. The list is intentionally short
-# because this project is for local/admin practice, not aggressive scanning.
 COMMON_PORTS = {
     20: "FTP Data",
     21: "FTP",
