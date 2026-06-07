@@ -1,6 +1,6 @@
 # NetWatch
 
-![NetWatch Banner](assets/netwatch-banner-v2.svg)
+![NetWatch Banner](assets/netwatch-banner-mobile.svg)
 
 NetWatch is a local network monitoring dashboard built with Python and Streamlit.
 
@@ -17,7 +17,7 @@ This version focuses on the visual identity and product feel:
 - Added paper background with a subtle grid
 - Redesigned metric cards with strong borders and shadow
 - Updated buttons, sidebar and table containers
-- Replaced the README banner with a minimal product-style banner
+- Replaced the README banner with a mobile-friendly product-style banner
 - Kept the neutral **Risk Advisor** wording
 
 ## What changed in v0.5.2
@@ -165,6 +165,7 @@ NetWatch/
 ├── docker-compose.yml
 ├── Makefile
 ├── assets/
+│   ├── netwatch-banner-mobile.svg
 │   └── netwatch-banner-v2.svg
 ├── data/
 │   └── sample_hosts.csv
