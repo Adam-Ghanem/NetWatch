@@ -1,134 +1,162 @@
-<svg width="1600" height="520" viewBox="0 0 1600 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1800" height="600" viewBox="0 0 1800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(930 260) rotate(18) scale(520 270)">
-      <stop stop-color="#172BFF" stop-opacity="0.42"/>
-      <stop offset="0.46" stop-color="#4C1D95" stop-opacity="0.22"/>
+    <radialGradient id="bg1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1040 250) rotate(8) scale(540 310)">
+      <stop stop-color="#172554" stop-opacity="0.78"/>
+      <stop offset="0.45" stop-color="#4C1D95" stop-opacity="0.30"/>
       <stop offset="1" stop-color="#02040A" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="titleGrad" x1="160" y1="88" x2="710" y2="160" gradientUnits="userSpaceOnUse">
+    <radialGradient id="blobBlue" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1020 265) rotate(23) scale(230 140)">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.34" stop-color="#2563EB"/>
+      <stop offset="0.66" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#0B1020"/>
+    </radialGradient>
+    <radialGradient id="blobSmall" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1110 430) rotate(33) scale(90 55)">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="0.46" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="title" x1="210" y1="95" x2="690" y2="156" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF"/>
-      <stop offset="0.42" stop-color="#DDEBFF"/>
-      <stop offset="0.68" stop-color="#8B5CF6"/>
-      <stop offset="1" stop-color="#22D3EE"/>
+      <stop offset="0.44" stop-color="#EAF2FF"/>
+      <stop offset="0.72" stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
     </linearGradient>
-    <linearGradient id="blob" x1="860" y1="84" x2="1130" y2="424" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#4F46E5"/>
-      <stop offset="0.42" stop-color="#06B6D4"/>
-      <stop offset="0.72" stop-color="#7C3AED"/>
-      <stop offset="1" stop-color="#22D3EE"/>
+    <linearGradient id="neonLine" x1="80" y1="0" x2="620" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="0.45" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#F59E0B"/>
     </linearGradient>
-    <filter id="softGlow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="18" result="blur"/>
       <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
     </filter>
-    <filter id="cardGlow" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="7" result="blur"/>
+    <filter id="soft" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
       <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
     </filter>
-    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
-      <path d="M36 0H0V36" stroke="#14345A" stroke-opacity="0.18"/>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" stroke="#19314F" stroke-opacity="0.16"/>
     </pattern>
+    <style>
+      .label{font-family:Inter,Arial,sans-serif;font-weight:800;letter-spacing:.04em}.text{font-family:Inter,Arial,sans-serif}.muted{fill:#9FB0C8}.white{fill:#F8FAFC}.card{fill:#050B16;fill-opacity:.72;stroke-width:1.4}.glitch{opacity:.7}.float{animation:float 6s ease-in-out infinite}.float2{animation:float2 7s ease-in-out infinite}@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}@keyframes float2{0%,100%{transform:translateY(0)}50%{transform:translateY(10px)}}
+    </style>
   </defs>
 
-  <rect width="1600" height="520" rx="34" fill="#02040A"/>
-  <rect width="1600" height="520" rx="34" fill="url(#grid)" opacity="0.75"/>
-  <rect width="1600" height="520" rx="34" fill="url(#bgGlow)"/>
+  <rect width="1800" height="600" rx="34" fill="#02040A"/>
+  <rect width="1800" height="600" rx="34" fill="url(#grid)"/>
+  <rect width="1800" height="600" rx="34" fill="url(#bg1)"/>
 
-  <g opacity="0.75">
-    <rect x="40" y="58" width="105" height="3" fill="#00E5FF" opacity="0.48"/>
-    <rect x="530" y="72" width="96" height="3" fill="#8B5CF6" opacity="0.55"/>
-    <rect x="1185" y="60" width="150" height="3" fill="#2563EB" opacity="0.42"/>
-    <rect x="1360" y="432" width="130" height="3" fill="#EC4899" opacity="0.42"/>
-    <rect x="730" y="444" width="112" height="3" fill="#00E5FF" opacity="0.50"/>
-    <rect x="84" y="445" width="184" height="3" fill="#7C3AED" opacity="0.32"/>
+  <g class="glitch">
+    <rect x="42" y="34" width="158" height="3" fill="#22D3EE" opacity=".32"/>
+    <rect x="204" y="34" width="32" height="3" fill="#EC4899" opacity=".55"/>
+    <rect x="742" y="76" width="106" height="3" fill="#8B5CF6" opacity=".55"/>
+    <rect x="1530" y="54" width="92" height="3" fill="#22D3EE" opacity=".40"/>
+    <rect x="1642" y="54" width="56" height="3" fill="#F97316" opacity=".42"/>
+    <rect x="1320" y="502" width="150" height="3" fill="#8B5CF6" opacity=".34"/>
+    <rect x="1502" y="502" width="68" height="3" fill="#22D3EE" opacity=".45"/>
+    <rect x="900" y="530" width="112" height="3" fill="#F97316" opacity=".34"/>
+    <rect x="510" y="272" width="110" height="3" fill="#22D3EE" opacity=".36"/>
+    <rect x="540" y="286" width="44" height="3" fill="#EC4899" opacity=".42"/>
   </g>
 
-  <g transform="translate(78 76)">
-    <path d="M44 0L87 25V77L44 102L0 77V25L44 0Z" fill="#07111F" stroke="#A5B4FC" stroke-width="5"/>
-    <path d="M27 30L61 69M61 30L27 69" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
-    <circle cx="67" cy="23" r="8" fill="#22D3EE"/>
-    <circle cx="20" cy="80" r="8" fill="#8B5CF6"/>
+  <g transform="translate(80 76)">
+    <path d="M44 0L86 24V76L44 100L2 76V24L44 0Z" fill="#07111F" stroke="#DBEAFE" stroke-width="5"/>
+    <path d="M23 28L62 69M63 29L25 70" stroke="#F8FAFC" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="68" cy="22" r="8" fill="#A78BFA"/>
+    <circle cx="22" cy="78" r="8" fill="#22D3EE"/>
+    <circle cx="47" cy="50" r="6" fill="#C084FC"/>
   </g>
 
-  <text x="205" y="154" fill="url(#titleGrad)" font-family="Inter, Arial, sans-serif" font-size="94" font-weight="900" letter-spacing="-4">NetWatch</text>
-  <text x="92" y="238" fill="#D6E3F8" font-family="Inter, Arial, sans-serif" font-size="35" font-weight="500">Local network monitor for lab and admin work</text>
-
-  <g transform="translate(92 285)">
-    <line x1="0" y1="0" x2="0" y2="54" stroke="#22D3EE" stroke-width="3"/>
-    <circle cx="44" cy="27" r="17" stroke="#00FFE0" stroke-width="4"/>
-    <circle cx="44" cy="27" r="5" fill="#00FFE0"/>
-    <text x="76" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Scan</text>
-    <circle cx="204" cy="27" r="17" stroke="#38BDF8" stroke-width="4"/>
-    <line x1="216" y1="39" x2="230" y2="53" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
-    <text x="248" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Inspect</text>
-    <rect x="420" y="34" width="8" height="18" fill="#A855F7"/>
-    <rect x="434" y="22" width="8" height="30" fill="#A855F7"/>
-    <rect x="448" y="10" width="8" height="42" fill="#A855F7"/>
-    <text x="480" y="36" fill="#E5EDF9" font-family="Inter, Arial, sans-serif" font-size="24">Understand</text>
+  <text x="210" y="158" fill="url(#title)" font-family="Inter,Arial,sans-serif" font-size="98" font-weight="900" letter-spacing="-4">NetWatch</text>
+  <line x1="92" y1="202" x2="92" y2="308" stroke="url(#neonLine)" stroke-width="3"/>
+  <text x="124" y="235" class="text white" font-size="34" font-weight="500">Local network monitor for lab and admin work</text>
+  <g transform="translate(124 272)">
+    <circle cx="18" cy="17" r="14" stroke="#22D3EE" stroke-width="4"/>
+    <circle cx="18" cy="17" r="4" fill="#22D3EE"/>
+    <text x="52" y="26" class="text white" font-size="25">Scan.</text>
+    <circle cx="178" cy="17" r="14" stroke="#38BDF8" stroke-width="4"/>
+    <line x1="188" y1="28" x2="202" y2="42" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+    <text x="224" y="26" class="text white" font-size="25">Inspect.</text>
+    <rect x="402" y="25" width="8" height="18" fill="#A855F7"/>
+    <rect x="416" y="13" width="8" height="30" fill="#A855F7"/>
+    <rect x="430" y="1" width="8" height="42" fill="#A855F7"/>
+    <text x="462" y="26" class="text white" font-size="25">Understand.</text>
   </g>
 
-  <g transform="translate(74 365)">
+  <g transform="translate(78 356)">
     <g>
-      <rect width="196" height="112" rx="16" fill="#03130F" fill-opacity="0.72" stroke="#00FF99" stroke-opacity="0.62"/>
-      <text x="20" y="32" fill="#2EFFA8" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">HOSTS ONLINE</text>
-      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">18</text>
-      <text x="132" y="73" fill="#2EFFA8" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="800">↑ 12%</text>
-      <path d="M20 95C35 92 39 83 52 91C66 101 75 78 88 86C103 95 115 93 126 74C140 92 151 88 168 80" stroke="#00FF99" stroke-width="2" fill="none"/>
+      <rect width="216" height="126" rx="16" class="card" stroke="#10B981"/>
+      <text x="22" y="34" fill="#34D399" class="label" font-size="16">HOSTS ONLINE</text>
+      <text x="22" y="86" class="text white" font-size="48" font-weight="900">18</text>
+      <text x="146" y="80" fill="#22C55E" class="label" font-size="20">↑ 12%</text>
+      <path d="M22 105C40 102 45 89 58 98C76 110 84 78 102 91C118 104 130 96 144 75C160 98 178 88 198 80" stroke="#22C55E" stroke-width="2" fill="none"/>
+      <circle cx="178" cy="41" r="7" fill="#22C55E" filter="url(#soft)"/>
     </g>
-    <g transform="translate(218 0)">
-      <rect width="196" height="112" rx="16" fill="#06111F" fill-opacity="0.76" stroke="#0EA5E9" stroke-opacity="0.66"/>
-      <text x="20" y="32" fill="#60C5FF" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">PORT AUDIT</text>
-      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">7</text>
-      <text x="20" y="100" fill="#BBD4E8" font-family="Inter, Arial, sans-serif" font-size="14">Open Ports</text>
-      <path d="M104 94C116 100 126 72 136 87C146 105 154 76 164 80C175 84 180 69 190 60" stroke="#0EA5E9" stroke-width="2" fill="none"/>
+    <g transform="translate(238 0)">
+      <rect width="216" height="126" rx="16" class="card" stroke="#0EA5E9"/>
+      <text x="22" y="34" fill="#93C5FD" class="label" font-size="16">PORT AUDIT</text>
+      <text x="22" y="86" class="text white" font-size="48" font-weight="900">7</text>
+      <text x="22" y="109" fill="#AFC7E8" class="text" font-size="15">Open Ports</text>
+      <path d="M104 105C116 111 126 82 136 98C148 116 156 82 168 88C184 96 192 72 206 60" stroke="#0EA5E9" stroke-width="2" fill="none"/>
     </g>
-    <g transform="translate(436 0)">
-      <rect width="196" height="112" rx="16" fill="#12091D" fill-opacity="0.75" stroke="#A855F7" stroke-opacity="0.70"/>
-      <text x="20" y="32" fill="#D57DFF" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">RISKS FOUND</text>
-      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">2</text>
-      <text x="20" y="100" fill="#D57DFF" font-family="Inter, Arial, sans-serif" font-size="14">Low Risk</text>
-      <path d="M104 98C114 90 124 100 134 84C144 103 152 66 164 90C174 77 184 85 190 70" stroke="#A855F7" stroke-width="2" fill="none"/>
+    <g transform="translate(476 0)">
+      <rect width="216" height="126" rx="16" class="card" stroke="#A855F7"/>
+      <text x="22" y="34" fill="#D8B4FE" class="label" font-size="16">RISKS FOUND</text>
+      <text x="22" y="86" class="text white" font-size="48" font-weight="900">2</text>
+      <text x="22" y="109" fill="#D8B4FE" class="text" font-size="15">Low Risk</text>
+      <path d="M104 108C116 98 124 113 136 90C148 118 158 74 170 98C184 82 198 92 206 76" stroke="#A855F7" stroke-width="2" fill="none"/>
     </g>
-    <g transform="translate(654 0)">
-      <rect width="196" height="112" rx="16" fill="#160F08" fill-opacity="0.74" stroke="#F59E0B" stroke-opacity="0.64"/>
-      <text x="20" y="32" fill="#FBBF24" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="800">REPORT</text>
-      <text x="20" y="78" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="900">MD</text>
-      <text x="20" y="100" fill="#E8D7B8" font-family="Inter, Arial, sans-serif" font-size="14">Export ready</text>
+    <g transform="translate(714 0)">
+      <rect width="216" height="126" rx="16" class="card" stroke="#F59E0B"/>
+      <text x="22" y="34" fill="#FBBF24" class="label" font-size="16">REPORT</text>
+      <text x="22" y="86" class="text white" font-size="48" font-weight="900">MD</text>
+      <text x="22" y="109" fill="#E8D7B8" class="text" font-size="15">Export ready</text>
     </g>
   </g>
 
-  <g filter="url(#softGlow)" opacity="0.88">
-    <path d="M944 76C1018 42 1106 78 1125 158C1140 221 1087 244 1117 304C1151 371 1082 438 1008 425C950 415 925 357 874 348C813 337 775 282 798 225C819 171 883 185 895 133C902 104 917 88 944 76Z" fill="url(#blob)" fill-opacity="0.35" stroke="#22D3EE" stroke-opacity="0.78" stroke-width="3"/>
-    <path d="M933 96C992 68 1063 96 1078 160C1092 217 1036 239 1066 295C1093 347 1043 395 989 385C942 376 919 320 873 313C830 307 802 268 820 226C839 182 890 191 900 145C905 120 913 105 933 96Z" fill="#050B18" fill-opacity="0.35" stroke="#8B5CF6" stroke-opacity="0.58"/>
+  <g filter="url(#glow)" class="float">
+    <path d="M1012 70C1084 36 1185 82 1201 166C1214 234 1156 260 1194 328C1232 397 1160 470 1075 456C1005 444 984 378 922 367C842 352 807 288 842 222C873 165 941 180 958 122C965 96 983 80 1012 70Z" fill="url(#blobBlue)" fill-opacity="0.58" stroke="#22D3EE" stroke-opacity="0.82" stroke-width="3"/>
+    <path d="M992 101C1046 74 1128 105 1140 170C1153 231 1092 252 1122 303C1154 358 1104 411 1043 402C994 395 971 337 918 326C874 317 849 274 870 231C893 184 944 192 953 148C958 123 970 111 992 101Z" fill="#030712" fill-opacity="0.24" stroke="#A78BFA" stroke-opacity="0.60"/>
   </g>
-  <g opacity="0.64">
-    <circle cx="982" cy="198" r="2" fill="#22D3EE"/><circle cx="1012" cy="226" r="2" fill="#8B5CF6"/><circle cx="950" cy="276" r="2" fill="#22D3EE"/><circle cx="1032" cy="330" r="2" fill="#22D3EE"/><circle cx="888" cy="235" r="2" fill="#FFFFFF"/><circle cx="1084" cy="170" r="2" fill="#FFFFFF"/>
+  <g class="float2" filter="url(#glow)">
+    <path d="M1124 402C1150 382 1196 393 1203 429C1210 463 1178 489 1141 484C1109 480 1092 452 1103 425C1107 415 1114 408 1124 402Z" fill="url(#blobSmall)" fill-opacity="0.55" stroke="#A78BFA" stroke-opacity="0.70"/>
+    <path d="M1225 75C1246 58 1286 68 1290 100C1294 127 1269 146 1238 142C1212 139 1200 115 1208 94C1211 86 1217 80 1225 75Z" fill="url(#blobSmall)" fill-opacity="0.46" stroke="#22D3EE" stroke-opacity="0.60"/>
   </g>
 
-  <g transform="translate(1170 86)">
-    <rect width="360" height="286" rx="18" fill="#06101C" fill-opacity="0.72" stroke="#22D3EE" stroke-opacity="0.55"/>
-    <text x="22" y="40" fill="#F8FAFC" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800">NETWORK MAP</text>
-    <rect x="292" y="19" width="48" height="26" rx="13" fill="#06291F" stroke="#10B981" stroke-opacity="0.45"/>
-    <circle cx="307" cy="32" r="4" fill="#22F5A8"/>
-    <text x="316" y="38" fill="#22F5A8" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="800">LIVE</text>
-    <circle cx="180" cy="160" r="38" fill="#063B70" stroke="#00A3FF" stroke-width="2" filter="url(#cardGlow)"/>
-    <rect x="162" y="146" width="36" height="24" rx="3" stroke="#22D3EE" stroke-width="4"/>
-    <line x1="180" y1="170" x2="180" y2="183" stroke="#22D3EE" stroke-width="4"/>
-    <line x1="160" y1="185" x2="200" y2="185" stroke="#22D3EE" stroke-width="4" stroke-linecap="round"/>
-    <g stroke="#0EA5E9" stroke-dasharray="4 5" opacity="0.8">
-      <path d="M180 160L100 116"/><path d="M180 160L268 116"/><path d="M180 160L180 76"/><path d="M180 160L105 218"/><path d="M180 160L272 218"/>
+  <g transform="translate(1324 78)">
+    <rect width="410" height="320" rx="18" fill="#06101C" fill-opacity="0.74" stroke="#22D3EE" stroke-opacity="0.54"/>
+    <text x="26" y="48" class="label white" font-size="21">NETWORK MAP</text>
+    <rect x="332" y="25" width="56" height="28" rx="14" fill="#06291F" stroke="#10B981" stroke-opacity="0.42"/>
+    <circle cx="348" cy="39" r="4" fill="#22F5A8"/>
+    <text x="359" y="45" fill="#22F5A8" class="label" font-size="13">LIVE</text>
+    <circle cx="210" cy="174" r="42" fill="#063B70" stroke="#22D3EE" stroke-width="2" filter="url(#soft)"/>
+    <rect x="190" y="158" width="40" height="27" rx="3" stroke="#22D3EE" stroke-width="4"/>
+    <line x1="210" y1="185" x2="210" y2="200" stroke="#22D3EE" stroke-width="4"/>
+    <line x1="187" y1="202" x2="233" y2="202" stroke="#22D3EE" stroke-width="4" stroke-linecap="round"/>
+    <g stroke="#0EA5E9" stroke-dasharray="4 7" opacity="0.8">
+      <path d="M210 174L120 126"/><path d="M210 174L302 126"/><path d="M210 174L210 86"/><path d="M210 174L118 238"/><path d="M210 174L304 238"/>
     </g>
-    <g>
-      <circle cx="180" cy="76" r="25" fill="#063924" stroke="#10B981"/><circle cx="180" cy="76" r="9" fill="#10F2A2"/>
-      <text x="211" y="82" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.10</text>
-      <circle cx="100" cy="116" r="25" fill="#29104D" stroke="#A855F7"/><circle cx="100" cy="116" r="9" fill="#A855F7"/>
-      <text x="129" y="121" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.23</text>
-      <circle cx="268" cy="116" r="25" fill="#3A2209" stroke="#F59E0B"/><circle cx="268" cy="116" r="9" fill="#F59E0B"/>
-      <text x="297" y="121" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.28</text>
-      <circle cx="105" cy="218" r="25" fill="#06345B" stroke="#0EA5E9"/><circle cx="105" cy="218" r="9" fill="#0EA5E9"/>
-      <text x="134" y="224" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.15</text>
-      <circle cx="272" cy="218" r="25" fill="#2C0D57" stroke="#7C3AED"/><circle cx="272" cy="218" r="9" fill="#7C3AED"/>
-      <text x="301" y="224" fill="#DDEBFF" font-family="Inter, Arial, sans-serif" font-size="14">192.168.1.31</text>
-    </g>
+    <circle cx="210" cy="86" r="25" fill="#063924" stroke="#10B981"/><circle cx="210" cy="86" r="9" fill="#10F2A2"/>
+    <text x="240" y="92" fill="#DDEBFF" class="text" font-size="14">192.168.1.10</text>
+    <circle cx="120" cy="126" r="25" fill="#29104D" stroke="#A855F7"/><circle cx="120" cy="126" r="9" fill="#A855F7"/>
+    <text x="150" y="132" fill="#DDEBFF" class="text" font-size="14">192.168.1.23</text>
+    <circle cx="302" cy="126" r="25" fill="#3A2209" stroke="#F59E0B"/><circle cx="302" cy="126" r="9" fill="#F59E0B"/>
+    <text x="332" y="132" fill="#DDEBFF" class="text" font-size="14">192.168.1.28</text>
+    <circle cx="118" cy="238" r="25" fill="#06345B" stroke="#0EA5E9"/><circle cx="118" cy="238" r="9" fill="#0EA5E9"/>
+    <text x="148" y="244" fill="#DDEBFF" class="text" font-size="14">192.168.1.8</text>
+    <circle cx="304" cy="238" r="25" fill="#1E124D" stroke="#7C3AED"/><circle cx="304" cy="238" r="9" fill="#7C3AED"/>
+    <text x="334" y="244" fill="#DDEBFF" class="text" font-size="14">192.168.1.30</text>
+  </g>
+
+  <g transform="translate(78 528)">
+    <text x="0" y="0" fill="#93A7C0" class="text" font-size="23">🛡  Private • Local • Safe</text>
+    <text x="300" y="0" fill="#93A7C0" class="text" font-size="23">Python</text>
+    <text x="462" y="0" fill="#93A7C0" class="text" font-size="23">Streamlit</text>
+  </g>
+  <g transform="translate(1468 510)">
+    <rect width="260" height="42" rx="21" fill="#07111F" stroke="#8B5CF6" stroke-opacity="0.52"/>
+    <circle cx="27" cy="21" r="6" fill="#22C55E"/>
+    <text x="46" y="28" fill="#C7D2FE" class="text" font-size="18">Secure by default.</text>
   </g>
 </svg>
