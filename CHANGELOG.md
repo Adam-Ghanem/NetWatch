@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.0
+
+- Added local AI Advisor engine.
+- Added AI Advisor page to the Streamlit sidebar.
+- Added AI-style defensive summary from scan, port and inventory results.
+- Added risk-level explanation, priority findings and suggested next steps.
+- Added Markdown export for AI advice.
+- Added AI Advisor documentation.
+- Added tests for AI Advisor logic.
+- Updated README with AI integration notes.
+
 ## v0.4.0
 
 - Added host profiler with latency, TTL, hostname and OS hint.
