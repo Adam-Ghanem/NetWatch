@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.7.1
+
+- Added mandatory API-key protection for non-health API endpoints.
+- Restricted CORS to configured local frontend origins.
+- Added server-side authorization confirmation for every scan request.
+- Added API rate limiting and bounded concurrent scans.
+- Disabled API scanning when `NETWATCH_API_KEY` is not configured.
+- Disabled FastAPI documentation by default.
+- Enforced explicit local IPv4 scope and clear IPv6 rejection.
+- Updated saved reports and Risk Advisor to use stored port findings.
+- Hardened SQLite with WAL mode, busy timeout, UTC timestamps, and indexes.
+- Added non-root Docker execution and local-only port bindings.
+- Added `.dockerignore`, `.env.example`, API tests, and security CI.
+
+## v0.7.0
+
+- Added an initial FastAPI backend in `backend/`.
+- Added a static frontend foundation in `frontend/`.
+- Added FastAPI, Uvicorn, and Pydantic dependencies.
+- Added premium UI components and updated the Streamlit design.
+
 ## v0.6.0
 
 - Switched the app to an editorial light theme.
