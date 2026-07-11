@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="NetWatch local network visibility and defensive review dashboard." />
-  <meta name="color-scheme" content="dark" />
+  <meta name="color-scheme" content="light" />
   <title>NetWatch · Local Network Visibility</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
@@ -26,7 +26,7 @@
       <p id="connect-status" class="form-status"></p>
       <div class="connect-help">
         <strong>First launch?</strong>
-        <span>Run <code>./scripts/start.sh</code> or copy <code>.env.example</code> to <code>.env</code>.</span>
+        <span>Run <code>python scripts/start.py</code> or copy <code>.env.example</code> to <code>.env</code>.</span>
       </div>
     </form>
   </div>
@@ -37,7 +37,7 @@
         <div class="brand-mark small">NW</div>
         <div>
           <strong>NetWatch</strong>
-          <span>Local visibility</span>
+          <span>Network clarity, fast.</span>
         </div>
       </div>
 
@@ -75,13 +75,21 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">Defensive visibility</span>
-            <h3>Know what is visible on your local network.</h3>
-            <p>Discover approved hosts, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports.</p>
+            <span class="pill">New · NetWatch v1</span>
+            <h3>Turn local network data into confident decisions.</h3>
+            <p>Discover approved hosts, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
+            <div class="hero-actions">
+              <button class="button primary" data-go="network" type="button">Start a network scan</button>
+              <button class="button ghost" data-go="inventory" type="button">View inventory</button>
+            </div>
           </div>
           <div class="hero-signal" aria-hidden="true">
             <div class="radar"><i></i><i></i><i></i><b></b></div>
           </div>
+        </div>
+
+        <div class="trust-strip">
+          <span>Local-first</span><span>Authenticated</span><span>Evidence-backed</span><span>No external telemetry</span>
         </div>
 
         <div class="metric-grid">
@@ -96,7 +104,7 @@
             <div class="panel-head"><div><p class="eyebrow">Latest activity</p><h3>Recent checks</h3></div><button class="link-button" data-go="network">Run a scan →</button></div>
             <div id="overview-history" class="table-wrap"></div>
           </article>
-          <article class="panel">
+          <article class="panel accent-panel">
             <div class="panel-head"><div><p class="eyebrow">Local analysis</p><h3>Advisor summary</h3></div><button class="link-button" data-go="advisor">Open advisor →</button></div>
             <div id="overview-advisor" class="summary-card skeleton-block"></div>
           </article>
@@ -172,7 +180,7 @@
 
       <section id="view-advisor" class="view">
         <div class="advisor-grid">
-          <article class="panel advisor-main">
+          <article class="panel advisor-main accent-panel">
             <div class="panel-head"><div><p class="eyebrow">Deterministic local analysis</p><h3>Risk advisor</h3></div><span id="advisor-level" class="risk-badge neutral">Unknown</span></div>
             <p id="advisor-summary" class="advisor-copy">Load saved scan data to generate a local summary.</p>
             <div class="advisor-columns">
