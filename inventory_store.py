@@ -1,25 +1,32 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-DATA_DIR = Path("data")
+DATA_DIR = Path(os.getenv("NETWATCH_DATA_DIR", "data"))
 DB_FILE = DATA_DIR / "netwatch.db"
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
 def _connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_FILE, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
 def init_db() -> None:
     with _connect() as conn:
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS scan_runs (
@@ -46,11 +53,14 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_created_at ON scan_runs(created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_type ON scan_runs(scan_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_last_seen ON assets(last_seen)")
 
 
 def add_scan_run(scan_type: str, target: str, summary: str, status: str = "completed") -> int:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_now()
     with _connect() as conn:
         cursor = conn.execute(
             """
@@ -64,7 +74,7 @@ def add_scan_run(scan_type: str, target: str, summary: str, status: str = "compl
 
 def upsert_hosts(host_rows: Iterable[dict]) -> None:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_now()
     with _connect() as conn:
         for row in host_rows:
             ip = str(row.get("IP Address", "")).strip()
@@ -87,7 +97,7 @@ def upsert_hosts(host_rows: Iterable[dict]) -> None:
 
 def update_asset_ports(ip_address: str, port_rows: Iterable[dict], exposure_score: int, exposure_level: str) -> None:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_now()
     open_ports = [row for row in port_rows if row.get("Status") == "Open"]
     encoded = json.dumps(open_ports, ensure_ascii=False)
     with _connect() as conn:
@@ -107,6 +117,7 @@ def update_asset_ports(ip_address: str, port_rows: Iterable[dict], exposure_scor
 
 def recent_scan_runs(limit: int = 30) -> list[dict]:
     init_db()
+    safe_limit = max(1, min(int(limit), 200))
     with _connect() as conn:
         rows = conn.execute(
             """
@@ -115,9 +126,38 @@ def recent_scan_runs(limit: int = 30) -> list[dict]:
             ORDER BY id DESC
             LIMIT ?
             """,
-            (limit,),
+            (safe_limit,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _decode_ports(raw: str | None) -> list[dict]:
+    try:
+        ports = json.loads(raw or "[]")
+    except (json.JSONDecodeError, TypeError):
+        return []
+    return ports if isinstance(ports, list) else []
+
+
+def asset_port_findings() -> list[dict]:
+    """Return saved open-port findings in report/advisor-ready form."""
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT ip_address, open_ports
+            FROM assets
+            WHERE open_ports != '[]'
+            ORDER BY ip_address ASC
+            """
+        ).fetchall()
+
+    findings: list[dict] = []
+    for row in rows:
+        for item in _decode_ports(row["open_ports"]):
+            if isinstance(item, dict):
+                findings.append({"IP Address": row["ip_address"], **item})
+    return findings
 
 
 def asset_inventory() -> list[dict]:
@@ -134,11 +174,8 @@ def asset_inventory() -> list[dict]:
     inventory = []
     for row in rows:
         item = dict(row)
-        try:
-            ports = json.loads(item.pop("open_ports") or "[]")
-        except json.JSONDecodeError:
-            ports = []
+        ports = _decode_ports(item.pop("open_ports", "[]"))
         item["open_port_count"] = len(ports)
-        item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
+        item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports if isinstance(port, dict)) if ports else "-"
         inventory.append(item)
     return inventory
