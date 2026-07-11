@@ -18,11 +18,30 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
     return TestClient(api.app)
 
 
+def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get("/")
+    assert response.status_code == 200
+    assert "Connect to NetWatch" in response.text
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "default-src 'self'" in response.headers["content-security-policy"]
+
+
+def test_frontend_assets_are_served(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get("/app.js")
+    assert response.status_code == 200
+    assert "NetWatchApi" in response.text
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
 def test_health_is_public(monkeypatch, tmp_path):
     with _client(monkeypatch, tmp_path) as client:
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["version"] == "1.0.0"
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_protected_endpoint_rejects_missing_key(monkeypatch, tmp_path):
@@ -96,9 +115,9 @@ def test_trusted_local_origin_is_allowed(monkeypatch, tmp_path):
         response = client.options(
             "/api/inventory",
             headers={
-                "Origin": "http://127.0.0.1:3000",
+                "Origin": "http://127.0.0.1:8000",
                 "Access-Control-Request-Method": "GET",
                 "Access-Control-Request-Headers": "X-NetWatch-Key",
             },
         )
-    assert response.headers.get("access-control-allow-origin") == "http://127.0.0.1:3000"
+    assert response.headers.get("access-control-allow-origin") == "http://127.0.0.1:8000"
