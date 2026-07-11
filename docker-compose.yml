@@ -5,8 +5,8 @@ services:
     ports:
       - "127.0.0.1:8501:8501"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - netwatch-data:/app/data
+      - netwatch-logs:/app/logs
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -35,8 +35,8 @@ services:
       NETWATCH_RATE_LIMIT_REQUESTS: "${NETWATCH_RATE_LIMIT_REQUESTS:-10}"
       NETWATCH_RATE_LIMIT_WINDOW_SECONDS: "${NETWATCH_RATE_LIMIT_WINDOW_SECONDS:-60}"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - netwatch-data:/app/data
+      - netwatch-logs:/app/logs
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -50,3 +50,7 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  netwatch-data:
+  netwatch-logs:
