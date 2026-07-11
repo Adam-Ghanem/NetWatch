@@ -1,51 +1,96 @@
-# Security Review Notes
+# NetWatch v1 Security Review
 
-NetWatch is designed as a defensive local-network visibility tool. These notes summarize the safety choices used in the project.
+## Scope
 
-## Target restrictions
+This review covers the default local deployment of NetWatch v1: one FastAPI process serving the responsive dashboard and protected API at `127.0.0.1:8000`.
 
-The app validates targets before scanning:
+## Threat model
 
-- Private IP addresses
-- Loopback addresses
-- Link-local addresses
+NetWatch runs on a trusted operator machine connected to an authorized network. Relevant risks include:
 
-Public Internet targets are blocked by default.
+- A malicious webpage attempting to call a locally running API
+- An unauthorized local user accessing inventory or initiating scans
+- Accidental scanning of public or oversized ranges
+- Concurrent scans exhausting local resources
+- Sensitive internal evidence leaking through files, reports, browser caching, or Git
+- Container compromise receiving unnecessary privileges
+- Dynamic scan values being interpreted as HTML or spreadsheet formulas
 
-## Scan limits
+## Implemented controls
 
-The app keeps scanning conservative:
+### API access
 
-- A maximum number of hosts per CIDR scan
-- A short predefined list of common TCP ports
-- No stealth behavior
-- No exploitation logic
-- No credential collection
-- No brute-force features
+- All non-health endpoints require `X-NetWatch-Key`.
+- The configured key is compared with `hmac.compare_digest`.
+- Protected operations return HTTP 503 when no server key is configured.
+- The dashboard stores the key only in session storage.
 
-## User confirmation
+### Browser boundary
 
-The UI asks for explicit confirmation before scan actions. This is not a legal control by itself, but it helps keep the app focused on authorized use.
+- Dashboard and API use the same origin by default.
+- CORS permits only configured local origins.
+- Content Security Policy restricts scripts, styles, connections, objects, frames, and forms.
+- Frame embedding is denied.
+- MIME sniffing is disabled.
+- Referrer information is not sent.
+- Camera, microphone, and geolocation permissions are disabled.
+- API responses use `Cache-Control: no-store`.
 
-## Generated data
+### Scan safety
 
-NetWatch creates local data files:
+- Scan requests require explicit server-side authorization confirmation.
+- Targets are restricted to approved local IPv4 ranges.
+- Public and unsupported IPv6 targets are rejected.
+- CIDR scans are limited to 256 hosts.
+- API requests are rate limited per client and endpoint.
+- Simultaneous scans are bounded.
+- Port workers are bounded.
+- The service list is intentionally conservative.
 
-```text
-data/netwatch.db
-data/scan_history.csv
-logs/netwatch.log
-```
+### Storage and output
 
-These files can contain internal IPs and should not be committed or shared publicly. They are ignored in `.gitignore`.
+- SQLite uses WAL mode and busy timeout.
+- Timestamps are stored in UTC.
+- Database and generated files are ignored by Git.
+- CSV output reduces spreadsheet formula injection.
+- HTML report values are escaped.
+- The dashboard renders dynamic values with text nodes instead of HTML insertion.
 
-## Recommended company controls
+### Container controls
 
-If this app is used inside an organization, add:
+- The container runs as a non-root user.
+- Docker Compose drops all Linux capabilities and adds only `NET_RAW` for ping.
+- `no-new-privileges` is enabled.
+- Port `8000` is published only on `127.0.0.1`.
+- Local data is persisted in named volumes.
+- The image excludes local secrets and generated data through `.dockerignore`.
 
-- Organization authentication
+## Residual risks
+
+- A user with access to the local machine and `.env` can obtain the API key.
+- The API key is a single shared local secret, not user-level identity.
+- Localhost binding does not protect against every malicious process running under the same user account.
+- ICMP and TCP observations can be incomplete or misleading due to filtering and transient network conditions.
+- The in-memory rate limiter resets when the process restarts and is not suitable for a multi-worker deployment.
+- SQLite and the current schema are designed for one local operator, not high-concurrency multi-tenant use.
+- Reports and screenshots can expose sensitive internal information if shared carelessly.
+
+## Shared-deployment requirements
+
+Do not expose the default service to other networks without adding:
+
+- TLS
+- SSO or organization authentication
 - Role-based access control
-- Approved scan ranges
-- Centralized logging
-- Retention policy for scan history
-- Review process for exported reports
+- Managed secrets
+- Network restrictions
+- Centralized audit logging
+- Monitoring and alerting
+- Database backup and migration procedures
+- Retention/deletion policy
+- Dependency and container vulnerability management
+- A deployment-specific penetration test and privacy review
+
+## Review conclusion
+
+The default NetWatch v1 configuration is appropriate for a trusted single-user local lab or internal demonstration when used only on authorized networks. It is not approved as-is for public, multi-user, or Internet-accessible deployment.
