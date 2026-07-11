@@ -2,15 +2,26 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends iputils-ping \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system netwatch \
+    && useradd --system --gid netwatch --create-home --home-dir /home/netwatch netwatch
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY --chown=netwatch:netwatch . .
+RUN mkdir -p /app/data /app/logs \
+    && chown -R netwatch:netwatch /app/data /app/logs
 
-EXPOSE 8501
+USER netwatch
+
+EXPOSE 8501 8000
 
 CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
