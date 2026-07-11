@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.0.0
+
+- Promoted the FastAPI application and responsive web dashboard to the default NetWatch product interface.
+- Added complete dashboard workflows for overview, network discovery, host profiling, port audits, inventory, history, Risk Advisor, and report downloads.
+- Served frontend and API from one same-origin FastAPI process.
+- Added a session-only API-key connection screen and disconnect flow.
+- Added loading states, error handling, safe DOM rendering, responsive tables, metrics, and mobile navigation.
+- Added defensive response headers including Content Security Policy, frame blocking, MIME-sniffing protection, and no-store API caching.
+- Added a cross-platform one-command launcher that generates a secret, builds Docker, and starts NetWatch.
+- Simplified Docker Compose to one default production-style service with an optional legacy Streamlit profile.
+- Made the unified dashboard the default Docker image command.
+- Added frontend JavaScript validation, Docker Compose validation, and production container builds to CI.
+- Added dashboard/static-file/security-header tests.
+- Updated architecture, deployment, security, README, Makefile, and environment documentation.
+
 ## v0.7.1
 
 - Added mandatory API-key protection for non-health API endpoints.
