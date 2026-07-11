@@ -12,9 +12,25 @@ def test_public_ip_blocked():
     assert not result.ok
 
 
+def test_ipv6_is_rejected_until_supported():
+    result = validate_target_ip("fd00::1")
+    assert not result.ok
+    assert "IPv6" in (result.error or "")
+
+
 def test_private_cidr_allowed():
     result = validate_cidr("192.168.1.0/24")
     assert result.ok
+
+
+def test_public_or_mixed_cidr_blocked():
+    result = validate_cidr("192.0.0.0/8")
+    assert not result.ok
+
+
+def test_ipv6_cidr_blocked():
+    result = validate_cidr("fd00::/120")
+    assert not result.ok
 
 
 def test_large_network_blocked():
