@@ -57,8 +57,11 @@ def test_scan_requires_explicit_authorization(monkeypatch, tmp_path):
 
 
 def test_authorized_scan_uses_validated_target(monkeypatch, tmp_path):
-    monkeypatch.setattr(api, "scan_network", lambda cidr: [{"IP Address": "192.168.1.1", "Status": "Online", "Details": "mock"}])
-    monkeypatch.setattr(api, "add_history", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        api,
+        "scan_network",
+        lambda cidr: [{"IP Address": "192.168.1.1", "Status": "Online", "Details": "mock"}],
+    )
     monkeypatch.setattr(api, "add_scan_run", lambda *args, **kwargs: 1)
     monkeypatch.setattr(api, "upsert_hosts", lambda *args, **kwargs: None)
 
