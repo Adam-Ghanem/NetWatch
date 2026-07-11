@@ -1,11 +1,39 @@
-"""Basic configuration for NetWatch."""
+"""Configuration for NetWatch."""
+
+from __future__ import annotations
+
+import os
+
 
 APP_NAME = "NetWatch"
-APP_VERSION = "0.7.0"
+APP_VERSION = "0.7.1"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
 DEFAULT_TIMEOUT = 0.6
+
+
+def _env_int(name: str, default: int, minimum: int = 1) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(minimum, value)
+
+
+API_ALLOWED_ORIGINS = tuple(
+    origin.strip()
+    for origin in os.getenv(
+        "NETWATCH_ALLOWED_ORIGINS",
+        "http://127.0.0.1:3000,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+)
+API_DOCS_ENABLED = os.getenv("NETWATCH_API_DOCS", "false").strip().lower() in {"1", "true", "yes"}
+API_RATE_LIMIT_REQUESTS = _env_int("NETWATCH_RATE_LIMIT_REQUESTS", 10)
+API_RATE_LIMIT_WINDOW_SECONDS = _env_int("NETWATCH_RATE_LIMIT_WINDOW_SECONDS", 60)
+MAX_CONCURRENT_SCANS = _env_int("NETWATCH_MAX_CONCURRENT_SCANS", 1)
 
 COMMON_PORTS = {
     20: "FTP Data",
