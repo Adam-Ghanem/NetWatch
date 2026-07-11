@@ -31,13 +31,13 @@ from config import (
     APP_VERSION,
     MAX_CONCURRENT_SCANS,
 )
-from history_store import add_history, load_history
 from host_profiler import profile_host
 from inventory_store import (
     add_scan_run,
     asset_inventory,
     asset_port_findings,
     init_db,
+    recent_scan_runs,
     update_asset_ports,
     upsert_hosts,
 )
@@ -171,7 +171,6 @@ def scan_lan(payload: NetworkScanRequest) -> dict[str, Any]:
     with _scan_slot():
         results = scan_network(target)
     summary = f"{len(results)} online host(s) found"
-    add_history("network", target, summary)
     add_scan_run("network", target, summary)
     upsert_hosts(results)
     return {"target": target, "online_hosts": len(results), "hosts": results, "summary": summary}
@@ -188,7 +187,6 @@ def check_host(payload: HostRequest) -> dict[str, Any]:
         result = profile_host(target)
     status = "online" if result.online else "offline"
     msg = f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; hostname={result.hostname}"
-    add_history("host_profile", target, msg, status=status)
     add_scan_run("host_profile", target, msg, status=status)
     if result.online:
         upsert_hosts([{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}])
@@ -206,7 +204,6 @@ def audit_ports(payload: HostRequest) -> dict[str, Any]:
         ports = scan_ports(target)
     exposure = summarize_exposure(ports)
     msg = f"{exposure.open_ports} open port(s), level {exposure.level}, score {exposure.score}"
-    add_history("ports", target, msg)
     add_scan_run("ports", target, msg)
     update_asset_ports(target, ports, exposure.score, exposure.level)
     return {
@@ -225,7 +222,7 @@ def inventory() -> dict[str, Any]:
 
 @app.get("/api/history", dependencies=[Depends(require_api_access)])
 def history(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, Any]:
-    return {"items": load_history(limit=limit)}
+    return {"items": recent_scan_runs(limit=limit)}
 
 
 @app.get("/api/advisor", dependencies=[Depends(require_api_access)])
