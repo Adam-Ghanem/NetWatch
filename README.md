@@ -323,6 +323,7 @@ NetWatch/
 │   ├── styles.css
 │   └── app.js
 ├── scripts/
+│   ├── __init__.py
 │   └── start.py
 ├── tests/
 ├── docs/
