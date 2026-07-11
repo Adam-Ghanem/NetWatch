@@ -6,7 +6,7 @@ import os
 
 
 APP_NAME = "NetWatch"
-APP_VERSION = "0.7.1"
+APP_VERSION = "1.0.0"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
@@ -26,12 +26,12 @@ API_ALLOWED_ORIGINS = tuple(
     origin.strip()
     for origin in os.getenv(
         "NETWATCH_ALLOWED_ORIGINS",
-        "http://127.0.0.1:3000,http://localhost:3000",
+        "http://127.0.0.1:8000,http://localhost:8000",
     ).split(",")
     if origin.strip()
 )
 API_DOCS_ENABLED = os.getenv("NETWATCH_API_DOCS", "false").strip().lower() in {"1", "true", "yes"}
-API_RATE_LIMIT_REQUESTS = _env_int("NETWATCH_RATE_LIMIT_REQUESTS", 10)
+API_RATE_LIMIT_REQUESTS = _env_int("NETWATCH_RATE_LIMIT_REQUESTS", 30)
 API_RATE_LIMIT_WINDOW_SECONDS = _env_int("NETWATCH_RATE_LIMIT_WINDOW_SECONDS", 60)
 MAX_CONCURRENT_SCANS = _env_int("NETWATCH_MAX_CONCURRENT_SCANS", 1)
 PORT_SCAN_WORKERS = _env_int("NETWATCH_PORT_SCAN_WORKERS", 12)
