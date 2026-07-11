@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import stat
 from pathlib import Path
+
+import pytest
 
 import scripts.start as launcher
 
@@ -49,6 +52,7 @@ def test_launcher_replaces_placeholder_key(monkeypatch, tmp_path: Path):
     assert len(key) >= 32
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are not portable to Windows")
 def test_launcher_uses_private_posix_permissions_when_supported(monkeypatch, tmp_path: Path):
     env_file = tmp_path / ".env"
     monkeypatch.setattr(launcher, "ENV_FILE", env_file)
