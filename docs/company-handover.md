@@ -29,7 +29,7 @@ NetWatch is not designed for:
 - Password attacks
 - Stealth scanning
 - Vulnerability exploitation
-- Enterprise-grade asset management
+- Centralized asset management
 
 ## Suggested demo flow
 
