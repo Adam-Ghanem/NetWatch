@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.0.0
+
+- Promoted the FastAPI application and responsive web dashboard to the default NetWatch product interface.
+- Added complete dashboard workflows for overview, network discovery, host profiling, port audits, inventory, history, Risk Advisor, and report downloads.
+- Served frontend and API from one same-origin FastAPI process.
+- Added a session-only API-key connection screen and disconnect flow.
+- Added loading states, error handling, safe DOM rendering, responsive tables, metrics, and mobile navigation.
+- Added defensive response headers including Content Security Policy, frame blocking, MIME-sniffing protection, and no-store API caching.
+- Added a cross-platform one-command launcher that generates a secret, builds Docker, and starts NetWatch.
+- Simplified Docker Compose to one default production-style service with an optional legacy Streamlit profile.
+- Made the unified dashboard the default Docker image command.
+- Added frontend JavaScript validation, Docker Compose validation, and production container builds to CI.
+- Added dashboard/static-file/security-header tests.
+- Updated architecture, deployment, security, README, Makefile, and environment documentation.
+
+## v0.7.1
+
+- Added mandatory API-key protection for non-health API endpoints.
+- Restricted CORS to configured local frontend origins.
+- Added server-side authorization confirmation for every scan request.
+- Added API rate limiting and bounded concurrent scans.
+- Disabled API scanning when `NETWATCH_API_KEY` is not configured.
+- Disabled FastAPI documentation by default.
+- Enforced explicit local IPv4 scope and clear IPv6 rejection.
+- Updated saved reports and Risk Advisor to use stored port findings.
+- Hardened SQLite with WAL mode, busy timeout, UTC timestamps, and indexes.
+- Added non-root Docker execution and local-only port bindings.
+- Added `.dockerignore`, `.env.example`, API tests, and security CI.
+
+## v0.7.0
+
+- Added an initial FastAPI backend in `backend/`.
+- Added a static frontend foundation in `frontend/`.
+- Added FastAPI, Uvicorn, and Pydantic dependencies.
+- Added premium UI components and updated the Streamlit design.
+
 ## v0.6.0
 
 - Switched the app to an editorial light theme.

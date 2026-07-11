@@ -1,63 +1,187 @@
-# Deployment Guide
+# NetWatch v1 Deployment Guide
 
-This guide explains how to run NetWatch for a small internal demo or local network lab.
+NetWatch is designed to run locally on a trusted laptop, workstation, or lab VM connected to an authorized network.
 
-## Option 1: Python virtual environment
+## Recommended installation: one command
+
+Requirements:
+
+- Git
+- Python 3.10 or newer
+- Docker Desktop or Docker Engine with Docker Compose
+
+Clone the repository and start NetWatch:
 
 ```bash
 git clone https://github.com/Adam-Ghanem/NetWatch.git
 cd NetWatch
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
+python scripts/start.py
+```
+
+The launcher:
+
+1. Creates `.env` when necessary.
+2. Generates a strong random API key.
+3. Builds the production container.
+4. Starts NetWatch on localhost.
+5. Prints the URL and API key.
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+Enter the printed key in the dashboard connection screen. The browser stores it only in session storage, so closing the tab clears it.
+
+## Manual Docker Compose installation
+
+Create the environment file:
+
+```bash
+cp .env.example .env
+```
+
+Generate a secure key:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Place the value in `.env`:
+
+```text
+NETWATCH_API_KEY=your-generated-secret
+```
+
+Build and start:
+
+```bash
+docker compose up -d --build netwatch
+```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f netwatch
+docker compose restart netwatch
+docker compose down
+```
+
+## Local Python development
+
+Create a virtual environment:
+
+```bash
+python -m venv .venv
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Windows PowerShell:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Set an API key and run FastAPI:
+
+Linux/macOS:
+
+```bash
+export NETWATCH_API_KEY="development-only-secret"
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Windows PowerShell:
+
+```powershell
+$env:NETWATCH_API_KEY="development-only-secret"
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+## Optional legacy Streamlit interface
+
+The original dashboard remains available but is not started by default:
+
+```bash
+docker compose --profile legacy up -d streamlit
 ```
 
 Open:
 
 ```text
-http://localhost:8501
+http://127.0.0.1:8501
 ```
 
-## Option 2: Docker
+## Configuration
 
-```bash
-docker build -t netwatch .
-docker run -p 8501:8501 netwatch
-```
+| Environment variable | Default | Description |
+|---|---:|---|
+| `NETWATCH_API_KEY` | empty | Required secret that enables protected endpoints |
+| `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
+| `NETWATCH_API_DOCS` | `false` | Enables FastAPI documentation for local development |
+| `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
+| `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests allowed per endpoint/window |
+| `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
+| `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded common-port worker count |
+| `NETWATCH_DATA_DIR` | `data` | Local SQLite directory |
 
-## Option 3: Docker Compose
+## Persistent data
 
-```bash
-docker compose up -d --build
-```
-
-Stop it later:
-
-```bash
-docker compose down
-```
-
-## Generated local files
-
-NetWatch creates local operational data when it runs:
+The Compose deployment uses named volumes:
 
 ```text
-data/netwatch.db
-data/scan_history.csv
-logs/netwatch.log
+netwatch-data
+netwatch-logs
 ```
 
-These files are ignored by Git and should stay local to the machine running the app.
+Inspect them with:
 
-## Recommended internal demo setup
+```bash
+docker volume ls
+docker volume inspect netwatch_netwatch-data
+```
 
-- Run NetWatch on a trusted laptop or lab VM.
-- Connect it to the authorized lab or company test network only.
-- Use a small CIDR range first, such as `/28`, then `/24` if allowed.
-- Export Markdown or HTML reports after the scan.
-- Do not expose the Streamlit port publicly on the Internet.
+Removing the Compose stack does not delete data unless `-v` is used:
 
-## Production notes
+```bash
+docker compose down -v
+```
 
-NetWatch is a portfolio/lab tool. For real production use, add organization authentication, role-based access control, audit retention rules, and monitoring around the Streamlit service.
+The `-v` option permanently deletes the saved NetWatch database and logs.
+
+## Safe operating procedure
+
+- Run NetWatch only on a trusted machine.
+- Keep port `8000` bound to `127.0.0.1` unless deployment security is reviewed.
+- Begin with one known host or a small CIDR such as `/28`.
+- Confirm written or explicit authorization before every assessment.
+- Treat open services as evidence requiring validation, not automatic vulnerabilities.
+- Export reports after important checks.
+- Do not publish `.env`, database files, internal IP maps, or exported reports.
+
+## Shared or remote deployment
+
+The default deployment is intended for one local operator. Before exposing NetWatch to other users or networks, add:
+
+- TLS through a maintained reverse proxy
+- Organization identity and role-based authorization
+- Network-level access restrictions
+- Secret management instead of `.env`
+- Centralized audit logging and retention rules
+- Backups and database migration procedures
+- Health monitoring and alerting
+- A deployment-specific security review

@@ -1,87 +1,85 @@
-# NetWatch Demo Script
+# NetWatch v1 Demo Script
 
-Use this script when presenting NetWatch to a teacher, internship supervisor, or company contact.
+## 1. Introduction
 
-## 1. Opening
+"NetWatch is a local-first defensive network visibility platform. It helps an authorized operator discover local hosts, review common service exposure, maintain an asset inventory, generate local guidance, and export reports."
 
-NetWatch is a small local network monitoring dashboard. I built it to practice Python, networking, Streamlit, local asset tracking, and defensive security reporting.
+## 2. Explain the safety boundary
 
-The app is intentionally limited to private/local networks and does not include exploitation features.
+"The application accepts only approved local IPv4 ranges, blocks public targets, limits CIDR size, requires an API key, and asks for explicit authorization before scans. It does not exploit services or test credentials."
 
-## 2. Show the dashboard
+## 3. Open the dashboard
 
-Open NetWatch and show the **Overview** page.
+1. Start NetWatch with `python scripts/start.py`.
+2. Open `http://127.0.0.1:8000`.
+3. Enter the API key printed by the launcher.
+4. Show that the key is stored only for the browser session.
 
-Mention:
-
-- Online hosts from the latest scan
-- Saved inventory count
-- Open ports from the latest audit
-- Exposure level and score
-
-## 3. Explain safety controls
-
-Go to **Safety** and mention:
-
-- Local/private IP validation
-- Maximum scan size
-- Short common-port list
-- Permission checkbox before scans
-- No brute force or exploitation
-
-## 4. Run Network Tools
-
-Go to **Network Tools** and enter a CIDR such as:
-
-```text
-192.168.1.0/24
-```
+## 4. Overview
 
 Explain:
 
-- Network address
-- Netmask
-- Broadcast address
-- Usable hosts
-- Gateway guess
+- Saved asset count
+- Observed open-service count
+- Assets with non-zero exposure scores
+- Recent checks
+- Compact Risk Advisor summary
 
-## 5. Run Host Check
+## 5. Network scan
 
-Go to **Host Check** and test the router or lab machine:
+1. Open **Network scan**.
+2. Enter a small authorized range such as `192.168.1.0/28`.
+3. Check the authorization confirmation.
+4. Start the scan.
+5. Explain that ICMP filtering may hide active hosts.
 
-```text
-192.168.1.1
-```
+## 6. Host check
 
-Explain that some devices block ping, so offline does not always mean the device is down.
+1. Open **Host check**.
+2. Enter one known approved local IP.
+3. Run the check.
+4. Explain latency, TTL, hostname, and the cautious OS hint.
 
-## 6. Run Network Scan
+## 7. Port audit
 
-Go to **Network Scan** and use a small authorized local range first.
+1. Open **Port audit**.
+2. Enter one authorized local IP.
+3. Run the audit.
+4. Explain Open, Closed, and Filtered/Unreachable states.
+5. Explain that an open service is exposure requiring context, not automatic proof of a vulnerability.
+6. Review priority and recommendation fields.
 
-Example:
+## 8. Inventory and history
 
-```text
-192.168.1.0/24
-```
+Open **Inventory** and explain:
 
-Confirm permission and start the scan.
+- First/last seen information
+- Saved open ports
+- Exposure score and priority
+- Recent scan audit trail
 
-## 7. Run Port Audit
+## 9. Risk Advisor
 
-Go to **Port Audit** and audit one internal IP. Explain that the app checks common services and gives defensive recommendations.
+Open **Risk advisor** and explain:
 
-## 8. Show Inventory
+- It is deterministic and local
+- It uses saved NetWatch evidence
+- It does not send scan data to an external service
+- Confidence depends on available data
 
-Go to **Inventory** and show saved devices, last seen time, open ports, and exposure score.
+## 10. Reports
 
-## 9. Export report
-
-Go to **Reports** and export:
+Open **Reports** and download:
 
 - Markdown report
-- HTML report
+- Standalone HTML report
 
-## 10. Closing
+Explain that reports can contain sensitive internal network information and must be reviewed before sharing.
 
-NetWatch is currently a lab/portfolio project, but it can be extended with authentication, scheduled scans, PDF reports, and more detailed asset management.
+## 11. Technical architecture
+
+"The dashboard and API are served by one FastAPI process. SQLite stores local inventory and scan history. Docker runs as a non-root user and publishes the application only on localhost by default."
+
+## 12. Close
+
+"NetWatch is designed as a safe local visibility and evidence tool. A shared company deployment would additionally require SSO, roles, TLS, managed secrets, centralized logs, monitoring, backups, and a deployment-specific security review."
