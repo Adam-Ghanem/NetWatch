@@ -1,10 +1,52 @@
 services:
   netwatch:
     build: .
-    container_name: netwatch
+    container_name: netwatch-ui
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  netwatch-api:
+    build: .
+    container_name: netwatch-api
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      NETWATCH_API_KEY: "${NETWATCH_API_KEY:-}"
+      NETWATCH_ALLOWED_ORIGINS: "${NETWATCH_ALLOWED_ORIGINS:-http://127.0.0.1:3000,http://localhost:3000}"
+      NETWATCH_API_DOCS: "${NETWATCH_API_DOCS:-false}"
+      NETWATCH_MAX_CONCURRENT_SCANS: "${NETWATCH_MAX_CONCURRENT_SCANS:-1}"
+      NETWATCH_RATE_LIMIT_REQUESTS: "${NETWATCH_RATE_LIMIT_REQUESTS:-10}"
+      NETWATCH_RATE_LIMIT_WINDOW_SECONDS: "${NETWATCH_RATE_LIMIT_WINDOW_SECONDS:-60}"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
