@@ -16,7 +16,7 @@ _FILTERED_CODES = {
     errno.ETIMEDOUT,
     errno.EHOSTUNREACH,
     errno.ENETUNREACH,
-    errno.EHOSTDOWN,
+    getattr(errno, "EHOSTDOWN", 112),
     10060,
     10065,
     10051,
