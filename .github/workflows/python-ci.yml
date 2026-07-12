@@ -2,13 +2,19 @@ name: Python CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,11 +23,25 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements-dev.txt
+          python -m pip check
 
-      - name: Run tests
-        run: pytest -q
+      - name: Run tests with coverage
+        env:
+          NETWATCH_API_KEY: ci-test-key
+          NETWATCH_DATA_DIR: /tmp/netwatch-python-ci-data
+        run: pytest -q --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: ./coverage.xml
+          flags: unittests
+          name: netwatch-python
+          fail_ci_if_error: false
