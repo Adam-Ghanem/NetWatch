@@ -1,49 +1,83 @@
-# NetWatch
+<p align="center">
+  <img src="frontend/assets/netwatch-logo.svg" alt="NetWatch" width="270" />
+</p>
 
-![NetWatch Banner](a_high_tech_dark_ui_marketing_banner_dashboard_p_1.png)
+<h1 align="center">NetWatch</h1>
 
-NetWatch is a local-first network visibility and defensive review platform built with Python, FastAPI, SQLite, and a responsive web dashboard.
+<p align="center">
+  Local-first network visibility and defensive review for authorized environments.
+</p>
 
-It helps an authorized operator discover local hosts, profile one device, review common TCP services, maintain an asset inventory, generate deterministic risk guidance, and export Markdown or HTML reports.
+<p align="center">
+  <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml"><img alt="Python CI" src="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml/badge.svg" /></a>
+  <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/security-ci.yml"><img alt="Security CI" src="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/security-ci.yml/badge.svg" /></a>
+  <a href="https://codecov.io/gh/Adam-Ghanem/NetWatch"><img alt="Coverage" src="https://codecov.io/gh/Adam-Ghanem/NetWatch/graph/badge.svg" /></a>
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" />
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
+</p>
+
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps an authorized operator discover local hosts, profile devices, review common TCP services, maintain an asset inventory, generate deterministic risk guidance, and export evidence-backed reports.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
+## Product preview
+
+The previews below use sample data and do not contain real network identifiers.
+
+### Overview
+
+![NetWatch overview dashboard](docs/screenshots/overview.svg)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" /></td>
+    <td width="50%"><img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Port audit</strong></td>
+    <td align="center"><strong>Risk advisor</strong></td>
+  </tr>
+</table>
+
+Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
+
 ## NetWatch v1.0
 
-The default application is now a complete professional dashboard served together with the protected API at one local address:
+The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-The original Streamlit dashboard remains available as an optional legacy profile, but it is no longer the default product interface.
+The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
 ## Highlights
 
-- Responsive dark operations dashboard
+- Responsive light corporate dashboard
+- User-provided NetWatch identity and local SVG assets
 - Session-only API-key connection screen
 - Authorized local IPv4 CIDR discovery
-- Single-host latency, TTL, hostname, and OS hints
+- Single-host latency, TTL, hostname, and cautious OS hints
 - Bounded concurrent common-port audit
 - Clear Open, Closed, and Filtered/Unreachable states
 - SQLite asset inventory and scan history
-- Exposure priority score and local Risk Advisor
+- Exposure priority score and deterministic local Risk Advisor
 - Markdown and standalone HTML report downloads
-- Public/oversized/unsupported targets blocked
+- Public, oversized, and unsupported targets blocked
 - API authentication, rate limits, scan concurrency limits, and security headers
 - Non-root Docker container with localhost-only publishing
 - One-command secure launcher
-- Automated Python, frontend, API, Compose, and Docker validation
+- Automated Python, frontend, API, Compose, Docker, and coverage validation
 
 ## Start NetWatch
 
-Requirements:
+### Requirements
 
 - Git
 - Python 3.10+
 - Docker Desktop or Docker Engine with Docker Compose
 
-Clone and launch:
+### Clone and launch
 
 ```bash
 git clone https://github.com/Adam-Ghanem/NetWatch.git
@@ -59,9 +93,11 @@ The launcher automatically:
 4. Starts it on `127.0.0.1:8000`.
 5. Prints the dashboard URL and API key.
 
-Open the displayed URL and enter the displayed key. The browser keeps the key only in session storage, so closing the tab clears it.
+Open the displayed URL and enter the displayed key. The browser stores the key only in session storage, so closing the tab clears it.
 
 ## Manual Docker deployment
+
+Create the environment file and generate a secret:
 
 ```bash
 cp .env.example .env
@@ -74,7 +110,7 @@ Put the generated value in `.env`:
 NETWATCH_API_KEY=your-generated-secret
 ```
 
-Then start NetWatch:
+Start NetWatch:
 
 ```bash
 docker compose up -d --build netwatch
@@ -178,7 +214,7 @@ NetWatch applies defense in depth:
 - CSV and HTML export sanitization
 - Non-root Docker user
 - Docker port published only on `127.0.0.1`
-- No exploitation, brute force, credential testing, stealth, or evasion functionality
+- No exploitation, brute force, credential testing, stealth, persistence, or evasion functionality
 
 The health endpoint is public so Docker and local operators can verify service availability. Inventory, scan, history, advisor, and report endpoints require authentication.
 
@@ -210,16 +246,17 @@ curl -X POST http://127.0.0.1:8000/api/audit/ports \
 
 ## Local development
 
-Create a virtual environment and install dependencies:
+Create a virtual environment and install development dependencies:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+pre-commit install
 ```
 
-On Windows PowerShell, activate with:
+On Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -272,29 +309,36 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
-## Tests and CI
+## Tests, coverage, and code quality
 
-Run locally:
+Install the development toolchain:
 
 ```bash
-pytest -q
+make dev-install
+```
+
+Run checks locally:
+
+```bash
+make test
+make coverage
+make lint
+make typecheck
+make pre-commit
 node --check frontend/app.js
 docker compose config --quiet
 docker build -t netwatch-local .
 ```
 
-GitHub Actions validates:
+Quality configuration is centralized in:
 
-- Python dependency consistency
-- Python source compilation
-- Frontend JavaScript syntax
-- Docker Compose configuration
-- Production container build
-- Dashboard and static asset serving
-- API authentication and authorization
-- CORS and security headers
-- Local IPv4 scope and IPv6 rejection
-- Full pytest suite
+- `pyproject.toml`
+- `.flake8`
+- `.pre-commit-config.yaml`
+- `requirements-dev.txt`
+- `codecov.yml`
+
+GitHub Actions validates Python tests and coverage, dependency consistency, Python source compilation, frontend JavaScript syntax, Docker Compose configuration, the production container build, dashboard/static asset serving, API authentication, CORS, security headers, and local target restrictions.
 
 Network actions are mocked in API tests, so CI does not scan external systems.
 
@@ -319,6 +363,7 @@ NetWatch/
 │   ├── __init__.py
 │   └── main.py
 ├── frontend/
+│   ├── assets/
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
@@ -327,6 +372,7 @@ NetWatch/
 │   └── start.py
 ├── tests/
 ├── docs/
+│   └── screenshots/
 ├── app.py                  # optional legacy Streamlit UI
 ├── advisory_engine.py
 ├── config.py
@@ -338,22 +384,35 @@ NetWatch/
 ├── risk_engine.py
 ├── security.py
 ├── service_catalog.py
+├── pyproject.toml
+├── requirements.txt
+├── requirements-dev.txt
+├── .pre-commit-config.yaml
 ├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
-├── Makefile
-└── requirements.txt
+└── Makefile
 ```
 
 ## Roadmap
 
 - Per-scan normalized host and service findings
 - Historical scan comparison and change detection
+- Local CVE enrichment with explicit version-confidence handling
 - ARP discovery where operating-system permissions allow
 - Progress updates and cancellation for longer scans
 - Editable owner, location, and business context for assets
 - PDF reports
+- Safe public demo mode with sample data and scanning disabled
 - Organization authentication for shared deployments
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. The project accepts defensive improvements, tests, documentation, accessibility work, performance improvements, and carefully scoped local-security features.
+
+## License
+
+NetWatch is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
