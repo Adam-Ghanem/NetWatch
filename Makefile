@@ -1,7 +1,10 @@
-.PHONY: install setup up down logs run run-api run-streamlit test clean
+.PHONY: install dev-install setup up down logs run run-api run-streamlit test coverage format lint typecheck pre-commit clean
 
 install:
 	python -m pip install -r requirements.txt
+
+dev-install:
+	python -m pip install -r requirements-dev.txt
 
 setup:
 	python scripts/start.py
@@ -26,6 +29,25 @@ run-streamlit:
 test:
 	pytest -q
 
+coverage:
+	pytest -q --cov=. --cov-report=term-missing --cov-report=xml
+
+format:
+	black .
+	isort .
+
+lint:
+	black --check .
+	isort --check-only .
+	flake8 .
+
+typecheck:
+	mypy .
+
+pre-commit:
+	pre-commit run --all-files
+
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
+	rm -f .coverage coverage.xml
