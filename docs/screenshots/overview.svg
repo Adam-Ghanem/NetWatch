@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860" role="img" aria-labelledby="title desc">
+  <title id="title">NetWatch overview dashboard preview</title>
+  <desc id="desc">Light corporate NetWatch dashboard with navigation, metrics, activity, and advisor summary using sample data.</desc>
+  <defs>
+    <linearGradient id="hero" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#e8f7f4"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#173941" flood-opacity=".10"/></filter>
+  </defs>
+  <rect width="1400" height="860" fill="#f7faf9"/>
+  <rect width="1400" height="78" fill="#fff" stroke="#dbe7e5"/>
+  <g transform="translate(34 15)">
+    <path fill="#2c0f50" d="M9 6h44l9 8v18l-31 23L0 32V14zm7 10v12l15 11 15-11V16l-15-6z"/>
+    <text x="75" y="30" font-family="Arial,sans-serif" font-size="24" font-weight="800" fill="#2c0f50" letter-spacing="4">NETWATCH</text>
+  </g>
+  <g font-family="Arial,sans-serif" font-size="15" fill="#405a62">
+    <text x="390" y="48" fill="#087f8c" font-weight="700">Overview</text><text x="490" y="48">Network scan</text><text x="620" y="48">Host check</text><text x="730" y="48">Port audit</text><text x="830" y="48">Inventory</text><text x="920" y="48">Risk advisor</text><text x="1045" y="48">Reports</text>
+  </g>
+  <rect x="1180" y="19" width="185" height="42" rx="12" fill="#fff" stroke="#c5d7d4"/><circle cx="1204" cy="40" r="6" fill="#179b67"/><text x="1221" y="45" font-family="Arial,sans-serif" font-size="14" fill="#102c35">API online · v1.0</text>
+
+  <text x="58" y="130" font-family="Arial,sans-serif" font-size="13" font-weight="800" fill="#087f8c" letter-spacing="2">AUTHORIZED LOCAL NETWORKS ONLY</text>
+  <text x="58" y="174" font-family="Arial,sans-serif" font-size="36" font-weight="800" fill="#081f27">Overview</text>
+
+  <g filter="url(#shadow)"><rect x="58" y="205" width="1284" height="275" rx="30" fill="url(#hero)" stroke="#d5e9e6"/></g>
+  <rect x="102" y="246" width="132" height="28" rx="14" fill="#d9f2ef" stroke="#b8ddd7"/><text x="118" y="265" font-family="Arial,sans-serif" font-size="12" font-weight="800" fill="#05626d">NETWATCH V1</text>
+  <text x="102" y="326" font-family="Arial,sans-serif" font-size="47" font-weight="800" fill="#081f27">Turn network data into</text>
+  <text x="102" y="379" font-family="Arial,sans-serif" font-size="47" font-weight="800" fill="#081f27">confident decisions.</text>
+  <text x="102" y="417" font-family="Arial,sans-serif" font-size="17" fill="#5a737a">Discover hosts, review services, maintain inventory, and export evidence-backed reports.</text>
+  <rect x="102" y="439" width="184" height="45" rx="11" fill="#087f8c"/><text x="128" y="467" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#fff">Start network scan</text>
+
+  <g transform="translate(1085 338)"><circle r="102" fill="#fff" stroke="#99ccc7"/><circle r="68" fill="none" stroke="#99ccc7"/><circle r="34" fill="none" stroke="#99ccc7"/><line x1="-102" y1="0" x2="102" y2="0" stroke="#99ccc7"/><line x1="0" y1="-102" x2="0" y2="102" stroke="#99ccc7"/><line x1="0" y1="0" x2="75" y2="-54" stroke="#087f8c" stroke-width="5"/><circle cx="75" cy="-54" r="9" fill="#f1d64b" stroke="#fff" stroke-width="4"/></g>
+
+  <g font-family="Arial,sans-serif">
+    <g filter="url(#shadow)"><rect x="58" y="512" width="300" height="134" rx="20" fill="#fff" stroke="#dbe7e5"/></g><rect x="58" y="512" width="5" height="134" rx="2" fill="#087f8c"/><text x="84" y="548" font-size="12" font-weight="800" fill="#647b82" letter-spacing="1">SAVED ASSETS</text><text x="84" y="598" font-size="42" font-weight="800" fill="#081f27">24</text><text x="84" y="626" font-size="13" fill="#647b82">Local SQLite inventory</text>
+    <g filter="url(#shadow)"><rect x="378" y="512" width="300" height="134" rx="20" fill="#fff" stroke="#dbe7e5"/></g><rect x="378" y="512" width="5" height="134" rx="2" fill="#2f8fc3"/><text x="404" y="548" font-size="12" font-weight="800" fill="#647b82" letter-spacing="1">OPEN SERVICES</text><text x="404" y="598" font-size="42" font-weight="800" fill="#081f27">8</text><text x="404" y="626" font-size="13" fill="#647b82">Across saved audits</text>
+    <g filter="url(#shadow)"><rect x="698" y="512" width="300" height="134" rx="20" fill="#fff" stroke="#dbe7e5"/></g><rect x="698" y="512" width="5" height="134" rx="2" fill="#f1d64b"/><text x="724" y="548" font-size="12" font-weight="800" fill="#647b82" letter-spacing="1">PRIORITY ASSETS</text><text x="724" y="598" font-size="42" font-weight="800" fill="#081f27">3</text><text x="724" y="626" font-size="13" fill="#647b82">Require operator review</text>
+    <g filter="url(#shadow)"><rect x="1018" y="512" width="324" height="134" rx="20" fill="#fff" stroke="#dbe7e5"/></g><rect x="1018" y="512" width="5" height="134" rx="2" fill="#72b9ad"/><text x="1044" y="548" font-size="12" font-weight="800" fill="#647b82" letter-spacing="1">RECENT CHECKS</text><text x="1044" y="598" font-size="42" font-weight="800" fill="#081f27">12</text><text x="1044" y="626" font-size="13" fill="#647b82">Latest recorded activity</text>
+  </g>
+
+  <g filter="url(#shadow)"><rect x="58" y="678" width="780" height="136" rx="20" fill="#fff" stroke="#dbe7e5"/><rect x="858" y="678" width="484" height="136" rx="20" fill="#eef8f6" stroke="#cce5e0"/></g>
+  <text x="84" y="714" font-family="Arial,sans-serif" font-size="12" font-weight="800" fill="#087f8c" letter-spacing="2">LATEST ACTIVITY</text><text x="84" y="747" font-family="Arial,sans-serif" font-size="22" font-weight="800" fill="#081f27">Recent checks</text>
+  <line x1="84" y1="767" x2="812" y2="767" stroke="#dbe7e5"/><text x="84" y="794" font-family="Arial,sans-serif" font-size="13" fill="#405a62">192.168.1.0/24 · network scan · 24 hosts · completed</text>
+  <text x="884" y="714" font-family="Arial,sans-serif" font-size="12" font-weight="800" fill="#087f8c" letter-spacing="2">LOCAL ANALYSIS</text><text x="884" y="747" font-family="Arial,sans-serif" font-size="22" font-weight="800" fill="#081f27">Advisor summary</text><text x="884" y="780" font-family="Arial,sans-serif" font-size="14" fill="#587078">3 assets need review. Prioritize remote access</text><text x="884" y="802" font-family="Arial,sans-serif" font-size="14" fill="#587078">services and validate business ownership.</text>
+  <text x="1200" y="842" font-family="Arial,sans-serif" font-size="11" fill="#789096">Sample data · product preview</text>
+</svg>
