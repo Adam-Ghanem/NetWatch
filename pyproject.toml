@@ -1,0 +1,61 @@
+[project]
+name = "netwatch"
+version = "1.0.0"
+description = "Local-first network visibility and defensive review platform"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Adam Ghanem" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+exclude = """
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | data
+)/
+"""
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = [".git", ".venv", "build", "dist", "data"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = "^(data|build|dist)/"
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [
+  "tests/*",
+  "*/site-packages/*",
+  "*/.venv/*",
+  "app.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+precision = 1
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+]
+
+[tool.coverage.xml]
+output = "coverage.xml"
