@@ -20,8 +20,26 @@ def test_summarize_ports_counts_open_and_risk():
 
 
 def test_build_markdown_report_contains_summary():
-    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}])
-    ports = pd.DataFrame([{"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"}])
+    hosts = pd.DataFrame(
+        [
+            {
+                "IP Address": "192.168.1.10",
+                "Status": "Online",
+                "Details": "Host is online",
+            }
+        ]
+    )
+    ports = pd.DataFrame(
+        [
+            {
+                "Port": 22,
+                "Service": "SSH",
+                "Status": "Open",
+                "Risk": "Medium",
+                "Recommendation": "Use keys",
+            }
+        ]
+    )
 
     report = build_markdown_report(hosts, ports)
 
@@ -32,11 +50,37 @@ def test_build_markdown_report_contains_summary():
 
 
 def test_build_html_report_contains_sections():
-    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}])
-    ports = pd.DataFrame([{"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"}])
+    hosts = pd.DataFrame(
+        [
+            {
+                "IP Address": "192.168.1.10",
+                "Status": "Online",
+                "Details": "Host is online",
+            }
+        ]
+    )
+    ports = pd.DataFrame(
+        [
+            {
+                "Port": 22,
+                "Service": "SSH",
+                "Status": "Open",
+                "Risk": "Medium",
+                "Recommendation": "Use keys",
+            }
+        ]
+    )
 
     report = build_html_report(hosts, ports)
 
     assert "<html" in report
     assert "NetWatch Report" in report
     assert "Top recommendations" in report
+
+
+def test_markdown_report_escapes_table_separators():
+    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Details": "router | lab"}])
+
+    report = build_markdown_report(hosts, pd.DataFrame())
+
+    assert "router \\| lab" in report

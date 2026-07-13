@@ -8,39 +8,16 @@ I made it as a practical cybersecurity/networking portfolio project. It is not a
 
 > Use it only on networks you own or where you have clear permission.
 
-## What changed in v0.6.0
+## Current release: v0.8.0
 
-This version focuses on the visual identity and product feel:
+- Tightened local IP/CIDR validation and added IPv6 port checks
+- Restricted API hosts and CORS origins by default
+- Added explicit authorization and concurrency controls to API scan routes
+- Made saved port findings available to reports and the Risk Advisor
+- Hardened local storage, logs, CSV/Markdown exports, Docker, and CI
+- Updated and audited pinned dependencies
 
-- Switched the app to an editorial light theme
-- Added oversized hero typography
-- Added paper background with a subtle grid
-- Redesigned metric cards with strong borders and shadow
-- Updated buttons, sidebar and table containers
-- Replaced the README banner with a mobile-friendly product-style banner
-- Kept the neutral **Risk Advisor** wording
-
-## What changed in v0.5.2
-
-This version keeps the advisory feature neutral and product-style:
-
-- Renamed the advisor page to **Risk Advisor**
-- Added `advisory_engine.py`
-- Added `docs/advisory-engine.md`
-- Added `tests/test_advisory_engine.py`
-- Updated exports to `netwatch_advisor_notes.md`
-- Updated app labels, documentation, and security notes
-
-## What changed in v0.5.1
-
-This version focuses on security hardening:
-
-- Dynamic text is cleaned before entering custom Streamlit HTML cards
-- CSV exports are sanitized to reduce spreadsheet formula-injection risk
-- Safety page documents UI/export safety controls
-- Added `safe_text.py` and `export_utils.py`
-- Added tests for safe text rendering and safe CSV export
-- Added `docs/security-hardening.md`
+See [CHANGELOG.md](CHANGELOG.md) for the complete version history.
 
 ## Main features
 
@@ -62,8 +39,11 @@ This version focuses on security hardening:
 NetWatch includes several defensive controls:
 
 - Public IP targets are blocked by validation logic.
+- Reserved/documentation and unspecified addresses are blocked.
 - CIDR scans have a maximum host limit.
-- Scan actions require explicit permission confirmation.
+- Streamlit and API scan actions require explicit permission confirmation.
+- The local API restricts Host headers and browser origins by default.
+- Only one API network check can run at a time.
 - Dynamic values used in custom UI cards are cleaned first.
 - CSV exports reduce spreadsheet formula-injection risk.
 - HTML reports escape table values before export.
@@ -157,6 +137,7 @@ NetWatch/
 ├── security.py
 ├── service_catalog.py
 ├── requirements.txt
+├── requirements-dev.txt
 ├── README.md
 ├── SECURITY.md
 ├── CONTRIBUTING.md
@@ -181,9 +162,14 @@ NetWatch/
 │   └── security-review.md
 └── tests/
     ├── test_advisory_engine.py
+    ├── test_backend.py
     ├── test_export_utils.py
     ├── test_host_profiler.py
+    ├── test_inventory_store.py
+    ├── test_logger.py
+    ├── test_network_scanner.py
     ├── test_network_tools.py
+    ├── test_port_scanner.py
     ├── test_report_builder.py
     ├── test_risk_engine.py
     ├── test_safe_text.py
@@ -252,7 +238,7 @@ python -m streamlit run app.py
 
 ```bash
 docker build -t netwatch .
-docker run -p 8501:8501 netwatch
+docker run -p 127.0.0.1:8501:8501 netwatch
 ```
 
 ## Docker Compose
@@ -264,8 +250,12 @@ docker compose up -d --build
 ## Tests
 
 ```bash
+pip install -r requirements-dev.txt
 pytest -q
 ```
+
+GitHub Actions also checks formatting, lint, dependency vulnerabilities,
+high-severity Bandit findings, and the hardened container build.
 
 ## Next improvements
 

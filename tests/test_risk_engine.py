@@ -6,6 +6,8 @@ def test_exposure_level_thresholds():
     assert exposure_level(1) == "Low"
     assert exposure_level(5) == "Medium"
     assert exposure_level(12) == "High"
+    assert exposure_level(4, high_findings=1) == "Medium"
+    assert exposure_level(8, high_findings=2) == "High"
 
 
 def test_summarize_exposure_scores_open_ports_only():

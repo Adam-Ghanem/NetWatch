@@ -11,6 +11,9 @@ NetWatch is intended for authorized local-network monitoring, cybersecurity educ
 - Conservative common-port scanning only
 - Maximum CIDR scan size
 - Explicit authorization checkbox before scan actions
+- Explicit authorization field for API scan actions
+- Local API Host and CORS allowlists
+- Bounded API input and one active API scan at a time
 - Activity logging
 - Defensive recommendations only
 - Local Risk Advisor with no external service calls
@@ -37,7 +40,11 @@ NetWatch is not a replacement for a full professional security audit. It does no
 
 ## Reporting Issues
 
-If you find a security issue in this project, open a GitHub issue with:
+If private vulnerability reporting is available in the repository Security tab,
+use **Report a vulnerability**. Otherwise, open a minimal GitHub issue without
+private network data or working exploit details and ask for a private contact.
+
+Include:
 
 - A clear description
 - Steps to reproduce

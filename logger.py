@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
+from config import LOG_DIR
 
-logging.basicConfig(
-    filename=LOG_DIR / "netwatch.log",
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOGGER = logging.getLogger("netwatch.activity")
+LOGGER.setLevel(logging.INFO)
+LOGGER.propagate = False
+
+if not LOGGER.handlers:
+    handler = logging.FileHandler(LOG_DIR / "netwatch.log", encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+    LOGGER.addHandler(handler)
+
+
+def sanitize_log_message(message: object, max_length: int = 1_000) -> str:
+    text = str(message).replace("\r", " ").replace("\n", " ")
+    text = "".join(character if character.isprintable() else " " for character in text)
+    return " ".join(text.split())[:max_length]
 
 
 def log_event(message: str) -> None:
-    logging.info(message.replace("\n", " ").strip())
+    LOGGER.info(sanitize_log_message(message))

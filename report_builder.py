@@ -20,23 +20,32 @@ def summarize_ports(port_rows: Iterable[dict]) -> dict[str, int]:
     }
 
 
+def _markdown_cell(value: object) -> str:
+    text = str(value).replace("\r", " ").replace("\n", " ")
+    return text.replace("\\", "\\\\").replace("|", "\\|")
+
+
 def _dataframe_to_markdown(df: pd.DataFrame) -> str:
     if df.empty:
         return "No data."
 
-    columns = [str(column) for column in df.columns]
+    columns = [_markdown_cell(column) for column in df.columns]
     header = "| " + " | ".join(columns) + " |"
     divider = "| " + " | ".join(["---"] * len(columns)) + " |"
     rows = []
     for _, row in df.iterrows():
-        values = [str(row[column]).replace("\n", " ") for column in df.columns]
+        values = [_markdown_cell(row[column]) for column in df.columns]
         rows.append("| " + " | ".join(values) + " |")
     return "\n".join([header, divider, *rows])
 
 
 def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    exposure = summarize_exposure(ports_df.to_dict("records")) if not ports_df.empty else summarize_exposure([])
+    exposure = (
+        summarize_exposure(ports_df.to_dict("records"))
+        if not ports_df.empty
+        else summarize_exposure([])
+    )
 
     lines = [
         "# NetWatch Local Network Report",
@@ -58,15 +67,23 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
     if not hosts_df.empty:
         lines.extend(["## Online hosts", "", _dataframe_to_markdown(hosts_df), ""])
     if not ports_df.empty:
-        open_ports = ports_df[ports_df["Status"] == "Open"]
+        open_ports = (
+            ports_df[ports_df["Status"] == "Open"]
+            if "Status" in ports_df.columns
+            else pd.DataFrame()
+        )
         lines.extend(["## Port assessment", "", _dataframe_to_markdown(ports_df), ""])
         if not open_ports.empty:
-            lines.extend([
-                "## Recommended checks",
-                "",
-                _dataframe_to_markdown(open_ports[["Port", "Service", "Risk", "Recommendation"]]),
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Recommended checks",
+                    "",
+                    _dataframe_to_markdown(
+                        open_ports[["Port", "Service", "Risk", "Recommendation"]]
+                    ),
+                    "",
+                ]
+            )
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -84,8 +101,16 @@ def _html_table(df: pd.DataFrame) -> str:
 
 def build_html_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    exposure = summarize_exposure(ports_df.to_dict("records")) if not ports_df.empty else summarize_exposure([])
-    recommendations = pd.DataFrame(top_recommendations(ports_df.to_dict("records"))) if not ports_df.empty else pd.DataFrame()
+    exposure = (
+        summarize_exposure(ports_df.to_dict("records"))
+        if not ports_df.empty
+        else summarize_exposure([])
+    )
+    recommendations = (
+        pd.DataFrame(top_recommendations(ports_df.to_dict("records")))
+        if not ports_df.empty
+        else pd.DataFrame()
+    )
 
     return f"""<!doctype html>
 <html lang="en">

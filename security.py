@@ -15,9 +15,38 @@ class ValidationResult:
     error: str | None = None
 
 
-def _is_allowed_ip(ip: ipaddress._BaseAddress) -> bool:
-    """Allow private, loopback, and link-local lab targets only."""
-    return bool(ip.is_private or ip.is_loopback or ip.is_link_local)
+IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+ALLOWED_NETWORKS: tuple[IPNetwork, ...] = tuple(
+    ipaddress.ip_network(cidr)
+    for cidr in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10",
+        "::1/128",
+    )
+)
+
+
+def _is_allowed_ip(ip: IPAddress) -> bool:
+    """Allow only explicit LAN, loopback, link-local, and IPv6 ULA ranges."""
+    if ip.is_unspecified or ip.is_multicast:
+        return False
+    return any(
+        ip.version == network.version and ip in network for network in ALLOWED_NETWORKS
+    )
+
+
+def _is_allowed_network(network: IPNetwork) -> bool:
+    return any(
+        network.version == allowed.version and network.subnet_of(allowed)
+        for allowed in ALLOWED_NETWORKS
+    )
 
 
 def validate_target_ip(target: str) -> ValidationResult:
@@ -25,7 +54,9 @@ def validate_target_ip(target: str) -> ValidationResult:
     try:
         ip = ipaddress.ip_address(target.strip())
     except ValueError:
-        return ValidationResult(False, error="Use a valid IP address, for example 192.168.1.1")
+        return ValidationResult(
+            False, error="Use a valid IP address, for example 192.168.1.1"
+        )
 
     if not _is_allowed_ip(ip):
         return ValidationResult(
@@ -50,7 +81,7 @@ def validate_cidr(cidr: str) -> ValidationResult:
     except ValueError:
         return ValidationResult(False, error="Invalid CIDR. Example: 192.168.1.0/24")
 
-    if not _is_allowed_ip(network.network_address):
+    if not _is_allowed_network(network):
         return ValidationResult(False, error="Only private/local networks are allowed.")
 
     host_count = _usable_host_count(network)
@@ -93,4 +124,6 @@ def recommendation_for_port(port: int, is_open: bool) -> str:
         5432: "Do not expose PostgreSQL broadly; restrict with firewall and strong auth.",
         8080: "Check admin panels and protect them with authentication/firewall rules.",
     }
-    return advice.get(port, "Verify that this service is expected and properly secured.")
+    return advice.get(
+        port, "Verify that this service is expected and properly secured."
+    )

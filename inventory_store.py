@@ -2,20 +2,26 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Iterable
 
-DATA_DIR = Path("data")
+from config import DATA_DIR, MAX_HISTORY_LIMIT, MAX_INVENTORY_LIMIT
+
 DB_FILE = DATA_DIR / "netwatch.db"
 
 
 def _connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_FILE)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_FILE, timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def init_db() -> None:
@@ -48,9 +54,11 @@ def init_db() -> None:
         )
 
 
-def add_scan_run(scan_type: str, target: str, summary: str, status: str = "completed") -> int:
+def add_scan_run(
+    scan_type: str, target: str, summary: str, status: str = "completed"
+) -> int:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_timestamp()
     with _connect() as conn:
         cursor = conn.execute(
             """
@@ -64,7 +72,7 @@ def add_scan_run(scan_type: str, target: str, summary: str, status: str = "compl
 
 def upsert_hosts(host_rows: Iterable[dict]) -> None:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_timestamp()
     with _connect() as conn:
         for row in host_rows:
             ip = str(row.get("IP Address", "")).strip()
@@ -85,9 +93,11 @@ def upsert_hosts(host_rows: Iterable[dict]) -> None:
             )
 
 
-def update_asset_ports(ip_address: str, port_rows: Iterable[dict], exposure_score: int, exposure_level: str) -> None:
+def update_asset_ports(
+    ip_address: str, port_rows: Iterable[dict], exposure_score: int, exposure_level: str
+) -> None:
     init_db()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _utc_timestamp()
     open_ports = [row for row in port_rows if row.get("Status") == "Open"]
     encoded = json.dumps(open_ports, ensure_ascii=False)
     with _connect() as conn:
@@ -97,6 +107,8 @@ def update_asset_ports(ip_address: str, port_rows: Iterable[dict], exposure_scor
             VALUES (?, ?, ?, 'Seen', 'Port audit completed', ?, ?, ?)
             ON CONFLICT(ip_address) DO UPDATE SET
                 last_seen=excluded.last_seen,
+                status=excluded.status,
+                details=excluded.details,
                 open_ports=excluded.open_ports,
                 exposure_score=excluded.exposure_score,
                 exposure_level=excluded.exposure_level
@@ -106,6 +118,7 @@ def update_asset_ports(ip_address: str, port_rows: Iterable[dict], exposure_scor
 
 
 def recent_scan_runs(limit: int = 30) -> list[dict]:
+    bounded_limit = max(1, min(int(limit), MAX_HISTORY_LIMIT))
     init_db()
     with _connect() as conn:
         rows = conn.execute(
@@ -115,12 +128,13 @@ def recent_scan_runs(limit: int = 30) -> list[dict]:
             ORDER BY id DESC
             LIMIT ?
             """,
-            (limit,),
+            (bounded_limit,),
         ).fetchall()
     return [dict(row) for row in rows]
 
 
-def asset_inventory() -> list[dict]:
+def asset_inventory(limit: int = MAX_INVENTORY_LIMIT) -> list[dict]:
+    bounded_limit = max(1, min(int(limit), MAX_INVENTORY_LIMIT))
     init_db()
     with _connect() as conn:
         rows = conn.execute(
@@ -128,7 +142,9 @@ def asset_inventory() -> list[dict]:
             SELECT ip_address, first_seen, last_seen, status, details, exposure_score, exposure_level, open_ports
             FROM assets
             ORDER BY exposure_score DESC, ip_address ASC
-            """
+            LIMIT ?
+            """,
+            (bounded_limit,),
         ).fetchall()
 
     inventory = []
@@ -139,6 +155,38 @@ def asset_inventory() -> list[dict]:
         except json.JSONDecodeError:
             ports = []
         item["open_port_count"] = len(ports)
-        item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
+        item["open_ports"] = (
+            ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
+        )
         inventory.append(item)
     return inventory
+
+
+def asset_open_ports(limit: int = MAX_INVENTORY_LIMIT) -> list[dict]:
+    """Return normalized open-port rows saved in the local asset inventory."""
+    bounded_limit = max(1, min(int(limit), MAX_INVENTORY_LIMIT))
+    init_db()
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT ip_address, open_ports
+            FROM assets
+            WHERE open_ports != '[]'
+            ORDER BY exposure_score DESC, ip_address ASC
+            LIMIT ?
+            """,
+            (bounded_limit,),
+        ).fetchall()
+
+    findings: list[dict] = []
+    for row in rows:
+        try:
+            ports = json.loads(row["open_ports"] or "[]")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(ports, list):
+            continue
+        for port in ports:
+            if isinstance(port, dict):
+                findings.append({**port, "IP Address": row["ip_address"]})
+    return findings

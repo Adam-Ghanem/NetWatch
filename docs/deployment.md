@@ -23,7 +23,7 @@ http://localhost:8501
 
 ```bash
 docker build -t netwatch .
-docker run -p 8501:8501 netwatch
+docker run -p 127.0.0.1:8501:8501 netwatch
 ```
 
 ## Option 3: Docker Compose
@@ -37,6 +37,22 @@ Stop it later:
 ```bash
 docker compose down
 ```
+
+Compose stores operational data in the named volumes `netwatch_data` and
+`netwatch_logs`. The published dashboard port is bound to localhost only.
+
+## Optional local API
+
+Run the API on loopback unless you have added proper authentication and an
+approved deployment boundary:
+
+```bash
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+API scan requests must include `"authorized": true`. Browser origins and Host
+headers can be customized with `NETWATCH_CORS_ORIGINS` and
+`NETWATCH_API_HOSTS`; wildcard values are intentionally ignored.
 
 ## Generated local files
 

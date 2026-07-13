@@ -6,22 +6,61 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: netwatch-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          python -m pip check
+
+      - name: Compile Python modules
+        run: python -m compileall -q .
+
+      - name: Ruff lint and format check
+        run: |
+          ruff check .
+          ruff format --check .
 
       - name: Run tests
         run: pytest -q
+
+      - name: Bandit high severity scan
+        run: bandit -q -r . -lll -x tests
+
+      - name: Dependency vulnerability audit
+        run: pip-audit -r requirements.txt
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build image
+        run: docker build -t netwatch:ci .
+
+      - name: Verify runtime user and ping dependency
+        run: |
+          test "$(docker run --rm --entrypoint id netwatch:ci -u)" != "0"
+          docker run --rm --cap-drop ALL --cap-add NET_RAW --entrypoint ping netwatch:ci -c 1 -W 1 127.0.0.1
