@@ -2,10 +2,7 @@ from safe_text import clean_text
 
 
 def test_clean_text_escapes_html():
-    assert (
-        clean_text("<script>alert(1)</script>")
-        == "&lt;script&gt;alert(1)&lt;/script&gt;"
-    )
+    assert clean_text("<script>alert(1)</script>") == "&lt;script&gt;alert(1)&lt;/script&gt;"
 
 
 def test_clean_text_trims_long_values():

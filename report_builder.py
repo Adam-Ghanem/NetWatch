@@ -9,6 +9,12 @@ import pandas as pd
 from risk_engine import summarize_exposure, top_recommendations
 
 
+def _markdown_cell(value: object) -> str:
+    return (
+        str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    )
+
+
 def summarize_ports(port_rows: Iterable[dict]) -> dict[str, int]:
     summary = summarize_exposure(port_rows)
     return {
@@ -18,11 +24,6 @@ def summarize_ports(port_rows: Iterable[dict]) -> dict[str, int]:
         "medium": summary.medium,
         "score": summary.score,
     }
-
-
-def _markdown_cell(value: object) -> str:
-    text = str(value).replace("\r", " ").replace("\n", " ")
-    return text.replace("\\", "\\\\").replace("|", "\\|")
 
 
 def _dataframe_to_markdown(df: pd.DataFrame) -> str:
@@ -74,16 +75,20 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
         )
         lines.extend(["## Port assessment", "", _dataframe_to_markdown(ports_df), ""])
         if not open_ports.empty:
-            lines.extend(
-                [
-                    "## Recommended checks",
-                    "",
-                    _dataframe_to_markdown(
-                        open_ports[["Port", "Service", "Risk", "Recommendation"]]
-                    ),
-                    "",
-                ]
-            )
+            recommendation_columns = [
+                column
+                for column in ("Port", "Service", "Risk", "Recommendation")
+                if column in open_ports.columns
+            ]
+            if recommendation_columns:
+                lines.extend(
+                    [
+                        "## Recommended checks",
+                        "",
+                        _dataframe_to_markdown(open_ports[recommendation_columns]),
+                        "",
+                    ]
+                )
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 

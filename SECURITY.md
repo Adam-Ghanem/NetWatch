@@ -1,54 +1,108 @@
 # Security Policy
 
-## Intended Use
+## Intended use
 
-NetWatch is intended for authorized local-network monitoring, cybersecurity education, and defensive administration.
+NetWatch is intended for authorized local-network visibility, defensive administration, cybersecurity education, and controlled lab use.
 
-## Built-in Safeguards
+It is not an Internet scanner and it does not include exploitation, credential testing, brute force, stealth, evasion, or persistence features.
 
-- Private/local IP target validation
-- Broad public scanning blocked by default
-- Conservative common-port scanning only
-- Maximum CIDR scan size
-- Explicit authorization checkbox before scan actions
-- Explicit authorization field for API scan actions
-- Local API Host and CORS allowlists
-- Bounded API input and one active API scan at a time
-- Activity logging
-- Defensive recommendations only
-- Local Risk Advisor with no external service calls
-- Dynamic UI text cleaned before entering custom HTML cards
+## Built-in safeguards
+
+NetWatch v1 includes:
+
+- API key required for every non-health API endpoint
+- Protected operations disabled until a non-placeholder `NETWATCH_API_KEY` of at least 32 characters is configured
+- Constant-time API-key comparison
+- Server-side authorization confirmation for scan requests
+- Explicit local IPv4 allowlists
+- Public and unsupported IPv6 targets rejected
+- Maximum 256 hosts per CIDR scan
+- Request rate limiting
+- Bounded simultaneous scans
+- Bounded common-port worker count
+- Restricted CORS origins
+- Restricted HTTP Host headers
+- Content Security Policy
+- Frame embedding blocked
+- MIME sniffing disabled
+- API responses marked `no-store`
+- Dashboard API key stored only in browser session storage
+- Dynamic custom-HTML values sanitized in the legacy interface
 - CSV exports sanitized to reduce spreadsheet formula-injection risk
-- HTML report tables escaped before export
-- Generated local data ignored by Git
+- HTML report values escaped
+- Docker container runs as a non-root user
+- Docker service published on localhost only by default
+- Linux capabilities dropped except the minimum raw-network capability required for ping
+- FastAPI interactive documentation disabled by default
+- Local Risk Advisor with no external service calls
 
-## Local Data
+## Secrets
 
-NetWatch may generate these local files while running:
+The `.env` file contains the local API key and is ignored by Git.
+
+Do not:
+
+- Commit `.env`
+- Paste the API key into issues, screenshots, reports, or chat messages
+- Reuse a sensitive account password as the NetWatch API key
+- Publish the API key in frontend source code
+
+Generate a new key with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Restart NetWatch after changing the key.
+
+Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost defaults unless a reviewed deployment requires additional names or origins.
+
+## Local data
+
+NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, service exposure, and internal network structure.
+
+Default SQLite path:
 
 ```text
 data/netwatch.db
-data/scan_history.csv
-logs/netwatch.log
 ```
 
-These files can contain internal IP information and should not be committed or shared publicly.
+Docker Compose stores data in named volumes. Keep database files, volume exports, screenshots, and reports inside the authorized environment.
 
-## Security Limits
+## Deployment limits
 
-NetWatch is not a replacement for a full professional security audit. It does not include vulnerability exploitation, credential testing, stealth scanning, or brute-force logic.
+The default deployment is designed for one trusted local operator and binds to:
 
-## Reporting Issues
+```text
+127.0.0.1:8000
+```
 
-If private vulnerability reporting is available in the repository Security tab,
-use **Report a vulnerability**. Otherwise, open a minimal GitHub issue without
-private network data or working exploit details and ask for a private contact.
+Before shared, remote, or public deployment, add and review:
 
-Include:
+- TLS
+- Organization authentication
+- Role-based authorization
+- Network access controls
+- Managed secret storage
+- Centralized audit logs
+- Monitoring and alerting
+- Backups and database migrations
+- Retention and deletion policies
+- Reverse-proxy security configuration
+
+Do not expose the default Compose service directly to the Internet.
+
+## Reporting a vulnerability
+
+Do not publish sensitive vulnerability details, API keys, private network maps, database contents, or internal screenshots in a public issue.
+
+For a non-sensitive bug, include:
 
 - A clear description
+- Affected version
 - Steps to reproduce
 - Expected and actual behavior
-- Suggested fix if available
+- Relevant sanitized logs
+- Suggested fix when available
 
-Do not include secrets, passwords, private IP maps, or sensitive screenshots in public issues.
+For a sensitive security issue, use GitHub private vulnerability reporting when enabled for the repository. If it is unavailable, contact the repository owner privately before publishing technical details.

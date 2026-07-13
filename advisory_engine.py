@@ -20,7 +20,10 @@ class AdvisorResult:
 def _host_summary(host_rows: list[dict]) -> str:
     if not host_rows:
         return "No host discovery data is available yet. Run a Host Check or Network Scan first."
-    return f"NetWatch has host data for {len(host_rows)} device(s) from the latest scan or inventory view."
+    return (
+        f"NetWatch has host data for {len(host_rows)} device(s) from the latest scan "
+        "or inventory view."
+    )
 
 
 def _port_summary(port_rows: list[dict]) -> tuple[str, str, list[str]]:
@@ -46,23 +49,27 @@ def _port_summary(port_rows: list[dict]) -> tuple[str, str, list[str]]:
     priorities = []
     for row in top_recommendations(port_rows, limit=5):
         priorities.append(
-            f"Review port {row.get('Port')} ({row.get('Service')}) — {row.get('Risk')} risk: {row.get('Recommendation')}"
+            f"Review port {row.get('Port')} ({row.get('Service')}) — "
+            f"{row.get('Risk')} risk: {row.get('Recommendation')}"
         )
 
     if not priorities:
-        priorities.append(
-            "No open service was detected in the configured common-port list."
-        )
+        priorities.append("No open service was detected in the configured common-port list.")
 
     return summary, exposure.level, priorities
 
 
 def _inventory_summary(inventory_rows: list[dict]) -> str:
     if not inventory_rows:
-        return "The local SQLite inventory is still empty. Results will appear after running checks."
+        return (
+            "The local SQLite inventory is still empty. Results will appear after running checks."
+        )
 
     scored = [row for row in inventory_rows if int(row.get("exposure_score", 0)) > 0]
-    return f"The local inventory contains {len(inventory_rows)} asset(s); {len(scored)} asset(s) have a non-zero exposure score."
+    return (
+        f"The local inventory contains {len(inventory_rows)} asset(s); "
+        f"{len(scored)} asset(s) have a non-zero exposure score."
+    )
 
 
 def build_advice(
@@ -83,14 +90,19 @@ def build_advice(
 
     next_steps = [
         "Start with one known authorized host and compare Host Check with Port Audit results.",
-        "Review high-risk services first, especially remote access, database, file-sharing and legacy services.",
-        "Export an HTML report after each important scan and keep it with the project documentation.",
+        (
+            "Review high-risk services first, especially remote access, database, "
+            "file-sharing and legacy services."
+        ),
+        (
+            "Export an HTML report after each important scan and keep it with the "
+            "project documentation."
+        ),
     ]
 
     if risk_level in {"High", "Medium"}:
         next_steps.insert(
-            1,
-            "Confirm whether each open service is expected and restricted by firewall rules.",
+            1, "Confirm whether each open service is expected and restricted by firewall rules."
         )
     elif risk_level == "Clean":
         next_steps.insert(
@@ -109,7 +121,10 @@ def build_advice(
         priorities=priorities,
         next_steps=next_steps,
         confidence=confidence,
-        note="Local advisory engine only. It summarizes scan results and does not replace a full security audit.",
+        note=(
+            "Local advisory engine only. It summarizes scan results and does not "
+            "replace a full security audit."
+        ),
     )
 
 
