@@ -50,7 +50,9 @@ def _port_summary(port_rows: list[dict]) -> tuple[str, str, list[str]]:
         )
 
     if not priorities:
-        priorities.append("No open service was detected in the configured common-port list.")
+        priorities.append(
+            "No open service was detected in the configured common-port list."
+        )
 
     return summary, exposure.level, priorities
 
@@ -63,7 +65,9 @@ def _inventory_summary(inventory_rows: list[dict]) -> str:
     return f"The local inventory contains {len(inventory_rows)} asset(s); {len(scored)} asset(s) have a non-zero exposure score."
 
 
-def build_advice(host_rows: Iterable[dict], port_rows: Iterable[dict], inventory_rows: Iterable[dict]) -> AdvisorResult:
+def build_advice(
+    host_rows: Iterable[dict], port_rows: Iterable[dict], inventory_rows: Iterable[dict]
+) -> AdvisorResult:
     """Build a local advisory summary from NetWatch results.
 
     This module uses deterministic project logic. It does not call any external
@@ -84,9 +88,14 @@ def build_advice(host_rows: Iterable[dict], port_rows: Iterable[dict], inventory
     ]
 
     if risk_level in {"High", "Medium"}:
-        next_steps.insert(1, "Confirm whether each open service is expected and restricted by firewall rules.")
+        next_steps.insert(
+            1,
+            "Confirm whether each open service is expected and restricted by firewall rules.",
+        )
     elif risk_level == "Clean":
-        next_steps.insert(1, "Repeat the check on another approved host to validate the network view.")
+        next_steps.insert(
+            1, "Repeat the check on another approved host to validate the network view."
+        )
 
     summary = " ".join([host_text, port_text, inventory_text])
     confidence = "Medium" if ports else "Low"

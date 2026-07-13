@@ -11,8 +11,20 @@ def test_advisor_low_confidence_without_data():
 
 def test_advisor_prioritizes_high_risk_ports():
     ports = [
-        {"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"},
-        {"Port": 3389, "Service": "RDP", "Status": "Open", "Risk": "High", "Recommendation": "Restrict RDP"},
+        {
+            "Port": 22,
+            "Service": "SSH",
+            "Status": "Open",
+            "Risk": "Medium",
+            "Recommendation": "Use keys",
+        },
+        {
+            "Port": 3389,
+            "Service": "RDP",
+            "Status": "Open",
+            "Risk": "High",
+            "Recommendation": "Restrict RDP",
+        },
     ]
     hosts = [{"IP Address": "192.168.1.10", "Status": "Online"}]
     inventory = [{"ip_address": "192.168.1.10", "exposure_score": 6}]

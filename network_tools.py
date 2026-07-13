@@ -58,7 +58,9 @@ def network_profile(cidr: str, sample_size: int = 8) -> NetworkProfile:
         usable_hosts=host_count,
         first_hosts=hosts,
         scan_allowed=allowed,
-        message="Ready for local scan" if allowed else f"Too large for scan limit ({MAX_HOSTS_PER_SCAN})",
+        message="Ready for local scan"
+        if allowed
+        else f"Too large for scan limit ({MAX_HOSTS_PER_SCAN})",
     )
 
 

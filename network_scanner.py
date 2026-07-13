@@ -18,8 +18,9 @@ def scan_network(cidr: str, max_workers: int = MAX_WORKERS) -> List[dict]:
     network = ipaddress.ip_network(validation.value, strict=False)
     hosts = [str(ip) for ip in network.hosts()]
     results: List[dict] = []
+    worker_count = min(max(int(max_workers), 1), MAX_WORKERS, max(len(hosts), 1))
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_map = {executor.submit(ping_host, ip): ip for ip in hosts}
         for future in as_completed(future_map):
             ip = future_map[future]
@@ -28,6 +29,8 @@ def scan_network(cidr: str, max_workers: int = MAX_WORKERS) -> List[dict]:
             except Exception as exc:  # pragma: no cover
                 online, message = False, str(exc)
             if online:
-                results.append({"IP Address": ip, "Status": "Online", "Details": message})
+                results.append(
+                    {"IP Address": ip, "Status": "Online", "Details": message}
+                )
 
     return sorted(results, key=lambda row: ipaddress.ip_address(row["IP Address"]))

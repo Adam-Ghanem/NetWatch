@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.8.0
+
+- Replaced broad address checks with explicit local IPv4/IPv6 allowlists.
+- Added IPv6 support to the common-port scanner.
+- Restricted API Host headers and CORS origins by default.
+- Added explicit authorization, bounded inputs, and a single active API scan slot.
+- Included saved port findings in Streamlit and API reports, metrics, and Risk Advisor output.
+- Hardened SQLite concurrency, timestamps, activity logs, and exports.
+- Fixed misleading aggregate risk for a single high-risk service.
+- Added the ping runtime dependency and a non-root Docker user.
+- Bound Docker Compose to localhost and reduced container capabilities.
+- Separated development dependencies and added tests, Ruff, Bandit, pip-audit, and a container build to CI.
+- Updated pinned dependencies.
+
 ## v0.6.0
 
 - Switched the app to an editorial light theme.

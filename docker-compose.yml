@@ -1,10 +1,22 @@
 services:
   netwatch:
     build: .
-    container_name: netwatch
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - netwatch_data:/app/data
+      - netwatch_logs:/app/logs
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     restart: unless-stopped
+    stop_grace_period: 10s
+
+volumes:
+  netwatch_data:
+  netwatch_logs:

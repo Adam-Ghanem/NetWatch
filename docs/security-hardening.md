@@ -5,9 +5,18 @@ This document records the defensive controls used in NetWatch.
 ## Target safety
 
 - Public Internet targets are blocked by validation logic.
-- The app accepts only private, loopback, or link-local addresses.
+- The app accepts only explicit RFC 1918, loopback, link-local, and IPv6 ULA ranges.
+- Unspecified, multicast, reserved, and documentation targets are blocked.
 - CIDR scans have a maximum host limit.
-- Scan actions require a permission checkbox.
+- Streamlit scans require a permission checkbox and API scans require an authorization flag.
+
+## Local API boundary
+
+- Wildcard CORS is disabled.
+- Browser origins and Host headers use explicit local allowlists by default.
+- Query and request sizes are bounded.
+- Only one API network check can run at a time.
+- The API should remain bound to `127.0.0.1` unless real authentication is added.
 
 ## UI safety
 
@@ -31,7 +40,13 @@ export_utils.py
 
 ## Report safety
 
-HTML reports escape table values before export. Markdown reports are previewed through Streamlit without unsafe HTML.
+HTML reports escape table values before export. Markdown table separators are escaped, and Markdown reports are previewed through Streamlit without unsafe HTML.
+
+## Container boundary
+
+The image includes the required ping utility, runs as an unprivileged user, and
+has a health check. Docker Compose binds the dashboard to localhost, drops
+unneeded Linux capabilities, and uses named volumes for operational data.
 
 ## Risk Advisor privacy
 

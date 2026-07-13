@@ -22,10 +22,10 @@ class RiskSummary:
     level: str
 
 
-def exposure_level(score: int) -> str:
-    if score >= 12:
+def exposure_level(score: int, high_findings: int = 0) -> str:
+    if score >= 12 or high_findings >= 2:
         return "High"
-    if score >= 5:
+    if score >= 5 or high_findings == 1:
         return "Medium"
     if score > 0:
         return "Low"
@@ -47,7 +47,7 @@ def summarize_exposure(rows: Iterable[dict]) -> RiskSummary:
         medium=medium,
         low=low,
         score=score,
-        level=exposure_level(score),
+        level=exposure_level(score, high_findings=high),
     )
 
 
