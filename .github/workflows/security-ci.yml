@@ -1,0 +1,67 @@
+name: Security CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y iputils-ping
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+          python -m pip check
+
+      - name: Audit application dependencies
+        run: pip-audit -r requirements-dev.txt
+
+      - name: Scan Python for high-confidence, high-severity findings
+        run: bandit -q -r . -x ./.venv,./venv,./tests -lll -iii
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
+      - name: Validate frontend JavaScript
+        run: node --check frontend/app.js
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Build production container
+        run: docker build -t netwatch-ci .
+
+      - name: Verify container privilege boundary and ping capability
+        run: |
+          test "$(docker run --rm --entrypoint id netwatch-ci -u)" != "0"
+          docker run --rm --cap-drop ALL --cap-add NET_RAW --entrypoint ping netwatch-ci -c 1 -W 1 127.0.0.1
+
+      - name: Run test suite
+        env:
+          NETWATCH_API_KEY: ci-test-key-with-at-least-32-characters
+          NETWATCH_DATA_DIR: /tmp/netwatch-ci-data
+        run: pytest -q

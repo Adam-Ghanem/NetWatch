@@ -3,21 +3,210 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NetWatch</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta name="description" content="NetWatch local network visibility and defensive review dashboard." />
+  <meta name="color-scheme" content="light" />
+  <title>NetWatch · Local Network Visibility</title>
+  <link rel="icon" href="/assets/netwatch-symbol.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <main class="shell">
-    <section class="hero">
-      <p class="kicker">NetWatch</p>
-      <h1>Monitor your local network.</h1>
-      <p class="lead">A clean local visibility dashboard for private networks.</p>
-      <div class="status-card" aria-live="polite">
-        <span>Network status</span>
-        <strong data-api-status data-state="checking">CHECKING</strong>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <div id="connect-overlay" class="overlay">
+    <form id="connect-form" class="connect-card">
+      <img src="/assets/netwatch-logo.svg" alt="NetWatch" width="180" height="128" />
+      <p class="eyebrow">Secure local access</p>
+      <h1>Connect to NetWatch</h1>
+      <p class="muted">Enter the API key configured in your local <code>.env</code> file. The key stays only in this browser tab.</p>
+      <label for="api-key">API key</label>
+      <div class="secret-row">
+        <input id="api-key" name="api-key" type="password" autocomplete="off" placeholder="Paste NETWATCH_API_KEY" required />
+        <button id="toggle-key" class="button ghost compact" type="button">Show</button>
       </div>
-    </section>
-  </main>
-  <script src="app.js"></script>
+      <button class="button primary full" type="submit">Connect securely</button>
+      <p id="connect-status" class="form-status"></p>
+      <div class="connect-help">
+        <strong>First launch?</strong>
+        <span>Run <code>python scripts/start.py</code> or copy <code>.env.example</code> to <code>.env</code>.</span>
+      </div>
+    </form>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/assets/netwatch-symbol.svg" alt="" width="42" height="41" />
+        <div>
+          <strong>NetWatch</strong>
+          <span>Network clarity, fast.</span>
+        </div>
+      </div>
+
+      <nav id="nav" class="nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="overview"><span>◫</span> Overview</button>
+        <button class="nav-item" data-view="network"><span>⌁</span> Network scan</button>
+        <button class="nav-item" data-view="host"><span>◎</span> Host check</button>
+        <button class="nav-item" data-view="ports"><span>⇄</span> Port audit</button>
+        <button class="nav-item" data-view="inventory"><span>▦</span> Inventory</button>
+        <button class="nav-item" data-view="advisor"><span>✦</span> Risk advisor</button>
+        <button class="nav-item" data-view="reports"><span>⇩</span> Reports</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="health-line">
+          <span id="health-dot" class="health-dot"></span>
+          <div><strong id="health-label">Checking API</strong><small id="version-label">NetWatch</small></div>
+        </div>
+        <button id="disconnect" class="button ghost full" type="button">Disconnect</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Authorized local networks only</p>
+          <h2 id="page-title">Overview</h2>
+        </div>
+        <div class="top-actions">
+          <button id="refresh" class="button ghost" type="button">Refresh</button>
+          <span id="clock" class="clock"></span>
+        </div>
+      </header>
+
+      <section id="view-overview" class="view active">
+        <div class="hero-panel">
+          <div>
+            <span class="pill">New · NetWatch v1</span>
+            <h3>Turn local network data into confident decisions.</h3>
+            <p>Discover approved hosts, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
+            <div class="hero-actions">
+              <button class="button primary" data-go="network" type="button">Start a network scan</button>
+              <button class="button ghost" data-go="inventory" type="button">View inventory</button>
+            </div>
+          </div>
+          <div class="hero-signal" aria-hidden="true">
+            <div class="radar"><i></i><i></i><i></i><b></b></div>
+          </div>
+        </div>
+
+        <div class="trust-strip">
+          <span>Local-first</span><span>Authenticated</span><span>Evidence-backed</span><span>No external telemetry</span>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric"><span>Saved assets</span><strong id="metric-assets">—</strong><small>Local SQLite inventory</small></article>
+          <article class="metric"><span>Open services</span><strong id="metric-open">—</strong><small>Across saved audits</small></article>
+          <article class="metric"><span>Priority assets</span><strong id="metric-risk">—</strong><small>Non-zero exposure score</small></article>
+          <article class="metric"><span>Recent checks</span><strong id="metric-runs">—</strong><small>Latest recorded activity</small></article>
+        </div>
+
+        <div class="split-grid">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Latest activity</p><h3>Recent checks</h3></div><button class="link-button" data-go="network">Run a scan →</button></div>
+            <div id="overview-history" class="table-wrap"></div>
+          </article>
+          <article class="panel accent-panel">
+            <div class="panel-head"><div><p class="eyebrow">Local analysis</p><h3>Advisor summary</h3></div><button class="link-button" data-go="advisor">Open advisor →</button></div>
+            <div id="overview-advisor" class="summary-card skeleton-block"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-network" class="view">
+        <div class="content-grid form-layout">
+          <form id="network-form" class="panel form-panel">
+            <p class="eyebrow">Host discovery</p><h3>Scan a local CIDR</h3>
+            <p class="muted">NetWatch checks a maximum of 256 approved IPv4 hosts. ICMP filtering may hide active devices.</p>
+            <label for="network-cidr">Local CIDR</label>
+            <input id="network-cidr" value="192.168.1.0/24" required />
+            <label class="check-row"><input id="network-authorized" type="checkbox" required /><span>I confirm I own or have explicit permission to assess this network.</span></label>
+            <button class="button primary" type="submit">Start network scan</button>
+            <p id="network-status" class="form-status"></p>
+          </form>
+          <article class="panel result-panel">
+            <div class="panel-head"><div><p class="eyebrow">Discovery results</p><h3 id="network-result-title">No scan yet</h3></div><span id="network-count" class="count-badge">0 hosts</span></div>
+            <div id="network-results" class="table-wrap empty-state">Run an authorized scan to populate this table.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-host" class="view">
+        <div class="content-grid form-layout">
+          <form id="host-form" class="panel form-panel">
+            <p class="eyebrow">Focused check</p><h3>Profile one host</h3>
+            <p class="muted">Check reachability, latency, TTL, reverse DNS, and a cautious operating-system hint.</p>
+            <label for="host-ip">Local IPv4 address</label>
+            <input id="host-ip" value="192.168.1.1" required />
+            <label class="check-row"><input id="host-authorized" type="checkbox" required /><span>I confirm I am authorized to check this device.</span></label>
+            <button class="button primary" type="submit">Check host</button>
+            <p id="host-status" class="form-status"></p>
+          </form>
+          <article class="panel result-panel">
+            <div class="panel-head"><div><p class="eyebrow">Host profile</p><h3 id="host-result-title">No result yet</h3></div></div>
+            <div id="host-metrics" class="mini-metrics"></div>
+            <div id="host-details" class="detail-list empty-state">Run a host check to see profile details.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-ports" class="view">
+        <div class="content-grid form-layout">
+          <form id="ports-form" class="panel form-panel">
+            <p class="eyebrow">Service exposure</p><h3>Audit common TCP ports</h3>
+            <p class="muted">Checks a short defensive service list. An open port is exposure requiring review—not proof of a vulnerability.</p>
+            <label for="ports-ip">Local IPv4 address</label>
+            <input id="ports-ip" value="192.168.1.1" required />
+            <label class="check-row"><input id="ports-authorized" type="checkbox" required /><span>I confirm I am authorized to audit this device.</span></label>
+            <button class="button primary" type="submit">Start port audit</button>
+            <p id="ports-status" class="form-status"></p>
+          </form>
+          <article class="panel result-panel">
+            <div class="panel-head"><div><p class="eyebrow">Audit results</p><h3 id="ports-result-title">No audit yet</h3></div><span id="ports-risk" class="risk-badge neutral">Unknown</span></div>
+            <div id="ports-summary" class="mini-metrics"></div>
+            <div id="ports-results" class="table-wrap empty-state">Run an authorized audit to review common services.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-inventory" class="view">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div><button id="inventory-refresh" class="button ghost">Refresh inventory</button></div>
+          <div id="inventory-results" class="table-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Audit trail</p><h3>Recent history</h3></div></div>
+          <div id="history-results" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="view-advisor" class="view">
+        <div class="advisor-grid">
+          <article class="panel advisor-main accent-panel">
+            <div class="panel-head"><div><p class="eyebrow">Deterministic local analysis</p><h3>Risk advisor</h3></div><span id="advisor-level" class="risk-badge neutral">Unknown</span></div>
+            <p id="advisor-summary" class="advisor-copy">Load saved scan data to generate a local summary.</p>
+            <div class="advisor-columns">
+              <div><h4>Priority findings</h4><ol id="advisor-priorities" class="action-list"></ol></div>
+              <div><h4>Suggested next steps</h4><ol id="advisor-steps" class="action-list"></ol></div>
+            </div>
+          </article>
+          <article class="panel advisor-side">
+            <p class="eyebrow">Confidence</p><strong id="advisor-confidence" class="big-number">—</strong>
+            <p class="muted">Confidence depends on available host, port, and inventory evidence.</p>
+            <button id="advisor-refresh" class="button ghost full">Rebuild advisor</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-reports" class="view">
+        <div class="report-grid">
+          <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable scan summary for GitHub, notes, or handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
+          <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with inventory, findings, and recommendations.</p></div><button data-report="html" class="button primary">Download .html</button></article>
+        </div>
+        <article class="panel safety-note"><p class="eyebrow">Interpretation</p><h3>Use results as evidence, not absolute truth.</h3><p>Firewalls, blocked ICMP, NAT, transient services, and local policy can affect what NetWatch observes. Validate important findings with the system owner.</p></article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
 </body>
 </html>

@@ -14,7 +14,7 @@ from host_profiler import profile_host
 from inventory_store import (
     add_scan_run,
     asset_inventory,
-    asset_open_ports,
+    asset_port_findings,
     init_db,
     recent_scan_runs,
     update_asset_ports,
@@ -25,7 +25,7 @@ from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
 from port_scanner import scan_ports
 from report_builder import build_html_report, build_markdown_report
-from risk_engine import summarize_exposure, top_recommendations
+from risk_engine import RiskSummary, summarize_exposure, top_recommendations
 from safe_text import clean_text
 from security import validate_cidr, validate_target_ip
 from ui_components import premium_css, premium_hero, premium_sidebar
@@ -62,9 +62,7 @@ def init_state() -> None:
     )
     st.session_state.setdefault(
         "port_results",
-        pd.DataFrame(
-            columns=["Port", "Protocol", "Service", "Status", "Risk", "Recommendation"]
-        ),
+        pd.DataFrame(columns=["Port", "Protocol", "Service", "Status", "Risk", "Recommendation"]),
     )
     st.session_state.setdefault("events", [])
 
@@ -96,8 +94,7 @@ def empty_panel(title: str, message: str) -> None:
 
 def section_title(title: str) -> None:
     st.markdown(
-        f'<div class="section-title">{clean_text(title, 100)}</div>',
-        unsafe_allow_html=True,
+        f'<div class="section-title">{clean_text(title, 100)}</div>', unsafe_allow_html=True
     )
 
 
@@ -109,12 +106,19 @@ def require_authorization(label: str) -> bool:
     )
 
 
-def current_exposure() -> object:
+def current_exposure() -> RiskSummary:
+    ports_df = active_ports()
+    return summarize_exposure(ports_df.to_dict("records"))
+
+
+def active_ports() -> pd.DataFrame:
     ports_df = st.session_state.port_results
-    port_rows = (
-        ports_df.to_dict("records") if not ports_df.empty else asset_open_ports()
-    )
-    return summarize_exposure(port_rows)
+    return ports_df if not ports_df.empty else pd.DataFrame(asset_port_findings())
+
+
+def active_hosts() -> pd.DataFrame:
+    hosts_df = st.session_state.network_results
+    return hosts_df if not hosts_df.empty else pd.DataFrame(asset_inventory())
 
 
 def show_overview() -> None:
@@ -137,16 +141,13 @@ def show_overview() -> None:
     left, right = st.columns([1.05, 0.95])
     with left:
         section_title("Risk overview")
-        ports_df = st.session_state.port_results
+        ports_df = active_ports()
         if ports_df.empty:
             empty_panel(
-                "No port audit yet",
-                "Run a Port Audit to build risk charts and recommendations.",
+                "No port audit yet", "Run a Port Audit to build risk charts and recommendations."
             )
         else:
-            chart_df = (
-                ports_df.groupby(["Status", "Risk"]).size().reset_index(name="Count")
-            )
+            chart_df = ports_df.groupby(["Status", "Risk"]).size().reset_index(name="Count")
             fig = px.bar(
                 chart_df,
                 x="Status",
@@ -181,9 +182,7 @@ def show_network_scan() -> None:
             st.success(f"Valid local range: {validation.value}")
         else:
             st.warning(validation.error)
-        authorized = require_authorization(
-            "I have permission to check this local network."
-        )
+        authorized = require_authorization("I have permission to check this local network.")
         start = st.button(
             "Start scan", type="primary", disabled=(not authorized or not validation.ok)
         )
@@ -196,7 +195,7 @@ def show_network_scan() -> None:
     if start:
         with st.spinner("Checking local hosts..."):
             try:
-                target = validation.value or cidr.strip()
+                target = validation.value or cidr
                 results = scan_network(target)
                 hosts_df = pd.DataFrame(results)
                 st.session_state.network_results = hosts_df
@@ -208,17 +207,14 @@ def show_network_scan() -> None:
                 st.success(summary)
             except ValueError as exc:
                 st.error(str(exc))
-                add_scan_run("network", target, str(exc), status="blocked")
+                add_scan_run("network", cidr, str(exc), status="blocked")
     hosts_df = st.session_state.network_results
     if hosts_df.empty:
         empty_panel("No hosts displayed", "Run a scan to populate the table.")
     else:
         st.dataframe(hosts_df, use_container_width=True, hide_index=True)
         st.download_button(
-            "Download hosts CSV",
-            safe_csv_bytes(hosts_df),
-            "netwatch_hosts.csv",
-            "text/csv",
+            "Download hosts CSV", safe_csv_bytes(hosts_df), "netwatch_hosts.csv", "text/csv"
         )
 
 
@@ -231,13 +227,13 @@ def show_host_check() -> None:
         st.info(f"Target accepted: {validation.value}")
     else:
         st.warning(validation.error)
-    authorized = require_authorization("I have permission to check this host.")
+    authorized = require_authorization("I have permission to check this host precisely.")
     if st.button(
         "Check host precisely",
         type="primary",
         disabled=(not authorized or not validation.ok),
     ):
-        target = validation.value or ip.strip()
+        target = validation.value or ip
         profile = profile_host(target)
         status = "online" if profile.online else "offline/blocked"
         msg = f"{profile.notes}; latency={profile.latency_ms}; ttl={profile.ttl}; hostname={profile.hostname}"
@@ -246,13 +242,7 @@ def show_host_check() -> None:
         add_scan_run("host_profile", target, msg, status=status)
         if profile.online:
             upsert_hosts(
-                [
-                    {
-                        "IP Address": profile.ip_address,
-                        "Status": "Online",
-                        "Details": profile.notes,
-                    }
-                ]
+                [{"IP Address": profile.ip_address, "Status": "Online", "Details": profile.notes}]
             )
             st.success("Host replied to ICMP ping")
         else:
@@ -267,14 +257,10 @@ def show_host_check() -> None:
                 "milliseconds",
             )
         with c3:
-            metric_card(
-                "TTL", profile.ttl if profile.ttl is not None else "-", profile.os_hint
-            )
+            metric_card("TTL", profile.ttl if profile.ttl is not None else "-", profile.os_hint)
         with c4:
             metric_card("Hostname", profile.hostname, "reverse DNS")
-        st.dataframe(
-            pd.DataFrame([profile.__dict__]), use_container_width=True, hide_index=True
-        )
+        st.dataframe(pd.DataFrame([profile.__dict__]), use_container_width=True, hide_index=True)
 
 
 def show_port_audit() -> None:
@@ -290,9 +276,7 @@ def show_port_audit() -> None:
             st.warning(validation.error)
         authorized = require_authorization("I have permission to check this host.")
         scan = st.button(
-            "Audit common ports",
-            type="primary",
-            disabled=(not authorized or not validation.ok),
+            "Audit common ports", type="primary", disabled=(not authorized or not validation.ok)
         )
     with col2:
         empty_panel(
@@ -301,7 +285,7 @@ def show_port_audit() -> None:
         )
     if scan:
         with st.spinner("Auditing common ports..."):
-            target = validation.value or ip.strip()
+            target = validation.value or ip
             results = scan_ports(target)
             ports_df = pd.DataFrame(results)
             st.session_state.port_results = ports_df
@@ -342,14 +326,10 @@ def show_port_audit() -> None:
 def show_risk_advisor() -> None:
     hero()
     section_title("Risk Advisor")
-    hosts_df = st.session_state.network_results
-    ports_df = st.session_state.port_results
+    hosts_df = active_hosts()
+    ports_df = active_ports()
     inventory = asset_inventory()
-    host_rows = hosts_df.to_dict("records") if not hosts_df.empty else inventory
-    port_rows = (
-        ports_df.to_dict("records") if not ports_df.empty else asset_open_ports()
-    )
-    advice = build_advice(host_rows, port_rows, inventory)
+    advice = build_advice(hosts_df.to_dict("records"), ports_df.to_dict("records"), inventory)
     c1, c2, c3 = st.columns(3)
     with c1:
         metric_card("Risk level", advice.risk_level, "Advisor output")
@@ -360,15 +340,11 @@ def show_risk_advisor() -> None:
     empty_panel("Advisor summary", advice.summary)
     section_title("Priority findings")
     st.dataframe(
-        pd.DataFrame({"Priority": advice.priorities}),
-        use_container_width=True,
-        hide_index=True,
+        pd.DataFrame({"Priority": advice.priorities}), use_container_width=True, hide_index=True
     )
     section_title("Suggested next steps")
     st.dataframe(
-        pd.DataFrame({"Next step": advice.next_steps}),
-        use_container_width=True,
-        hide_index=True,
+        pd.DataFrame({"Next step": advice.next_steps}), use_container_width=True, hide_index=True
     )
     markdown = advice_to_markdown(advice)
     st.download_button(
@@ -389,10 +365,7 @@ def show_inventory() -> None:
     inventory_df = pd.DataFrame(inventory)
     st.dataframe(inventory_df, use_container_width=True, hide_index=True)
     st.download_button(
-        "Download inventory CSV",
-        safe_csv_bytes(inventory_df),
-        "netwatch_inventory.csv",
-        "text/csv",
+        "Download inventory CSV", safe_csv_bytes(inventory_df), "netwatch_inventory.csv", "text/csv"
     )
 
 
@@ -421,12 +394,8 @@ def show_network_tools() -> None:
 def show_reports() -> None:
     hero()
     section_title("Reports & History")
-    hosts_df = st.session_state.network_results
-    ports_df = st.session_state.port_results
-    if hosts_df.empty:
-        hosts_df = pd.DataFrame(asset_inventory())
-    if ports_df.empty:
-        ports_df = pd.DataFrame(asset_open_ports())
+    hosts_df = active_hosts()
+    ports_df = active_ports()
     markdown_report = build_markdown_report(hosts_df, ports_df)
     html_report = build_html_report(hosts_df, ports_df)
     c1, c2 = st.columns(2)
@@ -439,10 +408,7 @@ def show_reports() -> None:
         )
     with c2:
         st.download_button(
-            "Download HTML report",
-            html_report.encode("utf-8"),
-            "netwatch_report.html",
-            "text/html",
+            "Download HTML report", html_report.encode("utf-8"), "netwatch_report.html", "text/html"
         )
     with st.expander("Preview Markdown report", expanded=True):
         st.markdown(markdown_report)

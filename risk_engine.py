@@ -22,10 +22,10 @@ class RiskSummary:
     level: str
 
 
-def exposure_level(score: int, high_findings: int = 0) -> str:
-    if score >= 12 or high_findings >= 2:
+def exposure_level(score: int) -> str:
+    if score >= 12:
         return "High"
-    if score >= 5 or high_findings == 1:
+    if score >= 5:
         return "Medium"
     if score > 0:
         return "Low"
@@ -39,6 +39,11 @@ def summarize_exposure(rows: Iterable[dict]) -> RiskSummary:
     medium = sum(1 for row in open_items if row.get("Risk") == "Medium")
     low = sum(1 for row in open_items if row.get("Risk") == "Low")
     score = sum(RISK_WEIGHT.get(str(row.get("Risk", "None")), 0) for row in open_items)
+    level = exposure_level(score)
+    if high >= 2:
+        level = "High"
+    elif high == 1 and level == "Low":
+        level = "Medium"
 
     return RiskSummary(
         checked=len(items),
@@ -47,7 +52,7 @@ def summarize_exposure(rows: Iterable[dict]) -> RiskSummary:
         medium=medium,
         low=low,
         score=score,
-        level=exposure_level(score, high_findings=high),
+        level=level,
     )
 
 

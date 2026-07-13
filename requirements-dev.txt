@@ -1,7 +1,11 @@
 -r requirements.txt
-
-pytest==9.1.1
-httpx2==2.5.0
-ruff==0.15.21
+black>=24.10,<27
 bandit==1.9.4
+flake8>=7.1,<8
+httpx2==2.5.0
+isort>=5.13,<7
+mypy>=1.13,<2
 pip-audit==2.10.1
+pre-commit>=4.0,<5
+pytest==9.1.1
+pytest-cov>=6.0,<8

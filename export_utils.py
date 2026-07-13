@@ -9,10 +9,8 @@ CONTROL_PREFIXES = ("\t", "\r", "\n")
 def _clean_cell(value: object) -> object:
     if not isinstance(value, str):
         return value
-    formula_candidate = value.lstrip(" \t\r\n")
-    if value.startswith(CONTROL_PREFIXES) or formula_candidate.startswith(
-        FORMULA_PREFIXES
-    ):
+    candidate = value.lstrip()
+    if value.startswith(CONTROL_PREFIXES) or candidate.startswith(FORMULA_PREFIXES):
         return "'" + value
     return value
 

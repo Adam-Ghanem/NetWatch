@@ -1,18 +1,52 @@
 # Changelog
 
-## v0.8.0
+## v1.0.1
 
-- Replaced broad address checks with explicit local IPv4/IPv6 allowlists.
-- Added IPv6 support to the common-port scanner.
-- Restricted API Host headers and CORS origins by default.
-- Added explicit authorization, bounded inputs, and a single active API scan slot.
-- Included saved port findings in Streamlit and API reports, metrics, and Risk Advisor output.
-- Hardened SQLite concurrency, timestamps, activity logs, and exports.
-- Fixed misleading aggregate risk for a single high-risk service.
-- Added the ping runtime dependency and a non-root Docker user.
-- Bound Docker Compose to localhost and reduced container capabilities.
-- Separated development dependencies and added tests, Ruff, Bandit, pip-audit, and a container build to CI.
-- Updated pinned dependencies.
+- Updated FastAPI, Starlette, Uvicorn, Pydantic, Streamlit, and pytest to patched releases and separated runtime from development dependencies.
+- Enforced strong non-placeholder API keys and explicit HTTP Host/CORS allowlists.
+- Added upper bounds for environment configuration, inventory queries, scanner workers, and port timeouts.
+- Hardened CSV and Markdown exports against formula and table injection edge cases.
+- Kept saved inventory and port findings visible across the legacy dashboard advisor, overview, and reports.
+- Improved SQLite upserts so saved status and audit details stay current.
+- Sanitized and rotated local activity logs to prevent forged lines and unbounded growth.
+- Added formatting, import, lint, typing, dependency audit, Bandit, and container privilege checks to CI.
+- Removed an unused legacy marketing image and expanded regression coverage.
+
+## v1.0.0
+
+- Promoted the FastAPI application and responsive web dashboard to the default NetWatch product interface.
+- Added complete dashboard workflows for overview, network discovery, host profiling, port audits, inventory, history, Risk Advisor, and report downloads.
+- Served frontend and API from one same-origin FastAPI process.
+- Added a session-only API-key connection screen and disconnect flow.
+- Added loading states, error handling, safe DOM rendering, responsive tables, metrics, and mobile navigation.
+- Added defensive response headers including Content Security Policy, frame blocking, MIME-sniffing protection, and no-store API caching.
+- Added a cross-platform one-command launcher that generates a secret, builds Docker, and starts NetWatch.
+- Simplified Docker Compose to one default production-style service with an optional legacy Streamlit profile.
+- Made the unified dashboard the default Docker image command.
+- Added frontend JavaScript validation, Docker Compose validation, and production container builds to CI.
+- Added dashboard/static-file/security-header tests.
+- Updated architecture, deployment, security, README, Makefile, and environment documentation.
+
+## v0.7.1
+
+- Added mandatory API-key protection for non-health API endpoints.
+- Restricted CORS to configured local frontend origins.
+- Added server-side authorization confirmation for every scan request.
+- Added API rate limiting and bounded concurrent scans.
+- Disabled API scanning when `NETWATCH_API_KEY` is not configured.
+- Disabled FastAPI documentation by default.
+- Enforced explicit local IPv4 scope and clear IPv6 rejection.
+- Updated saved reports and Risk Advisor to use stored port findings.
+- Hardened SQLite with WAL mode, busy timeout, UTC timestamps, and indexes.
+- Added non-root Docker execution and local-only port bindings.
+- Added `.dockerignore`, `.env.example`, API tests, and security CI.
+
+## v0.7.0
+
+- Added an initial FastAPI backend in `backend/`.
+- Added a static frontend foundation in `frontend/`.
+- Added FastAPI, Uvicorn, and Pydantic dependencies.
+- Added premium UI components and updated the Streamlit design.
 
 ## v0.6.0
 

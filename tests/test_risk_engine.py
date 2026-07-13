@@ -6,8 +6,6 @@ def test_exposure_level_thresholds():
     assert exposure_level(1) == "Low"
     assert exposure_level(5) == "Medium"
     assert exposure_level(12) == "High"
-    assert exposure_level(4, high_findings=1) == "Medium"
-    assert exposure_level(8, high_findings=2) == "High"
 
 
 def test_summarize_exposure_scores_open_ports_only():
@@ -37,3 +35,16 @@ def test_top_recommendations_prioritizes_high_risk():
     top = top_recommendations(rows, limit=1)
 
     assert top[0]["Port"] == 3389
+
+
+def test_high_risk_findings_raise_the_minimum_exposure_level():
+    one_high = summarize_exposure([{"Status": "Open", "Risk": "High"}])
+    two_high = summarize_exposure(
+        [
+            {"Status": "Open", "Risk": "High"},
+            {"Status": "Open", "Risk": "High"},
+        ]
+    )
+
+    assert one_high.level == "Medium"
+    assert two_high.level == "High"

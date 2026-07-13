@@ -21,13 +21,7 @@ def test_summarize_ports_counts_open_and_risk():
 
 def test_build_markdown_report_contains_summary():
     hosts = pd.DataFrame(
-        [
-            {
-                "IP Address": "192.168.1.10",
-                "Status": "Online",
-                "Details": "Host is online",
-            }
-        ]
+        [{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}]
     )
     ports = pd.DataFrame(
         [
@@ -51,13 +45,7 @@ def test_build_markdown_report_contains_summary():
 
 def test_build_html_report_contains_sections():
     hosts = pd.DataFrame(
-        [
-            {
-                "IP Address": "192.168.1.10",
-                "Status": "Online",
-                "Details": "Host is online",
-            }
-        ]
+        [{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}]
     )
     ports = pd.DataFrame(
         [
@@ -78,9 +66,10 @@ def test_build_html_report_contains_sections():
     assert "Top recommendations" in report
 
 
-def test_markdown_report_escapes_table_separators():
-    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Details": "router | lab"}])
+def test_markdown_report_escapes_table_delimiters_and_line_breaks():
+    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Details": "router|gateway\nlocal"}])
 
     report = build_markdown_report(hosts, pd.DataFrame())
 
-    assert "router \\| lab" in report
+    assert "router\\|gateway local" in report
+    assert "router|gateway\nlocal" not in report
