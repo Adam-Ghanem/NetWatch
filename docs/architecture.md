@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.0 is a local-first defensive network visibility application. The professional dashboard and protected API are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.1 is a local-first defensive network visibility application. The professional dashboard and protected API are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -25,7 +25,7 @@ FastAPI application (`backend/main.py`)
           |      - `risk_engine.py`
           |      - `advisory_engine.py`
           |
-          +--> SQLite inventory (`inventory_store.py`)
+          +--> SQLite inventory and change detection (`inventory_store.py`)
           |
           +--> Markdown/HTML reports (`report_builder.py`)
 ```
@@ -48,6 +48,7 @@ It provides:
 - Single-host profiling
 - Common TCP service audit
 - Persistent asset inventory
+- Scan-to-scan asset change history
 - Local Risk Advisor
 - Markdown and HTML report downloads
 
@@ -73,7 +74,7 @@ It is not the default deployment path.
 - `port_scanner.py`: bounded concurrent TCP service review.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
-- `inventory_store.py`: SQLite inventory and scan-run persistence.
+- `inventory_store.py`: SQLite inventory, scan snapshots, transition detection, and scan-run persistence.
 - `report_builder.py`: Markdown and standalone HTML reports.
 
 ## Storage
@@ -90,7 +91,18 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
+- Schema version 2 with normalized scan observations
+- Bounded change-event and observation retention
 - Named Docker volumes in the default Compose deployment
+
+The four operational tables have separate responsibilities:
+
+- `scan_runs` records each check and its summary.
+- `assets` stores current inventory state and the last confirmed sighting.
+- `network_observations` records observed and not-observed evidence for each network scan.
+- `asset_events` records meaningful transitions: new asset, returned asset, and not observed.
+
+A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery.
 
 The older CSV history remains only for Streamlit compatibility.
 

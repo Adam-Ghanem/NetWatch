@@ -16,7 +16,9 @@ from inventory_store import (
     asset_inventory,
     asset_port_findings,
     init_db,
+    recent_asset_events,
     recent_scan_runs,
+    record_network_scan,
     update_asset_ports,
     upsert_hosts,
 )
@@ -127,6 +129,7 @@ def show_overview() -> None:
     exposure = current_exposure()
     inventory = asset_inventory()
     runs = recent_scan_runs(limit=8)
+    changes = recent_asset_events(limit=8)
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -170,6 +173,12 @@ def show_overview() -> None:
         else:
             empty_panel("Quiet for now", "Checks will appear here after you run them.")
 
+    section_title("Recent asset changes")
+    if changes:
+        st.dataframe(pd.DataFrame(changes), use_container_width=True, hide_index=True)
+    else:
+        empty_panel("No changes recorded", "Run a network scan to establish a baseline.")
+
 
 def show_network_scan() -> None:
     hero()
@@ -199,12 +208,23 @@ def show_network_scan() -> None:
                 results = scan_network(target)
                 hosts_df = pd.DataFrame(results)
                 st.session_state.network_results = hosts_df
-                summary = f"{len(results)} online host(s) found"
-                add_event(f"Network scan completed for {target}: {summary}")
-                add_history("network", target, summary)
-                add_scan_run("network", target, summary)
-                upsert_hosts(results)
-                st.success(summary)
+                changes = record_network_scan(target, results)
+                add_event(f"Network scan completed for {target}: {changes.summary}")
+                add_history("network", target, changes.summary)
+                st.success(changes.summary)
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    metric_card("Observed", len(changes.observed_assets), "Latest snapshot")
+                with c2:
+                    metric_card("New", len(changes.new_assets), "First observed")
+                with c3:
+                    metric_card("Returned", len(changes.returned_assets), "Observed again")
+                with c4:
+                    metric_card(
+                        "Not observed",
+                        len(changes.not_observed_assets),
+                        "No reply; verify manually",
+                    )
             except ValueError as exc:
                 st.error(str(exc))
                 add_scan_run("network", cidr, str(exc), status="blocked")
@@ -239,10 +259,12 @@ def show_host_check() -> None:
         msg = f"{profile.notes}; latency={profile.latency_ms}; ttl={profile.ttl}; hostname={profile.hostname}"
         add_event(f"Host profile for {target}: {msg}")
         add_history("host_profile", target, msg, status=status)
-        add_scan_run("host_profile", target, msg, status=status)
+        scan_run_id = add_scan_run("host_profile", target, msg, status=status)
         if profile.online:
             upsert_hosts(
-                [{"IP Address": profile.ip_address, "Status": "Online", "Details": profile.notes}]
+                [{"IP Address": profile.ip_address, "Status": "Online", "Details": profile.notes}],
+                source="host check",
+                scan_run_id=scan_run_id,
             )
             st.success("Host replied to ICMP ping")
         else:
@@ -293,8 +315,14 @@ def show_port_audit() -> None:
             msg = f"{exposure.open_ports} open port(s), level {exposure.level}, score {exposure.score}"
             add_event(f"Port audit completed for {target}: {msg}")
             add_history("ports", target, msg)
-            add_scan_run("ports", target, msg)
-            update_asset_ports(target, results, exposure.score, exposure.level)
+            scan_run_id = add_scan_run("ports", target, msg)
+            update_asset_ports(
+                target,
+                results,
+                exposure.score,
+                exposure.level,
+                scan_run_id=scan_run_id,
+            )
             st.success(msg)
     ports_df = st.session_state.port_results
     if ports_df.empty:
@@ -329,7 +357,13 @@ def show_risk_advisor() -> None:
     hosts_df = active_hosts()
     ports_df = active_ports()
     inventory = asset_inventory()
-    advice = build_advice(hosts_df.to_dict("records"), ports_df.to_dict("records"), inventory)
+    changes = recent_asset_events(limit=25)
+    advice = build_advice(
+        hosts_df.to_dict("records"),
+        ports_df.to_dict("records"),
+        inventory,
+        changes,
+    )
     c1, c2, c3 = st.columns(3)
     with c1:
         metric_card("Risk level", advice.risk_level, "Advisor output")
@@ -367,6 +401,12 @@ def show_inventory() -> None:
     st.download_button(
         "Download inventory CSV", safe_csv_bytes(inventory_df), "netwatch_inventory.csv", "text/csv"
     )
+    changes = recent_asset_events(limit=50)
+    section_title("Recent asset changes")
+    if changes:
+        st.dataframe(pd.DataFrame(changes), use_container_width=True, hide_index=True)
+    else:
+        empty_panel("No changes recorded", "Run a network scan to establish a baseline.")
 
 
 def show_network_tools() -> None:
@@ -396,8 +436,9 @@ def show_reports() -> None:
     section_title("Reports & History")
     hosts_df = active_hosts()
     ports_df = active_ports()
-    markdown_report = build_markdown_report(hosts_df, ports_df)
-    html_report = build_html_report(hosts_df, ports_df)
+    changes_df = pd.DataFrame(recent_asset_events(limit=50))
+    markdown_report = build_markdown_report(hosts_df, ports_df, changes_df)
+    html_report = build_html_report(hosts_df, ports_df, changes_df)
     c1, c2 = st.columns(2)
     with c1:
         st.download_button(

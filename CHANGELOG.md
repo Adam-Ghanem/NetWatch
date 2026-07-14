@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.0
+
+- Added normalized per-scan network observations and durable asset-change events in SQLite.
+- Added change detection for newly observed, returned, and not-observed assets.
+- Preserved the last confirmed sighting when a host does not answer and avoided treating a missing ICMP reply as proof that a device is offline.
+- Added authenticated change-history and observation API endpoints.
+- Added change metrics and event history to the primary dashboard and optional Streamlit interface.
+- Included recent asset changes in the Risk Advisor and Markdown/HTML reports.
+- Bounded event and observation retention to keep local storage predictable.
+- Added transition, schema, API, advisor, and report regression tests.
+
 ## v1.0.1
 
 - Updated FastAPI, Starlette, Uvicorn, Pydantic, Streamlit, and pytest to patched releases and separated runtime from development dependencies.

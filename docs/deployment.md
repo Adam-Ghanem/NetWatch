@@ -1,4 +1,4 @@
-# NetWatch v1 Deployment Guide
+# NetWatch v1.1 Deployment Guide
 
 NetWatch is designed to run locally on a trusted laptop, workstation, or lab VM connected to an authorized network.
 

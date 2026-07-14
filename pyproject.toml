@@ -1,6 +1,6 @@
 [project]
 name = "netwatch"
-version = "1.0.1"
+version = "1.1.0"
 description = "Local-first network visibility and defensive review platform"
 requires-python = ">=3.10"
 license = { text = "MIT" }

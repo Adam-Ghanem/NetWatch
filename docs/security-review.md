@@ -1,8 +1,8 @@
-# NetWatch v1 Security Review
+# NetWatch v1.1 Security Review
 
 ## Scope
 
-This review covers the default local deployment of NetWatch v1: one FastAPI process serving the responsive dashboard and protected API at `127.0.0.1:8000`.
+This review covers the default local deployment of NetWatch v1.1: one FastAPI process serving the responsive dashboard and protected API at `127.0.0.1:8000`.
 
 ## Threat model
 
@@ -53,6 +53,8 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 
 - SQLite uses WAL mode and busy timeout.
 - Timestamps are stored in UTC.
+- Asset events and normalized observations have bounded retention.
+- Missing ICMP replies preserve the last confirmed sighting and use `Not observed` rather than a definitive offline claim.
 - Database and generated files are ignored by Git.
 - CSV output reduces spreadsheet formula injection, including leading-whitespace variants.
 - HTML report values are escaped.
@@ -76,6 +78,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - ICMP and TCP observations can be incomplete or misleading due to filtering and transient network conditions.
 - The in-memory rate limiter resets when the process restarts and is not suitable for a multi-worker deployment.
 - SQLite and the current schema are designed for one local operator, not high-concurrency multi-tenant use.
+- Change events remain network evidence and can contain sensitive internal addressing even without hostnames.
 - Reports and screenshots can expose sensitive internal information if shared carelessly.
 
 ## Shared-deployment requirements
@@ -96,4 +99,4 @@ Do not expose the default service to other networks without adding:
 
 ## Review conclusion
 
-The default NetWatch v1 configuration is appropriate for a trusted single-user local lab or internal demonstration when used only on authorized networks. It is not approved as-is for public, multi-user, or Internet-accessible deployment.
+The default NetWatch v1.1 configuration is appropriate for a trusted single-user local lab or internal demonstration when used only on authorized networks. It is not approved as-is for public, multi-user, or Internet-accessible deployment.

@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps an authorized operator discover local hosts, profile devices, review common TCP services, maintain an asset inventory, generate deterministic risk guidance, and export evidence-backed reports.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps an authorized operator discover local hosts, track what changed between scans, profile devices, review common TCP services, maintain an asset inventory, generate deterministic risk guidance, and export evidence-backed reports.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.0
+## NetWatch v1.1
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -57,10 +57,11 @@ The original Streamlit interface remains available as an optional legacy profile
 - User-provided NetWatch identity and local SVG assets
 - Session-only API-key connection screen
 - Authorized local IPv4 CIDR discovery
+- Historical scan snapshots with new, returned, and not-observed asset detection
 - Single-host latency, TTL, hostname, and cautious OS hints
 - Bounded concurrent common-port audit
 - Clear Open, Closed, and Filtered/Unreachable states
-- SQLite asset inventory and scan history
+- SQLite asset inventory, normalized observations, change events, and scan history
 - Exposure priority score and deterministic local Risk Advisor
 - Markdown and standalone HTML report downloads
 - Public, oversized, and unsupported targets blocked
@@ -130,11 +131,13 @@ docker compose down
 
 ### Overview
 
-Shows saved assets, open services, assets requiring review, recent checks, and a compact advisor summary.
+Shows saved assets, open services, assets requiring review, recent checks, recent asset changes, and a compact advisor summary.
 
 ### Network scan
 
-Checks an approved local IPv4 CIDR with a maximum of 256 hosts. ICMP filtering may hide active devices, so a zero-host result does not prove that the network is empty.
+Checks an approved local IPv4 CIDR with a maximum of 256 hosts. Each completed scan saves a normalized snapshot and compares it with earlier observations. NetWatch highlights newly observed devices, devices seen again after an absence, and known devices that did not reply this time.
+
+ICMP filtering may hide active devices, so NetWatch uses **Not observed** instead of claiming that a missing device is offline. A zero-host result does not prove that the network is empty.
 
 ### Host check
 
@@ -162,7 +165,7 @@ An open port is exposure that requires context and validation. It is not automat
 
 ### Inventory and history
 
-Stores local assets, timestamps, status, open-service findings, exposure score, and recent scan runs in SQLite.
+Stores local assets, first and last confirmed sightings, status, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite.
 
 ### Risk Advisor
 
@@ -174,6 +177,8 @@ Downloads:
 
 - Markdown report for GitHub, notes, or handover documents
 - Standalone HTML report for review and sharing inside an authorized environment
+
+Both formats include recent asset changes alongside inventory and port evidence.
 
 ## Architecture
 
@@ -245,6 +250,20 @@ curl -X POST http://127.0.0.1:8000/api/audit/ports \
   -d '{"ip":"192.168.1.1","authorized":true}'
 ```
 
+Recent asset changes:
+
+```bash
+curl http://127.0.0.1:8000/api/changes \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Normalized network observations:
+
+```bash
+curl "http://127.0.0.1:8000/api/observations?limit=100" \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
 ## Local development
 
 Create a virtual environment and install development dependencies:
@@ -307,7 +326,14 @@ SQLite is the main operational store:
 data/netwatch.db
 ```
 
-The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Compose persists it in a named volume.
+The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Compose persists it in a named volume. Its main records are:
+
+- `scan_runs`: one audit record per completed check
+- `assets`: the current asset inventory and last confirmed sighting
+- `network_observations`: normalized observed/not-observed evidence per network scan
+- `asset_events`: new, returned, and not-observed transitions
+
+Change history is bounded to 5,000 events and 50,000 network observations so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
@@ -349,6 +375,7 @@ Network actions are mocked in API tests, so CI does not scan external systems.
 NetWatch provides useful local evidence, not absolute truth:
 
 - ICMP discovery can miss hosts that block ping
+- **Not observed** means no reply in the latest relevant scan; it does not mean confirmed offline
 - Reverse DNS may not return a hostname
 - TTL-based OS hints are approximate
 - Firewalls can affect Closed and Filtered results
@@ -398,8 +425,8 @@ NetWatch/
 
 ## Roadmap
 
-- Per-scan normalized host and service findings
-- Historical scan comparison and change detection
+- Per-scan normalized service findings
+- Configurable retention and cleanup controls
 - Local CVE enrichment with explicit version-confidence handling
 - ARP discovery where operating-system permissions allow
 - Progress updates and cancellation for longer scans

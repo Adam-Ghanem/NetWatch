@@ -73,3 +73,25 @@ def test_markdown_report_escapes_table_delimiters_and_line_breaks():
 
     assert "router\\|gateway local" in report
     assert "router|gateway\nlocal" not in report
+
+
+def test_reports_include_recent_asset_changes_and_escape_html():
+    changes = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-13T10:00:00+00:00",
+                "ip_address": "192.168.1.20",
+                "event_label": "New asset",
+                "details": "router <approved>",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), changes)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), changes)
+
+    assert "Recent asset changes: **1**" in markdown
+    assert "192.168.1.20" in markdown
+    assert "Recent asset changes" in html
+    assert "router &lt;approved&gt;" in html
+    assert "router <approved>" not in html

@@ -38,7 +38,10 @@ from inventory_store import (
     asset_inventory,
     asset_port_findings,
     init_db,
+    recent_asset_events,
+    recent_network_observations,
     recent_scan_runs,
+    record_network_scan,
     update_asset_ports,
     upsert_hosts,
 )
@@ -206,10 +209,14 @@ def scan_lan(payload: NetworkScanRequest) -> dict[str, Any]:
     target = validation.value or payload.cidr
     with _scan_slot():
         results = scan_network(target)
-    summary = f"{len(results)} online host(s) found"
-    add_scan_run("network", target, summary)
-    upsert_hosts(results)
-    return {"target": target, "online_hosts": len(results), "hosts": results, "summary": summary}
+    changes = record_network_scan(target, results)
+    return {
+        "target": target,
+        "online_hosts": len(results),
+        "hosts": results,
+        "summary": changes.summary,
+        "changes": changes.as_dict(),
+    }
 
 
 @app.post("/api/scan/host", dependencies=[Depends(require_api_access)])
@@ -225,10 +232,12 @@ def check_host(payload: HostRequest) -> dict[str, Any]:
     msg = (
         f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; hostname={result.hostname}"
     )
-    add_scan_run("host_profile", target, msg, status=status)
+    scan_run_id = add_scan_run("host_profile", target, msg, status=status)
     if result.online:
         upsert_hosts(
-            [{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}]
+            [{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}],
+            source="host check",
+            scan_run_id=scan_run_id,
         )
     return result.__dict__
 
@@ -244,8 +253,8 @@ def audit_ports(payload: HostRequest) -> dict[str, Any]:
         ports = scan_ports(target)
     exposure = summarize_exposure(ports)
     msg = f"{exposure.open_ports} open port(s), level {exposure.level}, score {exposure.score}"
-    add_scan_run("ports", target, msg)
-    update_asset_ports(target, ports, exposure.score, exposure.level)
+    scan_run_id = add_scan_run("ports", target, msg)
+    update_asset_ports(target, ports, exposure.score, exposure.level, scan_run_id=scan_run_id)
     return {
         "target": target,
         "ports": ports,
@@ -267,11 +276,24 @@ def history(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, Any]:
     return {"items": recent_scan_runs(limit=limit)}
 
 
+@app.get("/api/changes", dependencies=[Depends(require_api_access)])
+def changes(limit: int = Query(default=25, ge=1, le=200)) -> dict[str, Any]:
+    items = recent_asset_events(limit=limit)
+    return {"count": len(items), "items": items}
+
+
+@app.get("/api/observations", dependencies=[Depends(require_api_access)])
+def observations(limit: int = Query(default=100, ge=1, le=1_000)) -> dict[str, Any]:
+    items = recent_network_observations(limit=limit)
+    return {"count": len(items), "items": items}
+
+
 @app.get("/api/advisor", dependencies=[Depends(require_api_access)])
 def advisor() -> dict[str, Any]:
     inventory_rows = asset_inventory()
     port_rows = asset_port_findings()
-    advice = build_advice(inventory_rows, port_rows, inventory_rows)
+    change_rows = recent_asset_events(limit=25)
+    advice = build_advice(inventory_rows, port_rows, inventory_rows, change_rows)
     return {**advice.__dict__, "markdown": advice_to_markdown(advice)}
 
 
@@ -283,7 +305,8 @@ def advisor() -> dict[str, Any]:
 def markdown_report() -> str:
     hosts_df = pd.DataFrame(asset_inventory())
     ports_df = pd.DataFrame(asset_port_findings())
-    return build_markdown_report(hosts_df, ports_df)
+    changes_df = pd.DataFrame(recent_asset_events(limit=50))
+    return build_markdown_report(hosts_df, ports_df, changes_df)
 
 
 @app.get(
@@ -294,7 +317,8 @@ def markdown_report() -> str:
 def html_report() -> str:
     hosts_df = pd.DataFrame(asset_inventory())
     ports_df = pd.DataFrame(asset_port_findings())
-    return build_html_report(hosts_df, ports_df)
+    changes_df = pd.DataFrame(recent_asset_events(limit=50))
+    return build_html_report(hosts_df, ports_df, changes_df)
 
 
 if FRONTEND_DIR.exists():

@@ -260,6 +260,7 @@ code {
 .metric small { font-size: 0.72rem; }
 
 .split-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr); gap: 18px; }
+.split-grid + .panel { margin-top: 18px; }
 .content-grid.form-layout { display: grid; grid-template-columns: minmax(320px, 0.36fr) minmax(0, 0.64fr); gap: 20px; align-items: start; }
 .panel {
   padding: 26px;
