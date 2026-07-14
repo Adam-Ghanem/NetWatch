@@ -1,6 +1,8 @@
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 import inventory_store
 
 
@@ -135,8 +137,8 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-    assert version == 2
-    assert {"network_observations", "asset_events"}.issubset(tables)
+    assert version == 3
+    assert {"network_observations", "asset_events", "audit_log"}.issubset(tables)
 
 
 def test_change_history_retention_is_bounded(monkeypatch, tmp_path):
@@ -156,3 +158,119 @@ def test_change_history_retention_is_bounded(monkeypatch, tmp_path):
 
     assert len(inventory_store.recent_asset_events(20)) == 2
     assert len(inventory_store.recent_network_observations(20)) == 2
+
+
+def test_existing_inventory_schema_migrates_without_losing_assets(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute("""
+            CREATE TABLE assets (
+                ip_address TEXT PRIMARY KEY,
+                first_seen TEXT NOT NULL,
+                last_seen TEXT NOT NULL,
+                status TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT '',
+                open_ports TEXT NOT NULL DEFAULT '[]',
+                exposure_score INTEGER NOT NULL DEFAULT 0,
+                exposure_level TEXT NOT NULL DEFAULT 'Clean'
+            )
+            """)
+        conn.execute(
+            """
+            INSERT INTO assets (
+                ip_address, first_seen, last_seen, status, details,
+                open_ports, exposure_score, exposure_level
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "192.168.1.40",
+                "2026-07-01T10:00:00+00:00",
+                "2026-07-01T10:00:00+00:00",
+                "Online",
+                "legacy asset",
+                "[]",
+                0,
+                "Clean",
+            ),
+        )
+
+    inventory_store.init_db()
+    asset = inventory_store.update_asset_context(
+        "192.168.1.40",
+        owner="Infrastructure",
+        department="IT",
+        location="HQ",
+        criticality="High",
+        notes="Migrated safely",
+        actor_role="admin",
+    )
+
+    assert asset["details"] == "legacy asset"
+    assert asset["owner"] == "Infrastructure"
+    assert asset["criticality"] == "High"
+
+
+def test_asset_context_is_normalized_and_recorded_in_audit_log(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.upsert_hosts([{"IP Address": "192.168.1.50"}])
+
+    asset = inventory_store.update_asset_context(
+        "192.168.1.50",
+        owner="  Platform\n Team  ",
+        department="IT",
+        location="Casablanca HQ",
+        criticality="critical",
+        notes="Internal service\nNo credentials stored",
+        actor_role="admin",
+    )
+    audit = inventory_store.recent_audit_log()
+
+    assert asset["owner"] == "Platform Team"
+    assert asset["criticality"] == "Critical"
+    assert asset["context_updated_at"]
+    assert audit[0]["action"] == "asset_context_updated"
+    assert audit[0]["target"] == "192.168.1.50"
+
+
+def test_asset_context_rejects_unknown_assets_and_criticality(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.upsert_hosts([{"IP Address": "192.168.1.60"}])
+
+    with pytest.raises(ValueError, match="Criticality"):
+        inventory_store.update_asset_context(
+            "192.168.1.60",
+            owner="",
+            department="",
+            location="",
+            criticality="Urgent",
+            notes="",
+            actor_role="admin",
+        )
+    with pytest.raises(KeyError):
+        inventory_store.update_asset_context(
+            "192.168.1.61",
+            owner="",
+            department="",
+            location="",
+            criticality="Medium",
+            notes="",
+            actor_role="admin",
+        )
+
+
+def test_audit_log_retention_is_bounded(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setattr(inventory_store, "MAX_AUDIT_LOG_ENTRIES", 2)
+
+    for index in range(3):
+        inventory_store.record_audit_event(
+            "operator",
+            f"check_{index}",
+            "192.168.1.1",
+            "completed",
+            "bounded test",
+        )
+
+    audit = inventory_store.recent_audit_log(20)
+    assert len(audit) == 2
+    assert [item["action"] for item in audit] == ["check_2", "check_1"]

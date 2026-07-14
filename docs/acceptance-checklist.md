@@ -1,11 +1,11 @@
-# NetWatch v1.1 Acceptance Checklist
+# NetWatch v1.2 Acceptance Checklist
 
 Use this checklist before merging, presenting, or handing over NetWatch.
 
 ## Repository and release
 
-- [ ] README shows NetWatch v1.1 and the correct startup command.
-- [ ] Changelog contains the v1.1.0 release.
+- [ ] README shows NetWatch v1.2 and the correct startup command.
+- [ ] Changelog contains the v1.2.0 release.
 - [ ] Architecture, deployment, and security documentation match the current code.
 - [ ] `.env`, database files, logs, and reports are ignored by Git.
 - [ ] No real API key or internal network evidence is committed.
@@ -20,6 +20,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] The dashboard opens at `http://127.0.0.1:8000`.
 - [ ] The printed API key connects successfully.
 - [ ] Closing the browser tab clears the session-only key.
+- [ ] Optional Operator and Viewer keys are blank unless intentionally configured.
 
 ## Dashboard
 
@@ -29,6 +30,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Refresh and disconnect actions work.
 - [ ] Loading and error states are understandable.
 - [ ] Dynamic API values are rendered as text, not injected HTML.
+- [ ] The connected role and capabilities are displayed correctly.
 
 ## Network workflows
 
@@ -38,6 +40,10 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Port Audit displays service status, response time, priority, and recommendation.
 - [ ] Port Audit distinguishes open, closed, and filtered/unreachable states.
 - [ ] Inventory displays saved assets and exposure information.
+- [ ] Admin can update owner, department, location, criticality, and notes.
+- [ ] Operator and Viewer cannot update company asset context.
+- [ ] Viewer cannot start scans; Operator and Admin can after explicit authorization.
+- [ ] Inventory CSV downloads and formula-like cells are neutralized.
 - [ ] A first network scan records newly observed assets.
 - [ ] A later missing reply records `Not observed` without changing the last confirmed sighting.
 - [ ] A device seen again after an absence records a Returned event.
@@ -48,6 +54,9 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Markdown report downloads correctly.
 - [ ] HTML report downloads and opens correctly.
 - [ ] Both report formats include recent asset changes.
+- [ ] Audit Log records scan and context operations without API keys.
+- [ ] Both report formats include recent operations audit events.
+- [ ] An existing pre-v1.2 database migrates without losing saved assets.
 
 ## Safety and security
 
@@ -64,6 +73,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Docker runs as a non-root user.
 - [ ] Port `8000` is published only on localhost.
 - [ ] No exploitation, brute-force, credential, stealth, or evasion logic exists.
+- [ ] Role keys are distinct, at least 32 characters, and not committed.
 
 ## Automated validation
 

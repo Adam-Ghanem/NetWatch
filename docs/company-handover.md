@@ -1,8 +1,8 @@
-# NetWatch v1.1 Company Handover
+# NetWatch v1.2 Company Handover
 
 ## Product summary
 
-NetWatch is a local network visibility and defensive review application for authorized internal environments. It gives one trusted operator a clear web dashboard for host discovery, focused device checks, common-service review, asset inventory, local risk guidance, and lightweight report export.
+NetWatch is a local network visibility and defensive review application for authorized internal environments. It gives a trusted internal pilot team a clear web dashboard for host discovery, focused device checks, common-service review, accountable asset context, local risk guidance, operations logging, and lightweight report export.
 
 The default product interface and API are served together by FastAPI at:
 
@@ -12,17 +12,18 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1.1 provides:
+NetWatch v1.2 provides:
 
-- Protected local dashboard with session-only API-key access
+- Protected local dashboard with session-only Admin, Operator, and Viewer access
 - Approved private/local IPv4 validation
 - Local CIDR discovery up to 256 hosts
 - Single-host latency, TTL, hostname, and OS hints
 - Concurrent review of a conservative common TCP port list
 - Open, Closed, and Filtered/Unreachable result states
 - Exposure priority scoring and recommendations
-- SQLite asset inventory and scan history
+- SQLite asset inventory with owner, department, location, criticality, and notes
 - Normalized scan snapshots and new/returned/not-observed asset events
+- Bounded operations audit log and formula-safe inventory CSV export
 - Deterministic local Risk Advisor
 - Markdown and standalone HTML reports
 - Docker deployment and one-command launcher
@@ -60,14 +61,15 @@ The launcher prints the dashboard URL and generated local API key.
 5. Run Host Check on a known router, VM, or lab server.
 6. Run Port Audit on one known authorized host.
 7. Explain why an open service is exposure—not automatic proof of a vulnerability.
-8. Open Inventory and History to show saved evidence and scan-to-scan changes.
-9. Open Risk Advisor to show deterministic local recommendations.
-10. Download Markdown and HTML reports.
-11. Explain the API authentication, scan limits, localhost binding, and data handling.
+8. Open Inventory, assign an owner and criticality, and show scan-to-scan changes.
+9. Open Audit Log and explain role/action/target accountability without stored keys.
+10. Open Risk Advisor to show business-critical asset prioritization.
+11. Export the inventory CSV and download Markdown and HTML reports.
+12. Explain the role boundary, scan limits, localhost binding, and data handling.
 
 ## Main files
 
-- `backend/main.py`: FastAPI app, API routes, authentication, rate limits, security headers, and frontend hosting.
+- `backend/main.py`: FastAPI app, role authorization, API routes, rate limits, security headers, and frontend hosting.
 - `frontend/index.html`: dashboard structure.
 - `frontend/styles.css`: responsive visual system.
 - `frontend/app.js`: dashboard behavior and protected API workflows.
@@ -78,7 +80,7 @@ The launcher prints the dashboard URL and generated local API key.
 - `port_scanner.py`: bounded common-service review.
 - `risk_engine.py`: exposure scoring.
 - `advisory_engine.py`: local evidence-based summary.
-- `inventory_store.py`: SQLite persistence.
+- `inventory_store.py`: SQLite inventory, company context, changes, and operations audit persistence.
 - `report_builder.py`: Markdown and HTML exports.
 - `docs/architecture.md`: current technical design.
 - `docs/deployment.md`: operating and deployment guide.
@@ -95,6 +97,8 @@ This information may include:
 - Scan timestamps
 - Per-scan presence observations and asset-change events
 - Observed service exposure
+- Asset owners, departments, locations, criticality, and operational notes
+- Operations audit events and actor roles
 - Internal recommendations
 
 Treat database exports, screenshots, logs, and reports as internal information.
@@ -102,8 +106,9 @@ Treat database exports, screenshots, logs, and reports as internal information.
 ## Default security posture
 
 - Localhost-only service exposure
-- API key required
-- Protected API disabled without configured key
+- Valid Admin, Operator, or Viewer key required
+- Viewer is read-only, Operator can run authorized checks, and Admin can edit asset context
+- Protected API disabled without at least one configured role key
 - Explicit authorization confirmation on scans
 - Local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
@@ -116,12 +121,12 @@ Treat database exports, screenshots, logs, and reports as internal information.
 
 Before use by multiple employees or on a remote server, add:
 
-- SSO or organization authentication
-- Role-based access control
+- SSO/OIDC organization authentication with individual identities
+- Fine-grained authorization beyond shared role secrets
 - TLS and reviewed reverse proxy
 - Network allowlists or VPN-only access
 - Managed secret storage
-- Centralized audit logs
+- Centralized tamper-resistant audit logs
 - Retention and deletion policy
 - Database backups and migrations
 - Health monitoring and alerting
@@ -133,9 +138,8 @@ Before use by multiple employees or on a remote server, add:
 - Normalized service findings per scan run
 - Configurable retention and cleanup controls
 - Scheduled scans for pre-approved ranges
-- Asset owner, department, location, and business criticality fields
 - PDF reports
 - ARP discovery where permissions allow
 - Progress and cancellation for long scans
-- SSO/RBAC for shared deployments
+- SSO/OIDC and individual RBAC for shared deployments
 - Encrypted and tested backup workflow

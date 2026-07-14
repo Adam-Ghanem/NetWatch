@@ -1,8 +1,8 @@
-# NetWatch v1.1 Demo Script
+# NetWatch v1.2 Demo Script
 
 ## 1. Introduction
 
-"NetWatch is a local-first defensive network visibility platform. It helps an authorized operator discover local hosts, track meaningful changes between scans, review common service exposure, maintain an asset inventory, generate local guidance, and export reports."
+"NetWatch is a local-first defensive network visibility platform. It helps an authorized internal team discover local hosts, track meaningful changes, review common service exposure, assign accountable business context, keep an operations log, generate local guidance, and export reports."
 
 ## 2. Explain the safety boundary
 
@@ -14,6 +14,7 @@
 2. Open `http://127.0.0.1:8000`.
 3. Enter the API key printed by the launcher.
 4. Show that the key is stored only for the browser session.
+5. Show the connected Admin role and explain the Viewer and Operator boundaries.
 
 ## 4. Overview
 
@@ -59,10 +60,22 @@ Open **Inventory** and explain:
 - First/last seen information
 - Saved open ports
 - Exposure score and priority
+- Owner, department, location, and business criticality
 - Recent scan audit trail
 - Normalized change history and the evidence recorded for each event
 
-## 9. Risk Advisor
+Update one approved sample asset with an owner and criticality, then export the inventory CSV.
+
+## 9. Operations audit log
+
+Open **Audit log** and explain:
+
+- UTC event time
+- Actor role and operation
+- Target, outcome, and bounded summary
+- API keys are never stored in audit records
+
+## 10. Risk Advisor
 
 Open **Risk advisor** and explain:
 
@@ -70,8 +83,9 @@ Open **Risk advisor** and explain:
 - It uses saved NetWatch evidence
 - It does not send scan data to an external service
 - Confidence depends on available data
+- Exposed High and Critical assets are prioritized using saved business context
 
-## 10. Reports
+## 11. Reports
 
 Open **Reports** and download:
 
@@ -80,10 +94,10 @@ Open **Reports** and download:
 
 Explain that reports can contain sensitive internal network information and must be reviewed before sharing.
 
-## 11. Technical architecture
+## 12. Technical architecture
 
-"The dashboard and API are served by one FastAPI process. SQLite stores local inventory, normalized scan observations, change events, and scan history. Docker runs as a non-root user and publishes the application only on localhost by default."
+"The dashboard and API are served by one FastAPI process. SQLite stores local inventory, business context, normalized observations, change events, scan history, and a bounded operations audit log. Docker runs as a non-root user and publishes the application only on localhost by default."
 
-## 12. Close
+## 13. Close
 
-"NetWatch is designed as a safe local visibility and evidence tool. A shared company deployment would additionally require SSO, roles, TLS, managed secrets, centralized logs, monitoring, backups, and a deployment-specific security review."
+"NetWatch v1.2 is designed for a trusted local pilot or small internal team. Its shared role keys are not enterprise identity; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, centralized tamper-resistant logs, monitoring, backups, and a deployment-specific security review."

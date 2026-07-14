@@ -56,3 +56,30 @@ def test_advisor_surfaces_recent_asset_changes_without_overclaiming():
     assert "1 newly observed" in result.summary
     assert any("192.168.1.20" in item for item in result.priorities)
     assert any("ICMP" in item for item in result.next_steps)
+
+
+def test_advisor_prioritizes_important_business_assets_and_missing_owners():
+    inventory = [
+        {
+            "ip_address": "192.168.1.70",
+            "criticality": "Critical",
+            "exposure_score": 9,
+            "owner": "Platform Team",
+            "department": "IT",
+        },
+        {
+            "ip_address": "192.168.1.71",
+            "criticality": "High",
+            "exposure_score": 0,
+            "owner": "",
+            "department": "Operations",
+        },
+    ]
+
+    result = build_advice([], [], inventory)
+
+    assert "2 are marked High or Critical" in result.summary
+    assert any("192.168.1.70" in item and "Platform Team" in item for item in result.priorities)
+    assert any(
+        "192.168.1.71" in item and "Assign accountable owners" in item for item in result.next_steps
+    )

@@ -1,4 +1,4 @@
-# NetWatch v1.1 Deployment Guide
+# NetWatch v1.2 Deployment Guide
 
 NetWatch is designed to run locally on a trusted laptop, workstation, or lab VM connected to an authorized network.
 
@@ -21,7 +21,7 @@ python scripts/start.py
 The launcher:
 
 1. Creates `.env` when necessary.
-2. Generates a strong random API key.
+2. Generates a strong random Admin key.
 3. Builds the production container.
 4. Starts NetWatch on localhost.
 5. Prints the URL and API key.
@@ -33,6 +33,8 @@ http://127.0.0.1:8000
 ```
 
 Enter the printed key in the dashboard connection screen. The browser stores it only in session storage, so closing the tab clears it.
+
+The optional Operator and Viewer roles remain disabled until their separate keys are configured.
 
 ## Manual Docker Compose installation
 
@@ -52,6 +54,8 @@ Place the value in `.env`:
 
 ```text
 NETWATCH_API_KEY=your-generated-secret
+NETWATCH_OPERATOR_KEY=
+NETWATCH_VIEWER_KEY=
 ```
 
 Build and start:
@@ -130,7 +134,9 @@ http://127.0.0.1:8501
 
 | Environment variable | Default | Description |
 |---|---:|---|
-| `NETWATCH_API_KEY` | empty | Required non-placeholder secret of at least 32 characters |
+| `NETWATCH_API_KEY` | empty | Admin key: read, scan, and asset-context management |
+| `NETWATCH_OPERATOR_KEY` | empty | Optional Operator key: read and authorized scans |
+| `NETWATCH_VIEWER_KEY` | empty | Optional Viewer key: read and export only |
 | `NETWATCH_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Accepted HTTP Host headers |
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI documentation for local development |
@@ -164,6 +170,8 @@ docker compose down -v
 
 The `-v` option permanently deletes the saved NetWatch database and logs.
 
+Back up the named data volume before upgrades or operational use. The v1.2 database migration adds company-context columns and the audit table in place, but a backup is still the required safe operating procedure.
+
 ## Safe operating procedure
 
 - Run NetWatch only on a trusted machine.
@@ -171,18 +179,32 @@ The `-v` option permanently deletes the saved NetWatch database and logs.
 - Begin with one known host or a small CIDR such as `/28`.
 - Confirm written or explicit authorization before every assessment.
 - Treat open services as evidence requiring validation, not automatic vulnerabilities.
+- Assign owners and criticality to important assets.
+- Review the operations audit log after important checks.
 - Export reports after important checks.
 - Do not publish `.env`, database files, internal IP maps, or exported reports.
 
-## Shared or remote deployment
+## Trusted internal pilot
 
-The default deployment is intended for one local operator. Before exposing NetWatch to other users or networks, add:
+For a small team on one controlled workstation, configure a distinct key per enabled role:
+
+| Role | Capabilities |
+|---|---|
+| Viewer | Dashboard, inventory, audit log, reports, CSV export |
+| Operator | Viewer capabilities plus authorized network, host, and port checks |
+| Admin | Operator capabilities plus company asset-context updates |
+
+These are shared role secrets, not individual identities. Store them in an approved secret manager where possible, rotate them when access changes, and do not send them through source control or screenshots.
+
+## Shared or remote deployment boundary
+
+The default deployment is intended for one trusted local pilot or small internal team. Before exposing NetWatch to remote users, public interfaces, or a multi-user production environment, add:
 
 - TLS through a maintained reverse proxy
-- Organization identity and role-based authorization
+- Organization identity with SSO/OIDC and individual authorization
 - Network-level access restrictions
 - Secret management instead of `.env`
-- Centralized audit logging and retention rules
+- Centralized tamper-resistant audit logging and retention rules
 - Backups and database migration procedures
 - Health monitoring and alerting
 - A deployment-specific security review

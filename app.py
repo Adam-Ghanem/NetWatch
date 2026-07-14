@@ -17,8 +17,11 @@ from inventory_store import (
     asset_port_findings,
     init_db,
     recent_asset_events,
+    recent_audit_log,
     recent_scan_runs,
+    record_audit_event,
     record_network_scan,
+    update_asset_context,
     update_asset_ports,
     upsert_hosts,
 )
@@ -209,6 +212,7 @@ def show_network_scan() -> None:
                 hosts_df = pd.DataFrame(results)
                 st.session_state.network_results = hosts_df
                 changes = record_network_scan(target, results)
+                record_audit_event("legacy", "network_scan", target, "completed", changes.summary)
                 add_event(f"Network scan completed for {target}: {changes.summary}")
                 add_history("network", target, changes.summary)
                 st.success(changes.summary)
@@ -269,6 +273,7 @@ def show_host_check() -> None:
             st.success("Host replied to ICMP ping")
         else:
             st.error(profile.notes)
+        record_audit_event("legacy", "host_check", target, "completed", f"Status: {status}.")
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             metric_card("Status", status, profile.notes)
@@ -323,6 +328,7 @@ def show_port_audit() -> None:
                 exposure.level,
                 scan_run_id=scan_run_id,
             )
+            record_audit_event("legacy", "port_audit", target, "completed", msg)
             st.success(msg)
     ports_df = st.session_state.port_results
     if ports_df.empty:
@@ -401,6 +407,50 @@ def show_inventory() -> None:
     st.download_button(
         "Download inventory CSV", safe_csv_bytes(inventory_df), "netwatch_inventory.csv", "text/csv"
     )
+    section_title("Company asset context")
+    st.caption(
+        "Legacy local interface. Use the FastAPI dashboard when role-based access is required."
+    )
+    selected_ip = st.selectbox(
+        "Saved asset",
+        options=[row["ip_address"] for row in inventory],
+        key="legacy_context_asset",
+    )
+    selected = next(row for row in inventory if row["ip_address"] == selected_ip)
+    with st.form("legacy_asset_context"):
+        owner = st.text_input("Owner", value=selected.get("owner", ""), max_chars=120)
+        department = st.text_input(
+            "Department", value=selected.get("department", ""), max_chars=120
+        )
+        location = st.text_input("Location", value=selected.get("location", ""), max_chars=120)
+        criticalities = ["Low", "Medium", "High", "Critical"]
+        current_criticality = selected.get("criticality", "Medium")
+        criticality = st.selectbox(
+            "Criticality",
+            options=criticalities,
+            index=(
+                criticalities.index(current_criticality)
+                if current_criticality in criticalities
+                else 1
+            ),
+        )
+        notes = st.text_area(
+            "Operational notes (do not store secrets)",
+            value=selected.get("notes", ""),
+            max_chars=1_000,
+        )
+        save_context = st.form_submit_button("Save asset context")
+    if save_context:
+        update_asset_context(
+            selected_ip,
+            owner=owner,
+            department=department,
+            location=location,
+            criticality=criticality,
+            notes=notes,
+            actor_role="legacy",
+        )
+        st.success("Asset context saved and added to the operations audit log.")
     changes = recent_asset_events(limit=50)
     section_title("Recent asset changes")
     if changes:
@@ -437,8 +487,9 @@ def show_reports() -> None:
     hosts_df = active_hosts()
     ports_df = active_ports()
     changes_df = pd.DataFrame(recent_asset_events(limit=50))
-    markdown_report = build_markdown_report(hosts_df, ports_df, changes_df)
-    html_report = build_html_report(hosts_df, ports_df, changes_df)
+    audit_df = pd.DataFrame(recent_audit_log(limit=100))
+    markdown_report = build_markdown_report(hosts_df, ports_df, changes_df, audit_df)
+    html_report = build_html_report(hosts_df, ports_df, changes_df, audit_df)
     c1, c2 = st.columns(2)
     with c1:
         st.download_button(
@@ -459,6 +510,17 @@ def show_reports() -> None:
     history = load_history(limit=25)
     if history:
         st.dataframe(pd.DataFrame(history), use_container_width=True, hide_index=True)
+
+
+def show_audit_log() -> None:
+    hero()
+    section_title("Operations Audit Log")
+    st.caption("Records operational role, action, target, outcome, and time. Keys are not stored.")
+    audit = recent_audit_log(limit=200)
+    if audit:
+        st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+    else:
+        empty_panel("No operational events", "Run an authorized check to create an audit entry.")
 
 
 def show_safety() -> None:
@@ -486,6 +548,7 @@ with st.sidebar:
             "Port Audit",
             "Risk Advisor",
             "Inventory",
+            "Audit Log",
             "Network Tools",
             "Reports",
             "Safety",
@@ -506,6 +569,8 @@ elif page == "Risk Advisor":
     show_risk_advisor()
 elif page == "Inventory":
     show_inventory()
+elif page == "Audit Log":
+    show_audit_log()
 elif page == "Network Tools":
     show_network_tools()
 elif page == "Reports":
