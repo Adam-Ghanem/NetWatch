@@ -62,11 +62,43 @@ def _audit_view(audit_df: pd.DataFrame | None) -> pd.DataFrame:
     return audit_df[columns] if columns else pd.DataFrame()
 
 
+def _alert_view(alerts_df: pd.DataFrame | None) -> pd.DataFrame:
+    if alerts_df is None or alerts_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in ("created_at", "severity", "title", "target", "status", "details")
+        if column in alerts_df.columns
+    ]
+    return alerts_df[columns] if columns else pd.DataFrame()
+
+
+def _policy_view(policies_df: pd.DataFrame | None) -> pd.DataFrame:
+    if policies_df is None or policies_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in (
+            "name",
+            "cidr",
+            "interval_minutes",
+            "enabled",
+            "last_run_at",
+            "next_run_at",
+            "last_status",
+        )
+        if column in policies_df.columns
+    ]
+    return policies_df[columns] if columns else pd.DataFrame()
+
+
 def build_markdown_report(
     hosts_df: pd.DataFrame,
     ports_df: pd.DataFrame,
     changes_df: pd.DataFrame | None = None,
     audit_df: pd.DataFrame | None = None,
+    alerts_df: pd.DataFrame | None = None,
+    policies_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -77,6 +109,11 @@ def build_markdown_report(
 
     events = _event_view(changes_df)
     audit_events = _audit_view(audit_df)
+    alerts = _alert_view(alerts_df)
+    policies = _policy_view(policies_df)
+    open_alerts = (
+        int((alerts["status"] == "open").sum()) if "status" in alerts.columns else len(alerts)
+    )
     lines = [
         "# NetWatch Local Network Report",
         "",
@@ -87,6 +124,8 @@ def build_markdown_report(
         f"- Saved assets: **{len(hosts_df) if not hosts_df.empty else 0}**",
         f"- Recent asset changes: **{len(events)}**",
         f"- Recent operational events: **{len(audit_events)}**",
+        f"- Open operational alerts: **{open_alerts}**",
+        f"- Approved scan policies: **{len(policies)}**",
         f"- Ports checked: **{exposure.checked}**",
         f"- Open ports: **{exposure.open_ports}**",
         f"- High risk findings: **{exposure.high}**",
@@ -124,6 +163,10 @@ def build_markdown_report(
         lines.extend(["## Recent asset changes", "", _dataframe_to_markdown(events), ""])
     if not audit_events.empty:
         lines.extend(["## Operations audit log", "", _dataframe_to_markdown(audit_events), ""])
+    if not alerts.empty:
+        lines.extend(["## Operational alerts", "", _dataframe_to_markdown(alerts), ""])
+    if not policies.empty:
+        lines.extend(["## Approved scan policies", "", _dataframe_to_markdown(policies), ""])
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -144,6 +187,8 @@ def build_html_report(
     ports_df: pd.DataFrame,
     changes_df: pd.DataFrame | None = None,
     audit_df: pd.DataFrame | None = None,
+    alerts_df: pd.DataFrame | None = None,
+    policies_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -158,6 +203,8 @@ def build_html_report(
     )
     events = _event_view(changes_df)
     audit_events = _audit_view(audit_df)
+    alerts = _alert_view(alerts_df)
+    policies = _policy_view(policies_df)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -190,6 +237,8 @@ th {{ color:#7dd3fc; background:#111827; }}
 <h2>Top recommendations</h2>{_html_table(recommendations)}
 <h2>Recent asset changes</h2>{_html_table(events)}
 <h2>Operations audit log</h2>{_html_table(audit_events)}
+<h2>Operational alerts</h2>{_html_table(alerts)}
+<h2>Approved scan policies</h2>{_html_table(policies)}
 </main>
 </body>
 </html>"""

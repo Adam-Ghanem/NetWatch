@@ -137,8 +137,14 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-    assert version == 3
-    assert {"network_observations", "asset_events", "audit_log"}.issubset(tables)
+    assert version == 4
+    assert {
+        "network_observations",
+        "asset_events",
+        "audit_log",
+        "scan_policies",
+        "operation_alerts",
+    }.issubset(tables)
 
 
 def test_change_history_retention_is_bounded(monkeypatch, tmp_path):

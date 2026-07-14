@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hmac
+import logging
 import os
 import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Literal
 
@@ -32,6 +34,10 @@ from config import (
     MAX_CONCURRENT_SCANS,
     MAX_INVENTORY_ROWS,
     MIN_API_KEY_LENGTH,
+    SCAN_POLICY_MAX_INTERVAL_MINUTES,
+    SCAN_POLICY_MIN_INTERVAL_MINUTES,
+    SCHEDULER_ENABLED,
+    SCHEDULER_POLL_SECONDS,
 )
 from export_utils import safe_csv_bytes
 from host_profiler import profile_host
@@ -52,6 +58,19 @@ from inventory_store import (
 )
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
+from operations_store import (
+    alert_counts,
+    claim_due_scan_policies,
+    complete_scan_policy,
+    create_alerts_for_changes,
+    create_scan_policy,
+    database_backup_bytes,
+    recent_alerts,
+    scan_policies,
+    set_alert_status,
+    start_scan_policy,
+    update_scan_policy,
+)
 from port_scanner import scan_ports
 from report_builder import build_html_report, build_markdown_report
 from risk_engine import summarize_exposure, top_recommendations
@@ -59,12 +78,28 @@ from security import validate_cidr, validate_target_ip
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
+LOGGER = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    yield
+    scheduler_stop = threading.Event()
+    scheduler_thread: threading.Thread | None = None
+    if SCHEDULER_ENABLED:
+        scheduler_thread = threading.Thread(
+            target=_scheduler_loop,
+            args=(scheduler_stop,),
+            name="netwatch-scheduler",
+            daemon=True,
+        )
+        scheduler_thread.start()
+    try:
+        yield
+    finally:
+        scheduler_stop.set()
+        if scheduler_thread is not None:
+            scheduler_thread.join(timeout=2.0)
 
 
 app = FastAPI(
@@ -124,6 +159,9 @@ class AuthContext:
             "read": True,
             "scan": self.role in {"admin", "operator"},
             "manage_assets": self.role == "admin",
+            "manage_alerts": self.role in {"admin", "operator"},
+            "manage_operations": self.role == "admin",
+            "backup": self.role == "admin",
         }
 
 
@@ -147,6 +185,42 @@ class AssetContextRequest(BaseModel):
     location: str = Field(default="", max_length=120)
     criticality: Literal["Low", "Medium", "High", "Critical"] = "Medium"
     notes: str = Field(default="", max_length=1_000)
+
+
+class ScanPolicyCreateRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    cidr: str = Field(min_length=7, max_length=43)
+    interval_minutes: int = Field(
+        default=60,
+        ge=SCAN_POLICY_MIN_INTERVAL_MINUTES,
+        le=SCAN_POLICY_MAX_INTERVAL_MINUTES,
+    )
+    enabled: bool = False
+    authorized: bool = Field(
+        default=False,
+        description="Confirm durable authorization for this scheduled target.",
+    )
+
+
+class ScanPolicyUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=120)
+    interval_minutes: int | None = Field(
+        default=None,
+        ge=SCAN_POLICY_MIN_INTERVAL_MINUTES,
+        le=SCAN_POLICY_MAX_INTERVAL_MINUTES,
+    )
+    enabled: bool | None = None
+
+
+class PolicyRunRequest(BaseModel):
+    authorized: bool = Field(
+        default=False,
+        description="Confirm authorization before manually running the approved policy.",
+    )
+
+
+class AlertStatusRequest(BaseModel):
+    status: Literal["open", "acknowledged"]
 
 
 def _valid_api_key(value: str) -> bool:
@@ -241,6 +315,63 @@ def _scan_slot() -> Iterator[None]:
         _scan_slots.release()
 
 
+def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[str, Any]:
+    with _scan_slot():
+        results = scan_network(target)
+    changes = record_network_scan(target, results)
+    alert_count = create_alerts_for_changes(changes)
+    details = f"{changes.summary}; {alert_count} operational alert(s) created"
+    record_audit_event(actor_role, action, target, "completed", details)
+    return {
+        "target": target,
+        "online_hosts": len(results),
+        "hosts": results,
+        "summary": changes.summary,
+        "changes": changes.as_dict(),
+        "alerts_created": alert_count,
+    }
+
+
+def _run_scan_policy(policy: dict[str, Any], *, actor_role: str, action: str) -> dict[str, Any]:
+    policy_id = int(policy["id"])
+    target = str(policy["cidr"])
+    try:
+        result = _execute_network_scan(target, actor_role=actor_role, action=action)
+    except HTTPException as exc:
+        status = "deferred" if exc.status_code == 429 else "failed"
+        complete_scan_policy(policy_id, status=status, summary=str(exc.detail))
+        record_audit_event(actor_role, action, target, status, str(exc.detail))
+        raise
+    except Exception as exc:
+        summary = f"Scanner failed with {type(exc).__name__}."
+        complete_scan_policy(policy_id, status="failed", summary=summary)
+        record_audit_event(actor_role, action, target, "failed", summary)
+        raise
+    complete_scan_policy(policy_id, status="completed", summary=result["summary"])
+    return {"policy_id": policy_id, **result}
+
+
+def run_due_scan_policies_once() -> int:
+    claimed = claim_due_scan_policies(limit=1)
+    completed = 0
+    for policy in claimed:
+        try:
+            _run_scan_policy(policy, actor_role="scheduler", action="scheduled_network_scan")
+            completed += 1
+        except Exception:
+            LOGGER.exception("A scheduled NetWatch scan did not complete.")
+    return completed
+
+
+def _scheduler_loop(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            run_due_scan_policies_once()
+        except Exception:
+            LOGGER.exception("The NetWatch scheduler cycle failed.")
+        stop_event.wait(SCHEDULER_POLL_SECONDS)
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     configured = _configured_api_keys()
@@ -250,6 +381,7 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "access_enabled": bool(configured),
         "scanning_enabled": any(role in {"admin", "operator"} for role, _ in configured),
+        "scheduler_enabled": SCHEDULER_ENABLED,
     }
 
 
@@ -277,23 +409,7 @@ def scan_lan(
     if not validation.ok:
         raise HTTPException(status_code=400, detail=validation.error)
     target = validation.value or payload.cidr
-    with _scan_slot():
-        results = scan_network(target)
-    changes = record_network_scan(target, results)
-    record_audit_event(
-        context.role,
-        "network_scan",
-        target,
-        "completed",
-        changes.summary,
-    )
-    return {
-        "target": target,
-        "online_hosts": len(results),
-        "hosts": results,
-        "summary": changes.summary,
-        "changes": changes.as_dict(),
-    }
+    return _execute_network_scan(target, actor_role=context.role, action="network_scan")
 
 
 @app.post("/api/scan/host")
@@ -393,6 +509,151 @@ def save_asset_context(
     return {"asset": asset}
 
 
+@app.get("/api/scan-policies")
+def list_scan_policies(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
+    items = scan_policies()
+    return {
+        "count": len(items),
+        "items": items,
+        "scheduler_enabled": SCHEDULER_ENABLED,
+        "minimum_interval_minutes": SCAN_POLICY_MIN_INTERVAL_MINUTES,
+    }
+
+
+@app.post("/api/scan-policies")
+def save_scan_policy(
+    payload: ScanPolicyCreateRequest,
+    context: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    _require_authorization(payload.authorized)
+    validation = validate_cidr(payload.cidr)
+    if not validation.ok:
+        raise HTTPException(status_code=400, detail=validation.error)
+    target = validation.value or payload.cidr
+    try:
+        policy = create_scan_policy(
+            name=payload.name,
+            cidr=target,
+            interval_minutes=payload.interval_minutes,
+            enabled=payload.enabled,
+            authorized_by=context.role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit_event(
+        context.role,
+        "scan_policy_created",
+        target,
+        "completed",
+        f"Policy {policy['name']} saved; enabled={policy['enabled']}.",
+    )
+    return {"policy": policy, "scheduler_enabled": SCHEDULER_ENABLED}
+
+
+@app.patch("/api/scan-policies/{policy_id}")
+def edit_scan_policy(
+    policy_id: int,
+    payload: ScanPolicyUpdateRequest,
+    context: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    if payload.name is None and payload.interval_minutes is None and payload.enabled is None:
+        raise HTTPException(status_code=400, detail="Provide at least one policy field to update.")
+    try:
+        policy = update_scan_policy(
+            policy_id,
+            name=payload.name,
+            interval_minutes=payload.interval_minutes,
+            enabled=payload.enabled,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Scan policy was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    record_audit_event(
+        context.role,
+        "scan_policy_updated",
+        policy["cidr"],
+        "completed",
+        f"Policy {policy['name']} updated; enabled={policy['enabled']}.",
+    )
+    return {"policy": policy, "scheduler_enabled": SCHEDULER_ENABLED}
+
+
+@app.post("/api/scan-policies/{policy_id}/run")
+def run_scan_policy_now(
+    policy_id: int,
+    payload: PolicyRunRequest,
+    context: AuthContext = Depends(require_operator_access),
+) -> dict[str, Any]:
+    _require_authorization(payload.authorized)
+    try:
+        policy = start_scan_policy(policy_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Scan policy was not found.") from exc
+    try:
+        return _run_scan_policy(policy, actor_role=context.role, action="scan_policy_run")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="The approved policy scan failed.") from exc
+
+
+@app.get("/api/alerts")
+def alerts(
+    status: Literal["open", "acknowledged"] | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=1_000),
+    _: AuthContext = Depends(require_api_access),
+) -> dict[str, Any]:
+    items = recent_alerts(status=status, limit=limit)
+    counts = alert_counts()
+    return {
+        "count": len(items),
+        "open_count": counts["open"],
+        "total_count": counts["total"],
+        "items": items,
+    }
+
+
+@app.patch("/api/alerts/{alert_id}")
+def update_alert(
+    alert_id: int,
+    payload: AlertStatusRequest,
+    context: AuthContext = Depends(require_operator_access),
+) -> dict[str, Any]:
+    try:
+        alert = set_alert_status(alert_id, status=payload.status, actor_role=context.role)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Operational alert was not found.") from exc
+    record_audit_event(
+        context.role,
+        "alert_status_updated",
+        alert["target"],
+        "completed",
+        f"Alert {alert_id} changed to {payload.status}.",
+    )
+    return {"alert": alert}
+
+
+@app.get("/api/backups/database")
+def database_backup(context: AuthContext = Depends(require_admin_access)) -> Response:
+    content = database_backup_bytes()
+    record_audit_event(
+        context.role,
+        "database_backup",
+        "netwatch.db",
+        "completed",
+        "Consistent SQLite snapshot generated for authorized download.",
+    )
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return Response(
+        content=content,
+        media_type="application/vnd.sqlite3",
+        headers={
+            "Content-Disposition": (f'attachment; filename="netwatch-backup-{timestamp}.sqlite3"')
+        },
+    )
+
+
 @app.get("/api/history", dependencies=[Depends(require_api_access)])
 def history(limit: int = Query(default=25, ge=1, le=100)) -> dict[str, Any]:
     return {"items": recent_scan_runs(limit=limit)}
@@ -435,7 +696,9 @@ def markdown_report() -> str:
     ports_df = pd.DataFrame(asset_port_findings())
     changes_df = pd.DataFrame(recent_asset_events(limit=50))
     audit_df = pd.DataFrame(recent_audit_log(limit=100))
-    return build_markdown_report(hosts_df, ports_df, changes_df, audit_df)
+    alerts_df = pd.DataFrame(recent_alerts(limit=100))
+    policies_df = pd.DataFrame(scan_policies())
+    return build_markdown_report(hosts_df, ports_df, changes_df, audit_df, alerts_df, policies_df)
 
 
 @app.get(
@@ -448,7 +711,9 @@ def html_report() -> str:
     ports_df = pd.DataFrame(asset_port_findings())
     changes_df = pd.DataFrame(recent_asset_events(limit=50))
     audit_df = pd.DataFrame(recent_audit_log(limit=100))
-    return build_html_report(hosts_df, ports_df, changes_df, audit_df)
+    alerts_df = pd.DataFrame(recent_alerts(limit=100))
+    policies_df = pd.DataFrame(scan_policies())
+    return build_html_report(hosts_df, ports_df, changes_df, audit_df, alerts_df, policies_df)
 
 
 if FRONTEND_DIR.exists():

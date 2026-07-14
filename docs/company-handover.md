@@ -1,4 +1,4 @@
-# NetWatch v1.2 Company Handover
+# NetWatch v1.3 Company Handover
 
 ## Product summary
 
@@ -12,7 +12,7 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1.2 provides:
+NetWatch v1.3 provides:
 
 - Protected local dashboard with session-only Admin, Operator, and Viewer access
 - Approved private/local IPv4 validation
@@ -24,6 +24,10 @@ NetWatch v1.2 provides:
 - SQLite asset inventory with owner, department, location, criticality, and notes
 - Normalized scan snapshots and new/returned/not-observed asset events
 - Bounded operations audit log and formula-safe inventory CSV export
+- Admin-approved private CIDR policies with bounded intervals
+- Opt-in single-process scheduled execution using the normal scan limit
+- Criticality-aware operational alerts with Operator/Admin acknowledgement
+- Admin-only consistent SQLite snapshot download
 - Deterministic local Risk Advisor
 - Markdown and standalone HTML reports
 - Docker deployment and one-command launcher
@@ -62,10 +66,13 @@ The launcher prints the dashboard URL and generated local API key.
 6. Run Port Audit on one known authorized host.
 7. Explain why an open service is exposure—not automatic proof of a vulnerability.
 8. Open Inventory, assign an owner and criticality, and show scan-to-scan changes.
-9. Open Audit Log and explain role/action/target accountability without stored keys.
-10. Open Risk Advisor to show business-critical asset prioritization.
-11. Export the inventory CSV and download Markdown and HTML reports.
-12. Explain the role boundary, scan limits, localhost binding, and data handling.
+9. Open Operations, save a disabled approved policy, then explain scheduler opt-in and the immutable CIDR approval record.
+10. Show transition alerts, acknowledge one sample alert, and explain that `Not observed` requires validation.
+11. Download a consistent database snapshot and explain protected storage and staged restoration.
+12. Open Audit Log and explain role/action/target accountability without stored keys.
+13. Open Risk Advisor to show business-critical asset prioritization.
+14. Export the inventory CSV and download Markdown and HTML reports.
+15. Explain the role boundary, scan limits, localhost binding, single-process scheduler, and data handling.
 
 ## Main files
 
@@ -81,6 +88,7 @@ The launcher prints the dashboard URL and generated local API key.
 - `risk_engine.py`: exposure scoring.
 - `advisory_engine.py`: local evidence-based summary.
 - `inventory_store.py`: SQLite inventory, company context, changes, and operations audit persistence.
+- `operations_store.py`: approved policies, scheduler claims, alerts, and consistent SQLite snapshots.
 - `report_builder.py`: Markdown and HTML exports.
 - `docs/architecture.md`: current technical design.
 - `docs/deployment.md`: operating and deployment guide.
@@ -99,6 +107,8 @@ This information may include:
 - Observed service exposure
 - Asset owners, departments, locations, criticality, and operational notes
 - Operations audit events and actor roles
+- Approved scan policies and execution state
+- Operational alerts and acknowledgement evidence
 - Internal recommendations
 
 Treat database exports, screenshots, logs, and reports as internal information.
@@ -107,7 +117,7 @@ Treat database exports, screenshots, logs, and reports as internal information.
 
 - Localhost-only service exposure
 - Valid Admin, Operator, or Viewer key required
-- Viewer is read-only, Operator can run authorized checks, and Admin can edit asset context
+- Viewer is read-only, Operator can run authorized checks and triage alerts, and Admin can edit asset context, manage policies, and download snapshots
 - Protected API disabled without at least one configured role key
 - Explicit authorization confirmation on scans
 - Local IPv4 allowlists
@@ -116,6 +126,7 @@ Treat database exports, screenshots, logs, and reports as internal information.
 - Non-root container
 - Defensive browser security headers
 - No external advisory service or telemetry
+- Scheduled execution disabled by default
 
 ## Company deployment requirements
 
@@ -128,7 +139,7 @@ Before use by multiple employees or on a remote server, add:
 - Managed secret storage
 - Centralized tamper-resistant audit logs
 - Retention and deletion policy
-- Database backups and migrations
+- Automated encrypted off-host backups, restore drills, and migrations
 - Health monitoring and alerting
 - Vulnerability and dependency management
 - Formal security and privacy review
@@ -137,9 +148,9 @@ Before use by multiple employees or on a remote server, add:
 
 - Normalized service findings per scan run
 - Configurable retention and cleanup controls
-- Scheduled scans for pre-approved ranges
 - PDF reports
 - ARP discovery where permissions allow
 - Progress and cancellation for long scans
 - SSO/OIDC and individual RBAC for shared deployments
-- Encrypted and tested backup workflow
+- External scheduler/worker coordination for multi-instance deployment
+- Automated encrypted backup rotation and tested restoration

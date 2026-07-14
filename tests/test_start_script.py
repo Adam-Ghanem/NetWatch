@@ -23,6 +23,8 @@ def test_launcher_generates_key_and_defaults(monkeypatch, tmp_path: Path):
     assert values["NETWATCH_ALLOWED_HOSTS"] == "127.0.0.1,localhost"
     assert values["NETWATCH_ALLOWED_ORIGINS"] == "http://127.0.0.1:8000,http://localhost:8000"
     assert values["NETWATCH_MAX_CONCURRENT_SCANS"] == "1"
+    assert values["NETWATCH_SCHEDULER_ENABLED"] == "false"
+    assert values["NETWATCH_SCHEDULER_POLL_SECONDS"] == "30"
     assert env_file.exists()
 
 

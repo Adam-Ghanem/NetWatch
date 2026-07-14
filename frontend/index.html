@@ -50,6 +50,7 @@
         <button class="nav-item" data-view="inventory"><span>▦</span> Inventory</button>
         <button class="nav-item" data-view="advisor"><span>✦</span> Risk advisor</button>
         <button class="nav-item" data-view="audit"><span>≡</span> Audit log</button>
+        <button class="nav-item" data-view="operations"><span>◷</span> Operations</button>
         <button class="nav-item" data-view="reports"><span>⇩</span> Reports</button>
       </nav>
 
@@ -78,7 +79,7 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1.2</span>
+            <span class="pill">New · NetWatch v1.3</span>
             <h3>Turn local network data into confident decisions.</h3>
             <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
@@ -92,7 +93,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Role-aware access</span><span>Evidence-backed</span><span>No external telemetry</span>
+          <span>Local-first</span><span>Approved scheduling</span><span>Actionable alerts</span><span>No external telemetry</span>
         </div>
 
         <div class="metric-grid">
@@ -215,6 +216,64 @@
           <div class="panel-head"><div><p class="eyebrow">Accountability</p><h3>Operations audit log</h3></div><button id="audit-refresh" class="button ghost" type="button">Refresh log</button></div>
           <p class="muted">Records scan and asset-context operations with role, target, outcome, and time. API keys are never stored in this log.</p>
           <div id="audit-results" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="view-operations" class="view">
+        <article class="panel accent-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Controlled automation</p><h3>Company operations</h3></div>
+            <span id="scheduler-state" class="risk-badge neutral">Checking scheduler</span>
+          </div>
+          <p class="muted">Store approved private CIDRs, run them on a bounded interval, triage change alerts, and download a consistent SQLite backup. Scheduled execution is opt-in through deployment configuration.</p>
+          <div id="operations-metrics" class="mini-metrics"></div>
+        </article>
+
+        <div class="content-grid form-layout operations-layout">
+          <form id="policy-form" class="panel form-panel">
+            <p class="eyebrow">Admin control</p><h3>Add an approved scan policy</h3>
+            <p class="muted">The CIDR becomes immutable approval evidence. Disable the policy when authorization or scope changes.</p>
+            <label for="policy-name">Policy name</label>
+            <input id="policy-name" maxlength="120" placeholder="Casablanca office baseline" required />
+            <label for="policy-cidr">Approved private CIDR</label>
+            <input id="policy-cidr" value="192.168.1.0/24" required />
+            <label for="policy-interval">Interval in minutes</label>
+            <input id="policy-interval" type="number" min="15" max="10080" value="60" required />
+            <label class="check-row"><input id="policy-enabled" type="checkbox" /><span>Enable this policy after it is saved.</span></label>
+            <label class="check-row"><input id="policy-authorized" type="checkbox" required /><span>I confirm durable authorization for this private range and schedule.</span></label>
+            <button class="button primary" type="submit">Save approved policy</button>
+            <p id="policy-status" class="form-status">Admin access is required to create and change policies.</p>
+          </form>
+
+          <article class="panel result-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Approved scope</p><h3>Scan policies</h3></div>
+              <button id="operations-refresh" class="button ghost" type="button">Refresh</button>
+            </div>
+            <label class="check-row policy-run-confirm"><input id="policy-run-authorized" type="checkbox" /><span>Confirm current authorization before using a Run now action.</span></label>
+            <div id="policy-results" class="table-wrap"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Operational triage</p><h3>Alert inbox</h3></div>
+            <div class="button-row">
+              <select id="alert-filter" aria-label="Alert status filter"><option value="open">Open alerts</option><option value="acknowledged">Acknowledged</option><option value="">All alerts</option></select>
+              <button id="alerts-refresh" class="button ghost" type="button">Refresh alerts</button>
+            </div>
+          </div>
+          <p class="muted">Alerts come only from saved scan transitions. “Not observed” remains evidence to validate, not proof that a device is offline.</p>
+          <div id="alert-results" class="table-wrap"></div>
+        </article>
+
+        <article class="panel backup-panel">
+          <div>
+            <p class="eyebrow">Admin recovery control</p>
+            <h3>Consistent database snapshot</h3>
+            <p class="muted">Download a point-in-time SQLite backup without copying the live WAL files. Keep the file in an approved encrypted location.</p>
+          </div>
+          <button id="database-backup" class="button primary" type="button">Download database backup</button>
         </article>
       </section>
 

@@ -8,10 +8,10 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1.2 includes:
+NetWatch v1.3 includes:
 
 - Valid Admin, Operator, or Viewer key required for every non-health API endpoint
-- Viewer read/export, Operator scan, and Admin asset-context authorization enforced server-side
+- Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
 - Protected operations disabled until at least one non-placeholder role key of 32+ characters is configured
 - Constant-time API-key comparison
 - Server-side authorization confirmation for scan requests
@@ -37,6 +37,10 @@ NetWatch v1.2 includes:
 - FastAPI interactive documentation disabled by default
 - Local Risk Advisor with no external service calls
 - Bounded operations audit records that never store raw role keys
+- Admin-approved private CIDR scan policies with bounded count and intervals
+- Opt-in single-process scheduler that shares the normal scan concurrency limit
+- Bounded criticality-aware operational alerts with acknowledgement evidence
+- Admin-only consistent SQLite snapshot downloads and no destructive restore endpoint
 
 ## Secrets
 
@@ -69,7 +73,7 @@ Default SQLite path:
 data/netwatch.db
 ```
 
-Docker Compose stores data in named volumes. Keep database files, volume exports, screenshots, and reports inside the authorized environment.
+Docker Compose stores data in named volumes. Keep database files, volume exports, downloaded snapshots, screenshots, and reports inside the authorized environment.
 
 ## Deployment limits
 
@@ -87,8 +91,9 @@ Before shared, remote, or public deployment, add and review:
 - Network access controls
 - Managed secret storage
 - Centralized tamper-resistant audit logs
-- Monitoring and alerting
-- Backups and database migrations
+- External scheduler/worker coordination for multi-instance deployments
+- Centralized monitoring and alert delivery
+- Automated encrypted off-host backups, restore drills, and database migrations
 - Retention and deletion policies
 - Reverse-proxy security configuration
 

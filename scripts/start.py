@@ -19,6 +19,8 @@ DEFAULTS = {
     "NETWATCH_RATE_LIMIT_REQUESTS": "30",
     "NETWATCH_RATE_LIMIT_WINDOW_SECONDS": "60",
     "NETWATCH_PORT_SCAN_WORKERS": "12",
+    "NETWATCH_SCHEDULER_ENABLED": "false",
+    "NETWATCH_SCHEDULER_POLL_SECONDS": "30",
 }
 
 
@@ -85,6 +87,7 @@ def main() -> int:
     print(f"Admin key: {api_key}")
     print("The key is stored in .env and is required by the dashboard connection screen.")
     print("Optional Operator and Viewer keys can also be configured in .env.")
+    print("Scheduled policy execution is opt-in with NETWATCH_SCHEDULER_ENABLED=true.")
     return 0
 
 

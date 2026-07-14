@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.2 is a local-first defensive network visibility application. The professional dashboard and role-protected API are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.3 is a local-first defensive network visibility application. The professional dashboard, role-protected API, and optional bounded scheduler are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -24,6 +24,13 @@ FastAPI application (`backend/main.py`)
           +--> Exposure analysis
           |      - `risk_engine.py`
           |      - `advisory_engine.py`
+          |
+          +--> Company operations
+          |      - approved scan policies
+          |      - opt-in scheduler
+          |      - alert triage
+          |      - consistent database snapshots
+          |      - `operations_store.py`
           |
           +--> SQLite inventory, company context, changes, audit log (`inventory_store.py`)
           |
@@ -52,6 +59,9 @@ It provides:
 - Asset ownership, department, location, criticality, and notes
 - Scan-to-scan asset change history
 - Operations audit log and inventory CSV export
+- Approved scan policies, scheduler state, and manual policy execution
+- Criticality-aware operational alerts with acknowledgement
+- Admin-only SQLite snapshot download
 - Local Risk Advisor
 - Markdown and HTML report downloads
 
@@ -78,6 +88,7 @@ It is not the default deployment path.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
 - `inventory_store.py`: SQLite inventory, company context, scan snapshots, transition detection, audit records, and scan-run persistence.
+- `operations_store.py`: approved scan policies, atomic due-policy claims, alert lifecycle, retention, and SQLite snapshot creation.
 - `report_builder.py`: Markdown and standalone HTML reports.
 
 ## Storage
@@ -94,17 +105,19 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 3 with company asset context and operational audit records
-- Bounded change-event, observation, and audit retention
+- Schema version 4 with company asset context, operational audit records, policies, and alerts
+- Bounded change-event, observation, audit, alert, and policy retention
 - Named Docker volumes in the default Compose deployment
 
-The five operational tables have separate responsibilities:
+The seven operational tables have separate responsibilities:
 
 - `scan_runs` records each check and its summary.
 - `assets` stores current inventory state, last confirmed sighting, owner, department, location, criticality, and notes.
 - `network_observations` records observed and not-observed evidence for each network scan.
 - `asset_events` records meaningful transitions: new asset, returned asset, and not observed.
 - `audit_log` records actor role, action, target, outcome, and a bounded operational summary.
+- `scan_policies` records immutable approved private CIDRs, bounded intervals, enablement, and last/next execution state.
+- `operation_alerts` records transition-derived alerts, severity, status, and acknowledgement evidence.
 
 A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery.
 
@@ -115,7 +128,7 @@ The older CSV history remains only for Streamlit compatibility.
 NetWatch is intended for approved local environments and applies these controls:
 
 - A valid Admin, Operator, or Viewer key required for every non-health API route
-- Viewer can read/export, Operator can also scan, and Admin can also edit asset context
+- Viewer can read/export, Operator can also scan and triage alerts, and Admin can also edit asset context, manage policies, and download backups
 - API disabled until at least one valid role key is configured
 - Server-side `authorized: true` confirmation for scans
 - Explicit RFC1918, loopback, and link-local IPv4 allowlists
@@ -123,6 +136,9 @@ NetWatch is intended for approved local environments and applies these controls:
 - Maximum 256 hosts per CIDR scan
 - Rate limiting per client and endpoint
 - Bounded simultaneous scans
+- Scheduler disabled by default and limited to persisted Admin-approved CIDRs
+- Atomic due-policy claims and one policy execution per scheduler cycle
+- Scheduled and manual policy scans share the normal target validation and scan semaphore
 - Restricted CORS origins
 - Content Security Policy and defensive HTTP headers
 - API responses marked `no-store`
@@ -138,4 +154,4 @@ The default Docker Compose service is intentionally single-process and local-onl
 127.0.0.1:8000 -> FastAPI + dashboard + API
 ```
 
-This keeps setup simple and avoids cross-origin configuration. Role keys provide coarse separation for a trusted internal pilot, not individual identity. For shared or remote deployment, add a reviewed reverse proxy, TLS, organization authentication, network restrictions, centralized logging, backups, and stronger operational monitoring.
+This keeps setup simple and avoids cross-origin configuration. The scheduler is intentionally in-process and supports this single-instance model only. Role keys provide coarse separation for a trusted internal pilot, not individual identity. For shared or remote deployment, add an external job platform with leader election, a reviewed reverse proxy, TLS, organization authentication, network restrictions, centralized logging, encrypted off-host backups with tested restoration, and stronger operational monitoring.

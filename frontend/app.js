@@ -6,7 +6,14 @@ const state = {
   view: 'overview',
   health: null,
   role: '',
-  capabilities: { read: false, scan: false, manage_assets: false },
+  capabilities: {
+    read: false,
+    scan: false,
+    manage_assets: false,
+    manage_alerts: false,
+    manage_operations: false,
+    backup: false,
+  },
   assets: [],
 };
 
@@ -18,6 +25,7 @@ const titles = {
   inventory: 'Inventory',
   advisor: 'Risk advisor',
   audit: 'Audit log',
+  operations: 'Operations',
   reports: 'Reports',
 };
 
@@ -91,6 +99,11 @@ function statusClass(value) {
   const normalized = String(value || '').toLowerCase();
   if (normalized.includes('filtered') || normalized.includes('not observed')) return 'filtered';
   if (normalized.includes('new asset') || normalized.includes('returned')) return 'online';
+  if (normalized.includes('scheduled') || normalized.includes('running')) return 'online';
+  if (normalized === 'enabled') return 'completed';
+  if (normalized === 'disabled') return 'filtered';
+  if (normalized.includes('acknowledged')) return 'completed';
+  if (normalized.includes('deferred')) return 'medium';
   if (normalized.includes('open')) return 'open';
   if (normalized.includes('online')) return 'online';
   if (normalized.includes('complete')) return 'completed';
@@ -208,7 +221,14 @@ function setConnected(connected) {
   if (connected) $('#api-key').value = '';
   if (!connected) {
     state.role = '';
-    state.capabilities = { read: false, scan: false, manage_assets: false };
+    state.capabilities = {
+      read: false,
+      scan: false,
+      manage_assets: false,
+      manage_alerts: false,
+      manage_operations: false,
+      backup: false,
+    };
     applyRoleAccess();
   }
 }
@@ -234,6 +254,18 @@ function applyRoleAccess() {
   } else if (state.role) {
     setFormStatus('context-status', 'Admin access is required to edit asset context.');
   }
+
+  const canManageOperations = Boolean(state.capabilities.manage_operations);
+  $$('input, button', $('#policy-form')).forEach((control) => {
+    control.disabled = !canManageOperations;
+  });
+  if (canManageOperations) {
+    setFormStatus('policy-status', 'Create a policy only for a private range with durable approval.');
+  } else if (state.role) {
+    setFormStatus('policy-status', 'Admin access is required to create and change policies.');
+  }
+  $('#policy-run-authorized').disabled = !canScan;
+  $('#database-backup').disabled = !Boolean(state.capabilities.backup);
 }
 
 async function connectWithKey(key) {
@@ -370,6 +402,158 @@ async function loadAudit() {
   ], 'No operational events have been recorded yet.');
 }
 
+function actionButton(label, action, itemId, enabled = true, primary = false) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `button ${primary ? 'primary' : 'ghost'} compact table-button`;
+  button.textContent = label;
+  button.dataset.action = action;
+  button.dataset.itemId = String(itemId);
+  button.disabled = !enabled;
+  return button;
+}
+
+function appendTableCell(row, value, chip = false) {
+  const cell = document.createElement('td');
+  if (chip) {
+    const badge = document.createElement('span');
+    badge.className = `status-chip ${statusClass(value)}`;
+    badge.textContent = text(value);
+    cell.appendChild(badge);
+  } else {
+    cell.textContent = text(value);
+    cell.title = text(value);
+  }
+  row.appendChild(cell);
+  return cell;
+}
+
+function renderPolicies(policies) {
+  const container = $('#policy-results');
+  container.replaceChildren();
+  container.classList.remove('empty-state');
+  if (!Array.isArray(policies) || policies.length === 0) {
+    container.classList.add('empty-state');
+    container.textContent = 'No approved scan policies have been saved.';
+    return;
+  }
+
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Policy', 'Approved CIDR', 'Interval', 'State', 'Last result', 'Next run', 'Actions'].forEach((label) => {
+    const cell = document.createElement('th');
+    cell.textContent = label;
+    headRow.appendChild(cell);
+  });
+  head.appendChild(headRow);
+
+  const body = document.createElement('tbody');
+  policies.forEach((policy) => {
+    const row = document.createElement('tr');
+    appendTableCell(row, policy.name);
+    appendTableCell(row, policy.cidr);
+    appendTableCell(row, `${policy.interval_minutes} min`);
+    appendTableCell(row, policy.enabled ? 'Enabled' : 'Disabled', true);
+    appendTableCell(row, policy.last_status, true);
+    appendTableCell(row, policy.next_run_at || 'Manual only');
+    const actions = appendTableCell(row, '');
+    actions.replaceChildren();
+    const rowActions = document.createElement('div');
+    rowActions.className = 'table-actions';
+    const canRun = Boolean(state.capabilities.scan) && policy.last_status !== 'running';
+    const canManage = Boolean(state.capabilities.manage_operations);
+    const runButton = actionButton('Run now', 'run-policy', policy.id, canRun, true);
+    const toggleButton = actionButton(
+      policy.enabled ? 'Disable' : 'Enable',
+      'toggle-policy',
+      policy.id,
+      canManage,
+    );
+    toggleButton.dataset.nextEnabled = String(!policy.enabled);
+    rowActions.append(runButton, toggleButton);
+    actions.appendChild(rowActions);
+    body.appendChild(row);
+  });
+
+  table.append(head, body);
+  container.appendChild(table);
+}
+
+function renderAlerts(alerts) {
+  const container = $('#alert-results');
+  container.replaceChildren();
+  container.classList.remove('empty-state');
+  if (!Array.isArray(alerts) || alerts.length === 0) {
+    container.classList.add('empty-state');
+    container.textContent = 'No alerts match this filter.';
+    return;
+  }
+
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Time', 'Severity', 'Alert', 'Target', 'Status', 'Evidence', 'Action'].forEach((label) => {
+    const cell = document.createElement('th');
+    cell.textContent = label;
+    headRow.appendChild(cell);
+  });
+  head.appendChild(headRow);
+
+  const body = document.createElement('tbody');
+  alerts.forEach((alert) => {
+    const row = document.createElement('tr');
+    appendTableCell(row, alert.created_at);
+    appendTableCell(row, alert.severity, true);
+    appendTableCell(row, alert.title);
+    appendTableCell(row, alert.target);
+    appendTableCell(row, alert.status, true);
+    appendTableCell(row, alert.details);
+    const actions = appendTableCell(row, '');
+    actions.replaceChildren();
+    const nextStatus = alert.status === 'open' ? 'acknowledged' : 'open';
+    const label = nextStatus === 'acknowledged' ? 'Acknowledge' : 'Reopen';
+    const button = actionButton(
+      label,
+      'set-alert-status',
+      alert.id,
+      Boolean(state.capabilities.manage_alerts),
+    );
+    button.dataset.nextStatus = nextStatus;
+    actions.appendChild(button);
+    body.appendChild(row);
+  });
+
+  table.append(head, body);
+  container.appendChild(table);
+}
+
+async function loadOperations() {
+  const filter = $('#alert-filter').value;
+  const alertPath = filter
+    ? `/api/alerts?status=${encodeURIComponent(filter)}&limit=200`
+    : '/api/alerts?limit=200';
+  const [policyPayload, alertPayload] = await Promise.all([
+    apiJson('/api/scan-policies'),
+    apiJson(alertPath),
+  ]);
+  const policies = policyPayload.items || [];
+  const alerts = alertPayload.items || [];
+  const schedulerEnabled = Boolean(policyPayload.scheduler_enabled);
+  const schedulerBadge = $('#scheduler-state');
+  schedulerBadge.textContent = schedulerEnabled ? 'Scheduler enabled' : 'Scheduler disabled';
+  schedulerBadge.className = `risk-badge ${schedulerEnabled ? 'low' : 'medium'}`;
+  renderMiniMetrics($('#operations-metrics'), [
+    { label: 'Approved policies', value: policies.length, note: 'Maximum 50' },
+    { label: 'Enabled policies', value: policies.filter((item) => item.enabled).length, note: 'Private CIDRs only' },
+    { label: 'Open alerts', value: alertPayload.open_count || 0, note: 'Needs triage' },
+    { label: 'Scheduler', value: schedulerEnabled ? 'On' : 'Off', note: 'Deployment setting' },
+  ]);
+  renderPolicies(policies);
+  renderAlerts(alerts);
+  applyRoleAccess();
+}
+
 async function loadAdvisor() {
   const advice = await apiJson('/api/advisor');
   applyRiskBadge($('#advisor-level'), advice.risk_level);
@@ -397,6 +581,7 @@ async function refreshCurrentView() {
   if (state.view === 'inventory') return loadInventory();
   if (state.view === 'advisor') return loadAdvisor();
   if (state.view === 'audit') return loadAudit();
+  if (state.view === 'operations') return loadOperations();
   return checkHealth();
 }
 
@@ -410,6 +595,7 @@ function navigate(view) {
   if (view === 'inventory') loadInventory().catch((error) => showToast(error.message, 'error'));
   if (view === 'advisor') loadAdvisor().catch((error) => showToast(error.message, 'error'));
   if (view === 'audit') loadAudit().catch((error) => showToast(error.message, 'error'));
+  if (view === 'operations') loadOperations().catch((error) => showToast(error.message, 'error'));
 }
 
 async function downloadApiFile(path, filename, button, successMessage) {
@@ -419,8 +605,10 @@ async function downloadApiFile(path, filename, button, successMessage) {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const serverFilename = /filename="([^"\\/]+)"/.exec(disposition);
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = serverFilename ? serverFilename[1] : filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -640,6 +828,111 @@ $('#audit-refresh').addEventListener('click', async (event) => {
   catch (error) { showToast(error.message, 'error'); }
   finally { setBusy(event.currentTarget, false); }
 });
+
+$('#policy-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving…');
+  setFormStatus('policy-status', 'Validating and saving approved scope…');
+  try {
+    const payload = await apiJson('/api/scan-policies', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: $('#policy-name').value.trim(),
+        cidr: $('#policy-cidr').value.trim(),
+        interval_minutes: Number($('#policy-interval').value),
+        enabled: $('#policy-enabled').checked,
+        authorized: $('#policy-authorized').checked,
+      }),
+    });
+    $('#policy-authorized').checked = false;
+    setFormStatus('policy-status', `Policy saved for ${payload.policy.cidr}.`, 'success');
+    await loadOperations();
+    showToast('Approved scan policy saved and audited.');
+  } catch (error) {
+    setFormStatus('policy-status', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+    applyRoleAccess();
+  }
+});
+
+$('#policy-results').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-action]');
+  if (!button) return;
+  const policyId = button.dataset.itemId;
+  if (button.dataset.action === 'run-policy' && !$('#policy-run-authorized').checked) {
+    showToast('Confirm current authorization before running this policy.', 'error');
+    return;
+  }
+
+  setBusy(button, true, button.dataset.action === 'run-policy' ? 'Running…' : 'Updating…');
+  try {
+    if (button.dataset.action === 'run-policy') {
+      const result = await apiJson(`/api/scan-policies/${policyId}/run`, {
+        method: 'POST',
+        body: JSON.stringify({ authorized: true }),
+      });
+      $('#policy-run-authorized').checked = false;
+      showToast(result.summary);
+    } else if (button.dataset.action === 'toggle-policy') {
+      const enabled = button.dataset.nextEnabled === 'true';
+      await apiJson(`/api/scan-policies/${policyId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled }),
+      });
+      showToast(`Scan policy ${enabled ? 'enabled' : 'disabled'}.`);
+    }
+    await loadOperations();
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$('#operations-refresh').addEventListener('click', async (event) => {
+  setBusy(event.currentTarget, true, 'Refreshing…');
+  try { await loadOperations(); showToast('Operations view refreshed.'); }
+  catch (error) { showToast(error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+$('#alerts-refresh').addEventListener('click', async (event) => {
+  setBusy(event.currentTarget, true, 'Refreshing…');
+  try { await loadOperations(); showToast('Alert inbox refreshed.'); }
+  catch (error) { showToast(error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+$('#alert-filter').addEventListener('change', () => {
+  loadOperations().catch((error) => showToast(error.message, 'error'));
+});
+
+$('#alert-results').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-action="set-alert-status"]');
+  if (!button) return;
+  setBusy(button, true, 'Updating…');
+  try {
+    await apiJson(`/api/alerts/${button.dataset.itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: button.dataset.nextStatus }),
+    });
+    await loadOperations();
+    showToast(`Alert ${button.dataset.nextStatus}.`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$('#database-backup').addEventListener('click', (event) => downloadApiFile(
+  '/api/backups/database',
+  'netwatch-backup.sqlite3',
+  event.currentTarget,
+  'Database backup downloaded and audited.',
+));
 
 $('#advisor-refresh').addEventListener('click', async (event) => {
   setBusy(event.currentTarget, true, 'Rebuilding…');
