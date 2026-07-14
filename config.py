@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 APP_NAME = "NetWatch"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
@@ -13,6 +13,10 @@ MAX_INVENTORY_ROWS = 2_000
 MAX_ASSET_EVENTS = 5_000
 MAX_NETWORK_OBSERVATIONS = 50_000
 MAX_AUDIT_LOG_ENTRIES = 10_000
+MAX_OPERATION_ALERTS = 5_000
+MAX_SCAN_POLICIES = 50
+SCAN_POLICY_MIN_INTERVAL_MINUTES = 15
+SCAN_POLICY_MAX_INTERVAL_MINUTES = 10_080
 DEFAULT_TIMEOUT = 0.6
 MIN_API_KEY_LENGTH = 32
 DEFAULT_API_KEY_PLACEHOLDER = "replace-with-a-long-random-secret"
@@ -42,6 +46,15 @@ def _env_csv(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
     return values or defaults
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, "true" if default else "false").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 API_ALLOWED_ORIGINS = _env_csv(
     "NETWATCH_ALLOWED_ORIGINS",
     ("http://127.0.0.1:8000", "http://localhost:8000"),
@@ -55,6 +68,8 @@ API_RATE_LIMIT_REQUESTS = _env_int("NETWATCH_RATE_LIMIT_REQUESTS", 30, maximum=1
 API_RATE_LIMIT_WINDOW_SECONDS = _env_int("NETWATCH_RATE_LIMIT_WINDOW_SECONDS", 60, maximum=3_600)
 MAX_CONCURRENT_SCANS = _env_int("NETWATCH_MAX_CONCURRENT_SCANS", 1, maximum=8)
 PORT_SCAN_WORKERS = _env_int("NETWATCH_PORT_SCAN_WORKERS", 12, maximum=MAX_WORKERS)
+SCHEDULER_ENABLED = _env_bool("NETWATCH_SCHEDULER_ENABLED", False)
+SCHEDULER_POLL_SECONDS = _env_int("NETWATCH_SCHEDULER_POLL_SECONDS", 30, minimum=5, maximum=300)
 
 COMMON_PORTS = {
     20: "FTP Data",

@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.0
+
+- Added Admin-managed scan policies with immutable validated private CIDR scope, bounded 15-minute-to-7-day intervals, and a maximum of 50 saved policies.
+- Added an opt-in single-process scheduler that atomically claims due policies and reuses the existing scan concurrency limit.
+- Added manual policy execution for Admin and Operator roles with a fresh authorization confirmation.
+- Added a bounded operational alert inbox for new, returned, and not-observed asset transitions.
+- Added criticality-aware alert severity plus Operator/Admin acknowledgement and reopening controls.
+- Added an Admin-only consistent SQLite backup download using the SQLite backup API.
+- Added role-aware Operations dashboard controls, scheduler status, policy actions, alert triage, and backup download.
+- Included operational alerts and approved scan policies in Markdown and HTML reports.
+- Upgraded the SQLite schema to version 4 with safe in-place creation of policy and alert tables.
+- Added scheduler, RBAC, alert severity, retention, backup integrity, API, frontend, configuration, and report regression tests.
+- Documented the single-process scheduler and snapshot-download boundaries for trusted internal deployments.
+
 ## v1.2.0
 
 - Added server-enforced Admin, Operator, and Viewer access tiers while preserving `NETWATCH_API_KEY` as the backwards-compatible Admin key.

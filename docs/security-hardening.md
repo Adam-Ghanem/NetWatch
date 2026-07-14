@@ -9,6 +9,9 @@ This document records the defensive controls used in NetWatch.
 - CIDR scans have a maximum host limit.
 - Scan actions require a permission checkbox.
 - API rate, concurrency, inventory, worker, and timeout inputs have upper bounds.
+- Scheduled policies accept only the same validated private CIDRs and have a 15-minute minimum interval.
+- Policy scope is immutable after Admin approval; changed scope requires a new approval record.
+- Scheduled execution is opt-in and shares the normal scan semaphore.
 
 ## API boundary
 
@@ -57,8 +60,10 @@ logs/netwatch.log
 
 These files can contain internal IP information and should not be shared publicly.
 
-Asset/company context and operations audit records are stored in SQLite. Audit retention is bounded, and raw role keys are never written to audit details.
+Asset/company context, approved policies, operational alerts, and operations audit records are stored in SQLite. Audit and alert retention are bounded, and raw role keys are never written to audit details.
+
+Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. Snapshots are sensitive and must be stored in an approved encrypted location. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database.
 
 ## Remaining production requirements
 
-For a remote or multi-user production deployment, add SSO/OIDC with individual identities, approved scan ranges, fine-grained authorization, managed secrets, centralized tamper-resistant logging, TLS, backups, monitoring, report approval workflow, and a formal retention policy.
+For a remote or multi-user production deployment, add SSO/OIDC with individual identities, fine-grained authorization, managed secrets, centralized tamper-resistant logging, TLS, an external scheduler with leader election, automated encrypted off-host backups with restore drills, monitoring, report approval workflow, and a formal retention policy.

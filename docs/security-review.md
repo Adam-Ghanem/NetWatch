@@ -1,8 +1,8 @@
-# NetWatch v1.2 Security Review
+# NetWatch v1.3 Security Review
 
 ## Scope
 
-This review covers the default local deployment of NetWatch v1.2: one FastAPI process serving the responsive dashboard and role-protected API at `127.0.0.1:8000`.
+This review covers the default local deployment of NetWatch v1.3: one FastAPI process serving the responsive dashboard, role-protected API, and optional bounded scheduler at `127.0.0.1:8000`.
 
 ## Threat model
 
@@ -15,6 +15,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Sensitive internal evidence leaking through files, reports, browser caching, or Git
 - Container compromise receiving unnecessary privileges
 - Dynamic scan values being interpreted as HTML or spreadsheet formulas
+- A stale or over-broad scheduled policy continuing after authorization changes
+- Concurrent scheduler instances running the same approved policy
+- Database snapshots exposing internal inventory if mishandled
 
 ## Implemented controls
 
@@ -22,7 +25,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 
 - All non-health endpoints require `X-NetWatch-Key`.
 - Admin, Operator, and Viewer keys are compared with `hmac.compare_digest`.
-- Viewer can read/export, Operator can also scan, and Admin can also edit asset context.
+- Viewer can read/export, Operator can also scan and triage alerts, and Admin can also edit asset context, manage policies, and download snapshots.
 - Protected operations return HTTP 503 when no valid non-placeholder role key of at least 32 characters is configured.
 - The dashboard stores the key only in session storage.
 
@@ -49,6 +52,10 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Port workers are bounded.
 - Scanner timeouts, configuration values, and inventory query sizes are bounded.
 - The service list is intentionally conservative.
+- Scan policies are Admin-only, private-CIDR-only, limited to 50, and use intervals from 15 minutes to 7 days.
+- Policy CIDRs are immutable after approval; enable/disable state and interval remain auditable controls.
+- The scheduler is disabled by default, atomically claims one due policy per cycle, and shares the normal scan semaphore.
+- Manual policy execution requires fresh authorization confirmation.
 
 ### Storage and output
 
@@ -56,7 +63,10 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Timestamps are stored in UTC.
 - Asset events, normalized observations, and operations audit records have bounded retention.
 - Audit records contain role, action, target, outcome, and short details but never raw API keys.
-- Existing databases migrate company-context columns and the audit table in place at schema version 3.
+- Existing databases migrate company-context, policy, alert, and audit records in place at schema version 4.
+- Transition-derived operational alerts have bounded retention and record acknowledgement role/time.
+- Not-observed severity uses business criticality but still avoids claiming confirmed downtime.
+- Admin snapshots use SQLite's online backup API; no destructive restore API is exposed.
 - Missing ICMP replies preserve the last confirmed sighting and use `Not observed` rather than a definitive offline claim.
 - Database and generated files are ignored by Git.
 - CSV output reduces spreadsheet formula injection, including leading-whitespace variants.
@@ -84,6 +94,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - The local audit table is useful operational evidence but is not centralized or tamper-resistant.
 - Change events remain network evidence and can contain sensitive internal addressing even without hostnames.
 - Reports and screenshots can expose sensitive internal information if shared carelessly.
+- The in-process scheduler is not safe for multi-worker or multi-instance coordination.
+- Shared role keys identify a role, not the individual who approved a policy or acknowledged an alert.
+- A downloaded snapshot is not an automated encrypted off-host backup or a tested disaster-recovery plan.
 
 ## Shared-deployment requirements
 
@@ -95,12 +108,13 @@ Do not expose the default service to other networks without adding:
 - Managed secrets
 - Network restrictions
 - Centralized audit logging
-- Monitoring and alerting
-- Database backup and migration procedures
+- External scheduler/worker coordination with leader election
+- Centralized monitoring and alert delivery
+- Automated encrypted off-host backup, tested restore, and migration procedures
 - Retention/deletion policy
 - Dependency and container vulnerability management
 - A deployment-specific penetration test and privacy review
 
 ## Review conclusion
 
-The default NetWatch v1.2 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, or Internet-accessible deployment.
+The default NetWatch v1.3 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, multi-instance, or Internet-accessible deployment.

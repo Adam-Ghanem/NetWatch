@@ -119,3 +119,41 @@ def test_reports_include_operations_audit_log_and_escape_values():
     assert "network_scan" in markdown
     assert "Operations audit log" in html
     assert "12 hosts &lt;reviewed&gt;" in html
+
+
+def test_reports_include_alerts_and_approved_scan_policies():
+    alerts = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-14T10:00:00+00:00",
+                "severity": "High",
+                "title": "Asset not observed",
+                "target": "192.168.1.20",
+                "status": "open",
+                "details": "Validate with Operations <team>",
+            }
+        ]
+    )
+    policies = pd.DataFrame(
+        [
+            {
+                "name": "HQ baseline",
+                "cidr": "192.168.1.0/24",
+                "interval_minutes": 60,
+                "enabled": True,
+                "last_run_at": "",
+                "next_run_at": "2026-07-14T11:00:00+00:00",
+                "last_status": "scheduled",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, policies)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, policies)
+
+    assert "Open operational alerts: **1**" in markdown
+    assert "Approved scan policies: **1**" in markdown
+    assert "HQ baseline" in markdown
+    assert "Operational alerts" in html
+    assert "Approved scan policies" in html
+    assert "Operations &lt;team&gt;" in html

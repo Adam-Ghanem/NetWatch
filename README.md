@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, keep an operations audit log, generate deterministic risk guidance, and export evidence-backed reports.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, triage operational alerts, create consistent backups, and export evidence-backed reports.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.2
+## NetWatch v1.3
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -51,7 +51,7 @@ http://127.0.0.1:8000
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
-v1.2 adds company-operations controls for a trusted internal deployment. It is suitable for a local pilot or small internal team when deployed according to the security guidance. Its local role keys are intentionally simple and are not a replacement for SSO, centralized identity, TLS, backups, or a deployment review.
+v1.3 adds a controlled operations layer for a trusted internal deployment. Admins can persist approved private CIDRs, optionally enable a single-process scheduler, Operators can run approved policies and acknowledge alerts, and Admins can download consistent SQLite snapshots. It is suitable for a local pilot or small internal team when deployed according to the security guidance. Its local role keys and in-process scheduler are intentionally simple and are not replacements for SSO, centralized identity, TLS, an external job platform, automated off-host backups, or a deployment review.
 
 ## Highlights
 
@@ -66,6 +66,11 @@ v1.2 adds company-operations controls for a trusted internal deployment. It is s
 - Clear Open, Closed, and Filtered/Unreachable states
 - SQLite asset inventory with owner, department, location, criticality, and operational notes
 - Bounded operations audit log for scans and asset-context changes
+- Approved scan policies with immutable private CIDR scope and 15-minute minimum intervals
+- Opt-in single-process scheduler using the existing scan concurrency limit
+- Bounded operational alert inbox for new, returned, and not-observed assets
+- Criticality-aware alert severity and Operator acknowledgement workflow
+- Admin-only consistent SQLite backup download
 - Exposure priority score and deterministic local Risk Advisor
 - Markdown and standalone HTML report downloads
 - Formula-safe inventory CSV export
@@ -119,6 +124,7 @@ Put the generated value in `.env`:
 NETWATCH_API_KEY=your-generated-secret
 NETWATCH_OPERATOR_KEY=
 NETWATCH_VIEWER_KEY=
+NETWATCH_SCHEDULER_ENABLED=false
 ```
 
 Start NetWatch:
@@ -182,6 +188,16 @@ Inventory can be exported as formula-safe CSV for an approved internal workflow.
 
 Records successful network scans, host checks, port audits, and asset-context updates with UTC time, actor role, action, target, outcome, and a short summary. Raw API keys are never written to the log. Retention is bounded to the latest 10,000 events.
 
+### Company operations
+
+The Operations view supports three controlled workflows:
+
+- Admins save one policy per approved private CIDR, choose a bounded interval from 15 minutes to 7 days, and enable or disable scheduled execution.
+- Operators and Admins can run a saved policy after confirming current authorization. The same target validation, 256-host limit, rate boundary, and scan semaphore apply.
+- Viewer roles can review policies and alerts. Operators and Admins can acknowledge or reopen alerts. Admins can download a consistent SQLite snapshot.
+
+Scheduled execution is disabled by default. Enable it explicitly with `NETWATCH_SCHEDULER_ENABLED=true` after the approved policies and operating procedure have been reviewed. The scheduler runs inside the single FastAPI process and is not intended for multi-worker or multi-instance deployment.
+
 ### Risk Advisor
 
 Builds a deterministic local summary from saved evidence. It does not send scan data outside the local machine.
@@ -193,7 +209,7 @@ Downloads:
 - Markdown report for GitHub, notes, or handover documents
 - Standalone HTML report for review and sharing inside an authorized environment
 
-Both formats include asset business context, recent changes, operations audit events, inventory, and port evidence.
+Both formats include asset business context, recent changes, operational alerts, approved scan policies, operations audit events, inventory, and port evidence.
 
 ## Architecture
 
@@ -205,7 +221,7 @@ Role-protected FastAPI application (`backend/main.py`)
               |
     +---------+----------+
     |         |          |
-Validation  Scanners   Risk Advisor
+Validation  Scanners   Operations
     |         |          |
     +---------+----------+
               |
@@ -221,7 +237,7 @@ NetWatch applies defense in depth:
 
 - `X-NetWatch-Key` required for all non-health API endpoints
 - Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys
-- Viewer can read and export; Operator can also run authorized checks; Admin can also edit asset context
+- Viewer can read and export; Operator can also run authorized checks and triage alerts; Admin can also edit asset context, manage approved policies, and create backups
 - Protected access disabled until at least one valid role key is configured
 - Server-side `authorized: true` required for scan requests
 - Explicit local IPv4 allowlists
@@ -229,6 +245,8 @@ NetWatch applies defense in depth:
 - CIDR scans limited to 256 hosts
 - Rate limiting per client and endpoint
 - One simultaneous scan by default
+- Scheduled scans are opt-in, use persisted Admin-approved private CIDRs, and share the same scan semaphore
+- Policy intervals are limited to 15 minutes through 7 days and policy count is bounded to 50
 - Restricted CORS origins
 - Content Security Policy
 - `X-Frame-Options: DENY`
@@ -304,6 +322,30 @@ curl "http://127.0.0.1:8000/api/audit-log?limit=100" \
   -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
 ```
 
+Create an approved scan policy (Admin only):
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/scan-policies \
+  -H "Content-Type: application/json" \
+  -H "X-NetWatch-Key: YOUR_ADMIN_KEY" \
+  -d '{"name":"HQ baseline","cidr":"192.168.1.0/24","interval_minutes":60,"enabled":false,"authorized":true}'
+```
+
+Review open operational alerts:
+
+```bash
+curl "http://127.0.0.1:8000/api/alerts?status=open" \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Download a consistent database snapshot (Admin only):
+
+```bash
+curl http://127.0.0.1:8000/api/backups/database \
+  -H "X-NetWatch-Key: YOUR_ADMIN_KEY" \
+  -o netwatch-backup.sqlite3
+```
+
 Export the inventory:
 
 ```bash
@@ -366,6 +408,8 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
+| `NETWATCH_SCHEDULER_ENABLED` | `false` | Enables execution of due approved policies in the single API process |
+| `NETWATCH_SCHEDULER_POLL_SECONDS` | `30` | Scheduler polling interval, bounded from 5 to 300 seconds |
 | `NETWATCH_DATA_DIR` | `data` | SQLite data directory |
 
 ## Data storage
@@ -383,8 +427,10 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 - `network_observations`: normalized observed/not-observed evidence per network scan
 - `asset_events`: new, returned, and not-observed transitions
 - `audit_log`: bounded role/action/target records for operational accountability
+- `scan_policies`: Admin-approved private CIDRs, intervals, enablement, and last/next run state
+- `operation_alerts`: bounded transition alerts with severity and acknowledgement evidence
 
-Change history is bounded to 5,000 events, 50,000 network observations, and 10,000 audit records so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, and 50 scan policies so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
@@ -459,6 +505,7 @@ NetWatch/
 ├── host_profiler.py
 ├── inventory_store.py
 ├── network_scanner.py
+├── operations_store.py
 ├── port_scanner.py
 ├── report_builder.py
 ├── risk_engine.py
@@ -484,7 +531,7 @@ NetWatch/
 - PDF reports
 - Safe public demo mode with sample data and scanning disabled
 - Organization authentication with SSO/OIDC and individual identities
-- Configurable backups, retention controls, and migration tooling
+- Encrypted off-host backup rotation, restore drills, and migration tooling
 
 ## Contributing
 
@@ -496,4 +543,4 @@ NetWatch is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-NetWatch is a defensive local visibility tool. Use it only with clear authorization. The default deployment is designed for a trusted local pilot or small internal team and must not be exposed publicly or treated as a multi-tenant enterprise service without TLS, organization identity, network restrictions, secret management, centralized logging, backups, monitoring, and a deployment-specific security review.
+NetWatch is a defensive local visibility tool. Use it only with clear authorization. The default deployment is designed for a trusted local pilot or small internal team and must not be exposed publicly or treated as a multi-tenant enterprise service without TLS, organization identity, network restrictions, secret management, centralized logging, automated encrypted off-host backups with tested restoration, monitoring, and a deployment-specific security review.
