@@ -9,11 +9,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from config import MAX_ASSET_EVENTS, MAX_INVENTORY_ROWS, MAX_NETWORK_OBSERVATIONS
+from config import (
+    MAX_ASSET_EVENTS,
+    MAX_AUDIT_LOG_ENTRIES,
+    MAX_INVENTORY_ROWS,
+    MAX_NETWORK_OBSERVATIONS,
+)
 
 DATA_DIR = Path(os.getenv("NETWATCH_DATA_DIR", "data"))
 DB_FILE = DATA_DIR / "netwatch.db"
 NOT_OBSERVED_STATUS = "Not observed"
+ASSET_CRITICALITIES = ("Low", "Medium", "High", "Critical")
 EVENT_LABELS = {
     "new_asset": "New asset",
     "asset_returned": "Returned",
@@ -87,9 +93,16 @@ def init_db() -> None:
                 details TEXT NOT NULL DEFAULT '',
                 open_ports TEXT NOT NULL DEFAULT '[]',
                 exposure_score INTEGER NOT NULL DEFAULT 0,
-                exposure_level TEXT NOT NULL DEFAULT 'Clean'
+                exposure_level TEXT NOT NULL DEFAULT 'Clean',
+                owner TEXT NOT NULL DEFAULT '',
+                department TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                criticality TEXT NOT NULL DEFAULT 'Medium',
+                notes TEXT NOT NULL DEFAULT '',
+                context_updated_at TEXT NOT NULL DEFAULT ''
             )
             """)
+        _ensure_asset_context_columns(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_created_at ON scan_runs(created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_type ON scan_runs(scan_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_last_seen ON assets(last_seen)")
@@ -116,6 +129,17 @@ def init_db() -> None:
                 FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE SET NULL
             )
             """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                details TEXT NOT NULL DEFAULT ''
+            )
+            """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_observations_scan ON network_observations(scan_run_id)"
         )
@@ -127,7 +151,24 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_asset_events_asset ON asset_events(ip_address, id)"
         )
-        conn.execute("PRAGMA user_version = 2")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_id ON audit_log(id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
+        conn.execute("PRAGMA user_version = 3")
+
+
+def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
+    columns = {
+        "owner": "TEXT NOT NULL DEFAULT ''",
+        "department": "TEXT NOT NULL DEFAULT ''",
+        "location": "TEXT NOT NULL DEFAULT ''",
+        "criticality": "TEXT NOT NULL DEFAULT 'Medium'",
+        "notes": "TEXT NOT NULL DEFAULT ''",
+        "context_updated_at": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE assets ADD COLUMN {name} {definition}")
 
 
 def _insert_scan_run(
@@ -175,6 +216,34 @@ def _insert_asset_event(
     )
 
 
+def _audit_value(value: object, max_length: int) -> str:
+    return " ".join(str(value).split())[:max_length]
+
+
+def _insert_audit_event(
+    conn: sqlite3.Connection,
+    actor_role: str,
+    action: str,
+    target: str,
+    outcome: str,
+    details: str,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO audit_log (created_at, actor_role, action, target, outcome, details)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            _utc_now(),
+            _audit_value(actor_role, 40),
+            _audit_value(action, 80),
+            _audit_value(target, 200),
+            _audit_value(outcome, 40),
+            _audit_value(details, 1_000),
+        ),
+    )
+
+
 def _prune_change_history(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -193,6 +262,18 @@ def _prune_change_history(conn: sqlite3.Connection) -> None:
         )
         """,
         (MAX_NETWORK_OBSERVATIONS,),
+    )
+
+
+def _prune_audit_log(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        DELETE FROM audit_log
+        WHERE id NOT IN (
+            SELECT id FROM audit_log ORDER BY id DESC LIMIT ?
+        )
+        """,
+        (MAX_AUDIT_LOG_ENTRIES,),
     )
 
 
@@ -411,6 +492,93 @@ def update_asset_ports(
         _prune_change_history(conn)
 
 
+def record_audit_event(
+    actor_role: str,
+    action: str,
+    target: str,
+    outcome: str,
+    details: str,
+) -> None:
+    init_db()
+    with _connect() as conn:
+        _insert_audit_event(conn, actor_role, action, target, outcome, details)
+        _prune_audit_log(conn)
+
+
+def update_asset_context(
+    ip_address: str,
+    *,
+    owner: str,
+    department: str,
+    location: str,
+    criticality: str,
+    notes: str,
+    actor_role: str,
+) -> dict:
+    init_db()
+    normalized_ip = _normalize_ipv4(ip_address)
+    if not normalized_ip:
+        raise ValueError("A valid IPv4 asset address is required.")
+    normalized_criticality = str(criticality).strip().title()
+    if normalized_criticality not in ASSET_CRITICALITIES:
+        raise ValueError("Criticality must be Low, Medium, High, or Critical.")
+
+    values = {
+        "owner": _audit_value(owner, 120),
+        "department": _audit_value(department, 120),
+        "location": _audit_value(location, 120),
+        "criticality": normalized_criticality,
+        "notes": _audit_value(notes, 1_000),
+    }
+    with _connect() as conn:
+        existing = conn.execute(
+            "SELECT ip_address FROM assets WHERE ip_address = ?", (normalized_ip,)
+        ).fetchone()
+        if existing is None:
+            raise KeyError(normalized_ip)
+        context_updated_at = _utc_now()
+        conn.execute(
+            """
+            UPDATE assets
+            SET owner = ?, department = ?, location = ?, criticality = ?,
+                notes = ?, context_updated_at = ?
+            WHERE ip_address = ?
+            """,
+            (
+                values["owner"],
+                values["department"],
+                values["location"],
+                values["criticality"],
+                values["notes"],
+                context_updated_at,
+                normalized_ip,
+            ),
+        )
+        _insert_audit_event(
+            conn,
+            actor_role,
+            "asset_context_updated",
+            normalized_ip,
+            "completed",
+            f"Asset ownership context updated; criticality={normalized_criticality}.",
+        )
+        _prune_audit_log(conn)
+        row = conn.execute(
+            """
+            SELECT
+                ip_address, first_seen, last_seen, status, details,
+                exposure_score, exposure_level, open_ports,
+                owner, department, location, criticality, notes, context_updated_at
+            FROM assets
+            WHERE ip_address = ?
+            """,
+            (normalized_ip,),
+        ).fetchone()
+    if row is None:
+        raise RuntimeError("Asset context was updated but could not be reloaded.")
+    return _asset_record(row)
+
+
 def recent_scan_runs(limit: int = 30) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 200))
@@ -472,6 +640,22 @@ def recent_network_observations(limit: int = 100) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def recent_audit_log(limit: int = 100) -> list[dict]:
+    init_db()
+    safe_limit = max(1, min(int(limit), 1_000))
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT created_at, actor_role, action, target, outcome, details
+            FROM audit_log
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _decode_ports(raw: str | None) -> list[dict]:
     try:
         ports = json.loads(raw or "[]")
@@ -480,6 +664,14 @@ def _decode_ports(raw: str | None) -> list[dict]:
     if not isinstance(ports, list):
         return []
     return [item for item in ports if isinstance(item, dict)]
+
+
+def _asset_record(row: sqlite3.Row) -> dict:
+    item = dict(row)
+    ports = _decode_ports(item.pop("open_ports", "[]"))
+    item["open_port_count"] = len(ports)
+    item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
+    return item
 
 
 def asset_port_findings(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
@@ -513,7 +705,8 @@ def asset_inventory(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
             """
             SELECT
                 ip_address, first_seen, last_seen, status, details,
-                exposure_score, exposure_level, open_ports
+                exposure_score, exposure_level, open_ports,
+                owner, department, location, criticality, notes, context_updated_at
             FROM assets
             ORDER BY exposure_score DESC, ip_address ASC
             LIMIT ?
@@ -521,11 +714,4 @@ def asset_inventory(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
             (safe_limit,),
         ).fetchall()
 
-    inventory = []
-    for row in rows:
-        item = dict(row)
-        ports = _decode_ports(item.pop("open_ports", "[]"))
-        item["open_port_count"] = len(ports)
-        item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
-        inventory.append(item)
-    return inventory
+    return [_asset_record(row) for row in rows]

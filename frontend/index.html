@@ -17,7 +17,7 @@
       <img src="/assets/netwatch-logo.svg" alt="NetWatch" width="180" height="128" />
       <p class="eyebrow">Secure local access</p>
       <h1>Connect to NetWatch</h1>
-      <p class="muted">Enter the API key configured in your local <code>.env</code> file. The key stays only in this browser tab.</p>
+      <p class="muted">Enter an Admin, Operator, or Viewer key configured in your local <code>.env</code> file. The key stays only in this browser tab.</p>
       <label for="api-key">API key</label>
       <div class="secret-row">
         <input id="api-key" name="api-key" type="password" autocomplete="off" placeholder="Paste NETWATCH_API_KEY" required />
@@ -49,6 +49,7 @@
         <button class="nav-item" data-view="ports"><span>⇄</span> Port audit</button>
         <button class="nav-item" data-view="inventory"><span>▦</span> Inventory</button>
         <button class="nav-item" data-view="advisor"><span>✦</span> Risk advisor</button>
+        <button class="nav-item" data-view="audit"><span>≡</span> Audit log</button>
         <button class="nav-item" data-view="reports"><span>⇩</span> Reports</button>
       </nav>
 
@@ -68,6 +69,7 @@
           <h2 id="page-title">Overview</h2>
         </div>
         <div class="top-actions">
+          <span id="session-role" class="role-badge">Disconnected</span>
           <button id="refresh" class="button ghost" type="button">Refresh</button>
           <span id="clock" class="clock"></span>
         </div>
@@ -76,11 +78,11 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1.1</span>
+            <span class="pill">New · NetWatch v1.2</span>
             <h3>Turn local network data into confident decisions.</h3>
             <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
-              <button class="button primary" data-go="network" type="button">Start a network scan</button>
+              <button class="button primary" data-go="network" data-scan-control type="button">Start a network scan</button>
               <button class="button ghost" data-go="inventory" type="button">View inventory</button>
             </div>
           </div>
@@ -90,7 +92,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Authenticated</span><span>Evidence-backed</span><span>No external telemetry</span>
+          <span>Local-first</span><span>Role-aware access</span><span>Evidence-backed</span><span>No external telemetry</span>
         </div>
 
         <div class="metric-grid">
@@ -176,8 +178,27 @@
 
       <section id="view-inventory" class="view">
         <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div><button id="inventory-refresh" class="button ghost">Refresh inventory</button></div>
+          <div class="panel-head">
+            <div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div>
+            <div class="button-row"><button id="inventory-export" class="button primary" type="button">Export CSV</button><button id="inventory-refresh" class="button ghost" type="button">Refresh inventory</button></div>
+          </div>
           <div id="inventory-results" class="table-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Company context</p><h3>Ownership and business priority</h3></div><span class="count-badge">Admin</span></div>
+          <form id="asset-context-form" class="company-form-grid">
+            <div class="field-span-2">
+              <label for="asset-ip">Inventory asset</label>
+              <input id="asset-ip" list="asset-options" placeholder="Select or enter a saved IPv4 address" required />
+              <datalist id="asset-options"></datalist>
+            </div>
+            <div><label for="asset-owner">Owner</label><input id="asset-owner" maxlength="120" placeholder="Team or accountable person" /></div>
+            <div><label for="asset-department">Department</label><input id="asset-department" maxlength="120" placeholder="Finance, Operations, IT…" /></div>
+            <div><label for="asset-location">Location</label><input id="asset-location" maxlength="120" placeholder="Office, floor, site, rack…" /></div>
+            <div><label for="asset-criticality">Criticality</label><select id="asset-criticality"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select></div>
+            <div class="field-span-2"><label for="asset-notes">Notes</label><textarea id="asset-notes" maxlength="1000" rows="4" placeholder="Operational context only; avoid secrets and credentials."></textarea></div>
+            <div class="field-span-2 form-actions"><button id="context-save" class="button primary" type="submit">Save asset context</button><p id="context-status" class="form-status">Admin access is required to edit asset context.</p></div>
+          </form>
         </article>
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div></div>
@@ -186,6 +207,14 @@
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">Audit trail</p><h3>Recent history</h3></div></div>
           <div id="history-results" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="view-audit" class="view">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Accountability</p><h3>Operations audit log</h3></div><button id="audit-refresh" class="button ghost" type="button">Refresh log</button></div>
+          <p class="muted">Records scan and asset-context operations with role, target, outcome, and time. API keys are never stored in this log.</p>
+          <div id="audit-results" class="table-wrap"></div>
         </article>
       </section>
 
@@ -209,8 +238,8 @@
 
       <section id="view-reports" class="view">
         <div class="report-grid">
-          <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable scan summary for GitHub, notes, or handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
-          <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with inventory, findings, and recommendations.</p></div><button data-report="html" class="button primary">Download .html</button></article>
+          <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable inventory, changes, findings, and operations log for handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
+          <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with business context, findings, recommendations, and audit evidence.</p></div><button data-report="html" class="button primary">Download .html</button></article>
         </div>
         <article class="panel safety-note"><p class="eyebrow">Interpretation</p><h3>Use results as evidence, not absolute truth.</h3><p>Firewalls, blocked ICMP, NAT, transient services, and local policy can affect what NetWatch observes. Validate important findings with the system owner.</p></article>
       </section>

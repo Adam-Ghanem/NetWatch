@@ -12,7 +12,8 @@ This document records the defensive controls used in NetWatch.
 
 ## API boundary
 
-- Protected endpoints require a non-placeholder API key of at least 32 characters.
+- Protected endpoints require a non-placeholder Admin, Operator, or Viewer key of at least 32 characters.
+- Viewer, Operator, and Admin capabilities are enforced on the server; dashboard disabling is only a usability layer.
 - CORS origins and HTTP Host headers use explicit local allowlists.
 - Wildcard-only allowlists fall back to safe local defaults.
 
@@ -56,6 +57,8 @@ logs/netwatch.log
 
 These files can contain internal IP information and should not be shared publicly.
 
+Asset/company context and operations audit records are stored in SQLite. Audit retention is bounded, and raw role keys are never written to audit details.
+
 ## Remaining production requirements
 
-For a real company deployment, add organization authentication, approved scan ranges, role-based access control, centralized logging, report approval workflow, and retention policy.
+For a remote or multi-user production deployment, add SSO/OIDC with individual identities, approved scan ranges, fine-grained authorization, managed secrets, centralized tamper-resistant logging, TLS, backups, monitoring, report approval workflow, and a formal retention policy.

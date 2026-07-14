@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps an authorized operator discover local hosts, track what changed between scans, profile devices, review common TCP services, maintain an asset inventory, generate deterministic risk guidance, and export evidence-backed reports.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, keep an operations audit log, generate deterministic risk guidance, and export evidence-backed reports.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.1
+## NetWatch v1.2
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -51,19 +51,24 @@ http://127.0.0.1:8000
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
+v1.2 adds company-operations controls for a trusted internal deployment. It is suitable for a local pilot or small internal team when deployed according to the security guidance. Its local role keys are intentionally simple and are not a replacement for SSO, centralized identity, TLS, backups, or a deployment review.
+
 ## Highlights
 
 - Responsive light corporate dashboard
 - User-provided NetWatch identity and local SVG assets
 - Session-only API-key connection screen
+- Admin, Operator, and Viewer access tiers with server-side authorization
 - Authorized local IPv4 CIDR discovery
 - Historical scan snapshots with new, returned, and not-observed asset detection
 - Single-host latency, TTL, hostname, and cautious OS hints
 - Bounded concurrent common-port audit
 - Clear Open, Closed, and Filtered/Unreachable states
-- SQLite asset inventory, normalized observations, change events, and scan history
+- SQLite asset inventory with owner, department, location, criticality, and operational notes
+- Bounded operations audit log for scans and asset-context changes
 - Exposure priority score and deterministic local Risk Advisor
 - Markdown and standalone HTML report downloads
+- Formula-safe inventory CSV export
 - Public, oversized, and unsupported targets blocked
 - API authentication, rate limits, scan concurrency limits, and security headers
 - Minimum-length API secrets and explicit HTTP Host/CORS allowlists
@@ -90,12 +95,14 @@ python scripts/start.py
 The launcher automatically:
 
 1. Creates a local `.env` file.
-2. Generates a strong random API key.
+2. Generates a strong random Admin key.
 3. Builds the NetWatch container.
 4. Starts it on `127.0.0.1:8000`.
 5. Prints the dashboard URL and API key.
 
 Open the displayed URL and enter the displayed key. The browser stores the key only in session storage, so closing the tab clears it.
+
+The launcher leaves the optional Operator and Viewer keys blank. Configure them in `.env` only when separate team access is needed, and use a different 32+ character random secret for every enabled role.
 
 ## Manual Docker deployment
 
@@ -110,6 +117,8 @@ Put the generated value in `.env`:
 
 ```text
 NETWATCH_API_KEY=your-generated-secret
+NETWATCH_OPERATOR_KEY=
+NETWATCH_VIEWER_KEY=
 ```
 
 Start NetWatch:
@@ -165,7 +174,13 @@ An open port is exposure that requires context and validation. It is not automat
 
 ### Inventory and history
 
-Stores local assets, first and last confirmed sightings, status, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite.
+Stores local assets, first and last confirmed sightings, status, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite. Admins can assign an owner, department, location, business criticality, and operational notes. Viewer and Operator roles can read this context but cannot edit it.
+
+Inventory can be exported as formula-safe CSV for an approved internal workflow.
+
+### Operations audit log
+
+Records successful network scans, host checks, port audits, and asset-context updates with UTC time, actor role, action, target, outcome, and a short summary. Raw API keys are never written to the log. Retention is bounded to the latest 10,000 events.
 
 ### Risk Advisor
 
@@ -178,7 +193,7 @@ Downloads:
 - Markdown report for GitHub, notes, or handover documents
 - Standalone HTML report for review and sharing inside an authorized environment
 
-Both formats include recent asset changes alongside inventory and port evidence.
+Both formats include asset business context, recent changes, operations audit events, inventory, and port evidence.
 
 ## Architecture
 
@@ -186,7 +201,7 @@ Both formats include recent asset changes alongside inventory and port evidence.
 Responsive dashboard (`frontend/`)
               |
               v
-Protected FastAPI application (`backend/main.py`)
+Role-protected FastAPI application (`backend/main.py`)
               |
     +---------+----------+
     |         |          |
@@ -205,7 +220,9 @@ The FastAPI process serves both the dashboard and the `/api/*` endpoints. This s
 NetWatch applies defense in depth:
 
 - `X-NetWatch-Key` required for all non-health API endpoints
-- Protected operations disabled until `NETWATCH_API_KEY` is configured
+- Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys
+- Viewer can read and export; Operator can also run authorized checks; Admin can also edit asset context
+- Protected access disabled until at least one valid role key is configured
 - Server-side `authorized: true` required for scan requests
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
@@ -222,7 +239,7 @@ NetWatch applies defense in depth:
 - Docker port published only on `127.0.0.1`
 - No exploitation, brute force, credential testing, stealth, persistence, or evasion functionality
 
-The health endpoint is public so Docker and local operators can verify service availability. Inventory, scan, history, advisor, and report endpoints require authentication.
+The health endpoint is public so Docker and local operators can verify service availability. Inventory, scan, history, audit, advisor, and report endpoints require authentication. These local shared-secret roles improve separation for a trusted internal pilot; they do not provide individual user identity or non-repudiation.
 
 ## API examples
 
@@ -230,6 +247,13 @@ Health:
 
 ```bash
 curl http://127.0.0.1:8000/api/health
+```
+
+Current role and capabilities:
+
+```bash
+curl http://127.0.0.1:8000/api/session \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
 ```
 
 Authorized network scan:
@@ -262,6 +286,30 @@ Normalized network observations:
 ```bash
 curl "http://127.0.0.1:8000/api/observations?limit=100" \
   -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Update company context for a saved asset (Admin only):
+
+```bash
+curl -X PATCH http://127.0.0.1:8000/api/assets/192.168.1.20 \
+  -H "Content-Type: application/json" \
+  -H "X-NetWatch-Key: YOUR_ADMIN_KEY" \
+  -d '{"owner":"Platform Team","department":"IT","location":"HQ","criticality":"Critical","notes":"Core internal service"}'
+```
+
+Review recent operational events:
+
+```bash
+curl "http://127.0.0.1:8000/api/audit-log?limit=100" \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Export the inventory:
+
+```bash
+curl http://127.0.0.1:8000/api/inventory/export.csv \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY" \
+  -o netwatch-inventory.csv
 ```
 
 ## Local development
@@ -308,7 +356,9 @@ docker compose --profile legacy up -d streamlit
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `NETWATCH_API_KEY` | empty | Required 32+ character secret for protected operations |
+| `NETWATCH_API_KEY` | empty | Admin key; 32+ characters; read, scan, and asset-context access |
+| `NETWATCH_OPERATOR_KEY` | empty | Optional Operator key; read and authorized scan access |
+| `NETWATCH_VIEWER_KEY` | empty | Optional Viewer key; read and export access only |
 | `NETWATCH_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Accepted HTTP Host headers |
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI docs for local development |
@@ -329,11 +379,12 @@ data/netwatch.db
 The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Compose persists it in a named volume. Its main records are:
 
 - `scan_runs`: one audit record per completed check
-- `assets`: the current asset inventory and last confirmed sighting
+- `assets`: current inventory, last confirmed sighting, ownership, location, criticality, and notes
 - `network_observations`: normalized observed/not-observed evidence per network scan
 - `asset_events`: new, returned, and not-observed transitions
+- `audit_log`: bounded role/action/target records for operational accountability
 
-Change history is bounded to 5,000 events and 50,000 network observations so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, and 10,000 audit records so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
@@ -430,10 +481,10 @@ NetWatch/
 - Local CVE enrichment with explicit version-confidence handling
 - ARP discovery where operating-system permissions allow
 - Progress updates and cancellation for longer scans
-- Editable owner, location, and business context for assets
 - PDF reports
 - Safe public demo mode with sample data and scanning disabled
-- Organization authentication for shared deployments
+- Organization authentication with SSO/OIDC and individual identities
+- Configurable backups, retention controls, and migration tooling
 
 ## Contributing
 
@@ -445,4 +496,4 @@ NetWatch is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-NetWatch is a defensive local visibility tool. Use it only with clear authorization. The default deployment is designed for one local operator and must not be exposed publicly without TLS, stronger identity controls, network restrictions, secret management, logging, and a deployment-specific security review.
+NetWatch is a defensive local visibility tool. Use it only with clear authorization. The default deployment is designed for a trusted local pilot or small internal team and must not be exposed publicly or treated as a multi-tenant enterprise service without TLS, organization identity, network restrictions, secret management, centralized logging, backups, monitoring, and a deployment-specific security review.

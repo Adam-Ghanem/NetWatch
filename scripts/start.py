@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = ROOT / ".env"
 MIN_API_KEY_LENGTH = 32
 DEFAULTS = {
+    "NETWATCH_OPERATOR_KEY": "",
+    "NETWATCH_VIEWER_KEY": "",
     "NETWATCH_ALLOWED_HOSTS": "127.0.0.1,localhost",
     "NETWATCH_ALLOWED_ORIGINS": "http://127.0.0.1:8000,http://localhost:8000",
     "NETWATCH_API_DOCS": "false",
@@ -80,8 +82,9 @@ def main() -> int:
 
     print("\nNetWatch is ready.")
     print("URL:     http://127.0.0.1:8000")
-    print(f"API key: {api_key}")
-    print("The key is also stored in .env and is required by the dashboard connection screen.")
+    print(f"Admin key: {api_key}")
+    print("The key is stored in .env and is required by the dashboard connection screen.")
+    print("Optional Operator and Viewer keys can also be configured in .env.")
     return 0
 
 

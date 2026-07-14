@@ -65,11 +65,49 @@ def _inventory_summary(inventory_rows: list[dict]) -> str:
             "The local SQLite inventory is still empty. Results will appear after running checks."
         )
 
-    scored = [row for row in inventory_rows if int(row.get("exposure_score", 0)) > 0]
+    scored = [row for row in inventory_rows if _exposure_score(row) > 0]
+    important = [
+        row
+        for row in inventory_rows
+        if str(row.get("criticality", "")).title() in {"High", "Critical"}
+    ]
     return (
         f"The local inventory contains {len(inventory_rows)} asset(s); "
-        f"{len(scored)} asset(s) have a non-zero exposure score."
+        f"{len(scored)} asset(s) have a non-zero exposure score and "
+        f"{len(important)} are marked High or Critical."
     )
+
+
+def _exposure_score(row: dict) -> int:
+    try:
+        return int(row.get("exposure_score", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _business_context_priorities(inventory_rows: list[dict]) -> tuple[list[str], list[str]]:
+    priorities: list[str] = []
+    next_steps: list[str] = []
+    important = [
+        row
+        for row in inventory_rows
+        if str(row.get("criticality", "")).title() in {"High", "Critical"}
+    ]
+    exposed = sorted(important, key=_exposure_score, reverse=True)
+    exposed = [row for row in exposed if _exposure_score(row) > 0]
+    for row in exposed[:3]:
+        owner = str(row.get("owner") or "unassigned")
+        department = str(row.get("department") or "department not set")
+        priorities.append(
+            f"Prioritize {row.get('ip_address')} ({row.get('criticality')}): exposure score "
+            f"{_exposure_score(row)}, owner {owner}, {department}."
+        )
+
+    unowned = [row for row in important if not str(row.get("owner", "")).strip()]
+    if unowned:
+        addresses = ", ".join(str(row.get("ip_address")) for row in unowned[:5])
+        next_steps.append(f"Assign accountable owners to important assets: {addresses}.")
+    return priorities, next_steps
 
 
 def _change_summary(change_rows: list[dict]) -> tuple[str, list[str], list[str]]:
@@ -140,6 +178,8 @@ def build_advice(
     port_text, risk_level, priorities = _port_summary(ports)
     inventory_text = _inventory_summary(inventory)
     change_text, change_priorities, change_steps = _change_summary(changes)
+    business_priorities, business_steps = _business_context_priorities(inventory)
+    priorities.extend(business_priorities)
     priorities.extend(change_priorities)
 
     next_steps = [
@@ -154,6 +194,7 @@ def build_advice(
         ),
     ]
     next_steps.extend(change_steps)
+    next_steps.extend(business_steps)
 
     if risk_level in {"High", "Medium"}:
         next_steps.insert(

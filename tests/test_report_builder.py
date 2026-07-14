@@ -95,3 +95,27 @@ def test_reports_include_recent_asset_changes_and_escape_html():
     assert "Recent asset changes" in html
     assert "router &lt;approved&gt;" in html
     assert "router <approved>" not in html
+
+
+def test_reports_include_operations_audit_log_and_escape_values():
+    audit = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-14T10:00:00+00:00",
+                "actor_role": "operator",
+                "action": "network_scan",
+                "target": "192.168.1.0/24",
+                "outcome": "completed",
+                "details": "12 hosts <reviewed>",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), None, audit)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, audit)
+
+    assert "Recent operational events: **1**" in markdown
+    assert "Operations audit log" in markdown
+    assert "network_scan" in markdown
+    assert "Operations audit log" in html
+    assert "12 hosts &lt;reviewed&gt;" in html

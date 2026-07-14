@@ -5,6 +5,9 @@ const state = {
   key: sessionStorage.getItem('netwatchApiKey') || '',
   view: 'overview',
   health: null,
+  role: '',
+  capabilities: { read: false, scan: false, manage_assets: false },
+  assets: [],
 };
 
 const titles = {
@@ -14,6 +17,7 @@ const titles = {
   ports: 'Port audit',
   inventory: 'Inventory',
   advisor: 'Risk advisor',
+  audit: 'Audit log',
   reports: 'Reports',
 };
 
@@ -90,7 +94,7 @@ function statusClass(value) {
   if (normalized.includes('open')) return 'open';
   if (normalized.includes('online')) return 'online';
   if (normalized.includes('complete')) return 'completed';
-  if (normalized.includes('high')) return 'high';
+  if (normalized.includes('high') || normalized.includes('critical')) return 'high';
   if (normalized.includes('medium')) return 'medium';
   if (normalized.includes('block')) return 'blocked';
   if (normalized.includes('error') || normalized.includes('offline')) return 'error';
@@ -186,7 +190,9 @@ async function checkHealth() {
     const health = await (await fetch(`${API_BASE}/api/health`)).json();
     state.health = health;
     dot.className = 'health-dot online';
-    label.textContent = health.scanning_enabled ? 'API online' : 'API needs setup';
+    label.textContent = !health.access_enabled
+      ? 'API needs setup'
+      : (health.scanning_enabled ? 'API online' : 'API read-only');
     $('#version-label').textContent = `v${health.version}`;
     return health;
   } catch (error) {
@@ -200,14 +206,45 @@ async function checkHealth() {
 function setConnected(connected) {
   $('#connect-overlay').classList.toggle('hidden', connected);
   if (connected) $('#api-key').value = '';
+  if (!connected) {
+    state.role = '';
+    state.capabilities = { read: false, scan: false, manage_assets: false };
+    applyRoleAccess();
+  }
+}
+
+function applyRoleAccess() {
+  const roleBadge = $('#session-role');
+  const roleLabel = state.role ? `${state.role[0].toUpperCase()}${state.role.slice(1)}` : 'Disconnected';
+  roleBadge.textContent = roleLabel;
+  roleBadge.className = `role-badge ${state.role || ''}`;
+
+  const canScan = Boolean(state.capabilities.scan);
+  ['#network-form', '#host-form', '#ports-form'].forEach((selector) => {
+    $$('input, button', $(selector)).forEach((control) => { control.disabled = !canScan; });
+  });
+  $$('[data-scan-control]').forEach((control) => { control.disabled = !canScan; });
+
+  const canManageAssets = Boolean(state.capabilities.manage_assets);
+  $$('input, select, textarea, button', $('#asset-context-form')).forEach((control) => {
+    control.disabled = !canManageAssets;
+  });
+  if (canManageAssets) {
+    setFormStatus('context-status', 'Select a saved asset, then add accountable business context.');
+  } else if (state.role) {
+    setFormStatus('context-status', 'Admin access is required to edit asset context.');
+  }
 }
 
 async function connectWithKey(key) {
   setApiKey(key);
-  await apiJson('/api/inventory');
-  setConnected(true);
-  showToast('Connected to NetWatch securely.');
+  const session = await apiJson('/api/session');
+  state.role = session.role || '';
+  state.capabilities = session.capabilities || {};
+  applyRoleAccess();
   await loadOverview();
+  setConnected(true);
+  showToast(`Connected with ${state.role} access.`);
 }
 
 async function loadOverview() {
@@ -265,8 +302,13 @@ async function loadInventory() {
     apiJson('/api/history?limit=50'),
     apiJson('/api/changes?limit=50'),
   ]);
-  renderTable($('#inventory-results'), inventoryPayload.assets || [], [
+  state.assets = inventoryPayload.assets || [];
+  renderTable($('#inventory-results'), state.assets, [
     { key: 'ip_address', label: 'IP address' },
+    { key: 'owner', label: 'Owner' },
+    { key: 'department', label: 'Department' },
+    { key: 'location', label: 'Location' },
+    { key: 'criticality', label: 'Criticality', chip: true },
     { key: 'status', label: 'Status', chip: true },
     { key: 'last_seen', label: 'Last seen' },
     { key: 'open_ports', label: 'Open ports' },
@@ -286,6 +328,46 @@ async function loadInventory() {
     { key: 'summary', label: 'Summary' },
     { key: 'status', label: 'Status', chip: true },
   ], 'No history recorded yet.');
+  populateAssetOptions();
+  fillAssetContext($('#asset-ip').value);
+}
+
+function populateAssetOptions() {
+  const datalist = $('#asset-options');
+  datalist.replaceChildren();
+  state.assets.forEach((asset) => {
+    const option = document.createElement('option');
+    option.value = asset.ip_address;
+    option.label = [asset.owner, asset.department].filter(Boolean).join(' · ');
+    datalist.appendChild(option);
+  });
+}
+
+function fillAssetContext(ipAddress) {
+  const asset = state.assets.find((item) => item.ip_address === String(ipAddress || '').trim());
+  if (!asset) return;
+  $('#asset-owner').value = asset.owner || '';
+  $('#asset-department').value = asset.department || '';
+  $('#asset-location').value = asset.location || '';
+  $('#asset-criticality').value = asset.criticality || 'Medium';
+  $('#asset-notes').value = asset.notes || '';
+  if (state.capabilities.manage_assets) {
+    setFormStatus('context-status', `Editing ${asset.ip_address}.`, 'success');
+  } else {
+    setFormStatus('context-status', 'Admin access is required to edit asset context.');
+  }
+}
+
+async function loadAudit() {
+  const payload = await apiJson('/api/audit-log?limit=200');
+  renderTable($('#audit-results'), payload.items || [], [
+    { key: 'created_at', label: 'Time' },
+    { key: 'actor_role', label: 'Role', chip: true },
+    { key: 'action', label: 'Action', format: (value) => text(value).replaceAll('_', ' ') },
+    { key: 'target', label: 'Target' },
+    { key: 'outcome', label: 'Outcome', chip: true },
+    { key: 'details', label: 'Details' },
+  ], 'No operational events have been recorded yet.');
 }
 
 async function loadAdvisor() {
@@ -314,6 +396,7 @@ async function refreshCurrentView() {
   if (state.view === 'overview') return loadOverview();
   if (state.view === 'inventory') return loadInventory();
   if (state.view === 'advisor') return loadAdvisor();
+  if (state.view === 'audit') return loadAudit();
   return checkHealth();
 }
 
@@ -326,28 +409,38 @@ function navigate(view) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   if (view === 'inventory') loadInventory().catch((error) => showToast(error.message, 'error'));
   if (view === 'advisor') loadAdvisor().catch((error) => showToast(error.message, 'error'));
+  if (view === 'audit') loadAudit().catch((error) => showToast(error.message, 'error'));
 }
 
-async function downloadReport(type, button) {
+async function downloadApiFile(path, filename, button, successMessage) {
   setBusy(button, true, 'Preparing…');
   try {
-    const extension = type === 'html' ? 'html' : 'md';
-    const response = await apiFetch(`/api/reports/${type}`);
+    const response = await apiFetch(path);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `netwatch-report.${extension}`;
+    anchor.download = filename;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-    showToast(`${type.toUpperCase()} report downloaded.`);
+    showToast(successMessage);
   } catch (error) {
     showToast(error.message, 'error');
   } finally {
     setBusy(button, false);
   }
+}
+
+async function downloadReport(type, button) {
+  const extension = type === 'html' ? 'html' : 'md';
+  return downloadApiFile(
+    `/api/reports/${type}`,
+    `netwatch-report.${extension}`,
+    button,
+    `${type.toUpperCase()} report downloaded.`,
+  );
 }
 
 $('#connect-form').addEventListener('submit', async (event) => {
@@ -359,6 +452,7 @@ $('#connect-form').addEventListener('submit', async (event) => {
     await connectWithKey($('#api-key').value);
   } catch (error) {
     setApiKey('');
+    setConnected(false);
     setFormStatus('connect-status', error.message, 'error');
   } finally {
     setBusy(button, false);
@@ -504,6 +598,49 @@ $('#inventory-refresh').addEventListener('click', async (event) => {
   finally { setBusy(event.currentTarget, false); }
 });
 
+$('#inventory-export').addEventListener('click', (event) => downloadApiFile(
+  '/api/inventory/export.csv',
+  'netwatch-inventory.csv',
+  event.currentTarget,
+  'Inventory CSV downloaded.',
+));
+
+$('#asset-ip').addEventListener('change', (event) => fillAssetContext(event.currentTarget.value));
+
+$('#asset-context-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving…');
+  setFormStatus('context-status', 'Saving accountable asset context…');
+  try {
+    const ipAddress = $('#asset-ip').value.trim();
+    await apiJson(`/api/assets/${encodeURIComponent(ipAddress)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        owner: $('#asset-owner').value.trim(),
+        department: $('#asset-department').value.trim(),
+        location: $('#asset-location').value.trim(),
+        criticality: $('#asset-criticality').value,
+        notes: $('#asset-notes').value.trim(),
+      }),
+    });
+    await loadInventory();
+    setFormStatus('context-status', `Asset context saved for ${ipAddress}.`, 'success');
+    showToast('Asset context saved and logged.');
+  } catch (error) {
+    setFormStatus('context-status', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$('#audit-refresh').addEventListener('click', async (event) => {
+  setBusy(event.currentTarget, true, 'Refreshing…');
+  try { await loadAudit(); showToast('Audit log refreshed.'); }
+  catch (error) { showToast(error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
 $('#advisor-refresh').addEventListener('click', async (event) => {
   setBusy(event.currentTarget, true, 'Rebuilding…');
   try { await loadAdvisor(); showToast('Advisor rebuilt from saved evidence.'); }
@@ -533,6 +670,7 @@ async function init() {
       return;
     } catch (error) {
       setApiKey('');
+      setConnected(false);
       setFormStatus('connect-status', error.message, 'error');
     }
   }

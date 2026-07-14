@@ -51,10 +51,22 @@ def _event_view(changes_df: pd.DataFrame | None) -> pd.DataFrame:
     return changes_df[columns] if columns else pd.DataFrame()
 
 
+def _audit_view(audit_df: pd.DataFrame | None) -> pd.DataFrame:
+    if audit_df is None or audit_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in ("created_at", "actor_role", "action", "target", "outcome", "details")
+        if column in audit_df.columns
+    ]
+    return audit_df[columns] if columns else pd.DataFrame()
+
+
 def build_markdown_report(
     hosts_df: pd.DataFrame,
     ports_df: pd.DataFrame,
     changes_df: pd.DataFrame | None = None,
+    audit_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -64,6 +76,7 @@ def build_markdown_report(
     )
 
     events = _event_view(changes_df)
+    audit_events = _audit_view(audit_df)
     lines = [
         "# NetWatch Local Network Report",
         "",
@@ -73,6 +86,7 @@ def build_markdown_report(
         "",
         f"- Saved assets: **{len(hosts_df) if not hosts_df.empty else 0}**",
         f"- Recent asset changes: **{len(events)}**",
+        f"- Recent operational events: **{len(audit_events)}**",
         f"- Ports checked: **{exposure.checked}**",
         f"- Open ports: **{exposure.open_ports}**",
         f"- High risk findings: **{exposure.high}**",
@@ -108,6 +122,8 @@ def build_markdown_report(
                 )
     if not events.empty:
         lines.extend(["## Recent asset changes", "", _dataframe_to_markdown(events), ""])
+    if not audit_events.empty:
+        lines.extend(["## Operations audit log", "", _dataframe_to_markdown(audit_events), ""])
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -127,6 +143,7 @@ def build_html_report(
     hosts_df: pd.DataFrame,
     ports_df: pd.DataFrame,
     changes_df: pd.DataFrame | None = None,
+    audit_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -140,6 +157,7 @@ def build_html_report(
         else pd.DataFrame()
     )
     events = _event_view(changes_df)
+    audit_events = _audit_view(audit_df)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -171,6 +189,7 @@ th {{ color:#7dd3fc; background:#111827; }}
 <h2>Port assessment</h2>{_html_table(ports_df)}
 <h2>Top recommendations</h2>{_html_table(recommendations)}
 <h2>Recent asset changes</h2>{_html_table(events)}
+<h2>Operations audit log</h2>{_html_table(audit_events)}
 </main>
 </body>
 </html>"""

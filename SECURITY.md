@@ -8,10 +8,11 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1 includes:
+NetWatch v1.2 includes:
 
-- API key required for every non-health API endpoint
-- Protected operations disabled until a non-placeholder `NETWATCH_API_KEY` of at least 32 characters is configured
+- Valid Admin, Operator, or Viewer key required for every non-health API endpoint
+- Viewer read/export, Operator scan, and Admin asset-context authorization enforced server-side
+- Protected operations disabled until at least one non-placeholder role key of 32+ characters is configured
 - Constant-time API-key comparison
 - Server-side authorization confirmation for scan requests
 - Explicit local IPv4 allowlists
@@ -35,17 +36,18 @@ NetWatch v1 includes:
 - Linux capabilities dropped except the minimum raw-network capability required for ping
 - FastAPI interactive documentation disabled by default
 - Local Risk Advisor with no external service calls
+- Bounded operations audit records that never store raw role keys
 
 ## Secrets
 
-The `.env` file contains the local API key and is ignored by Git.
+The `.env` file contains the local role keys and is ignored by Git.
 
 Do not:
 
 - Commit `.env`
-- Paste the API key into issues, screenshots, reports, or chat messages
-- Reuse a sensitive account password as the NetWatch API key
-- Publish the API key in frontend source code
+- Paste role keys into issues, screenshots, reports, or chat messages
+- Reuse a sensitive account password as a NetWatch role key
+- Publish role keys in frontend source code
 
 Generate a new key with:
 
@@ -53,7 +55,7 @@ Generate a new key with:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Restart NetWatch after changing the key.
+Use a different random value for each enabled role and restart NetWatch after changing keys.
 
 Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost defaults unless a reviewed deployment requires additional names or origins.
 
@@ -71,7 +73,7 @@ Docker Compose stores data in named volumes. Keep database files, volume exports
 
 ## Deployment limits
 
-The default deployment is designed for one trusted local operator and binds to:
+The default deployment is designed for a trusted local pilot or small internal team and binds to:
 
 ```text
 127.0.0.1:8000
@@ -80,11 +82,11 @@ The default deployment is designed for one trusted local operator and binds to:
 Before shared, remote, or public deployment, add and review:
 
 - TLS
-- Organization authentication
-- Role-based authorization
+- SSO/OIDC organization authentication with individual identities
+- Fine-grained authorization beyond shared role secrets
 - Network access controls
 - Managed secret storage
-- Centralized audit logs
+- Centralized tamper-resistant audit logs
 - Monitoring and alerting
 - Backups and database migrations
 - Retention and deletion policies

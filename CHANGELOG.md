@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.0
+
+- Added server-enforced Admin, Operator, and Viewer access tiers while preserving `NETWATCH_API_KEY` as the backwards-compatible Admin key.
+- Added a protected session endpoint so the dashboard can display capabilities and disable unauthorized controls.
+- Added asset owner, department, location, criticality, operational notes, and context-update timestamps with an in-place SQLite migration for existing databases.
+- Added a bounded operations audit log for network scans, host checks, port audits, and asset-context updates without storing API keys.
+- Added authenticated audit-log and formula-safe inventory CSV endpoints.
+- Added role-aware dashboard controls, asset-context editing, audit-log review, and inventory CSV download.
+- Prioritized exposed High and Critical business assets in the deterministic Risk Advisor.
+- Included operations audit evidence and company asset context in Markdown and HTML reports.
+- Updated the optional Streamlit interface to write and display operational audit records.
+- Added role-isolation, migration, retention, export-safety, advisor, API, and report regression tests.
+- Documented the boundary between a trusted internal pilot and a full enterprise deployment requiring SSO, TLS, secret management, backups, and centralized monitoring.
+
 ## v1.1.0
 
 - Added normalized per-scan network observations and durable asset-change events in SQLite.

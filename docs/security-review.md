@@ -1,8 +1,8 @@
-# NetWatch v1.1 Security Review
+# NetWatch v1.2 Security Review
 
 ## Scope
 
-This review covers the default local deployment of NetWatch v1.1: one FastAPI process serving the responsive dashboard and protected API at `127.0.0.1:8000`.
+This review covers the default local deployment of NetWatch v1.2: one FastAPI process serving the responsive dashboard and role-protected API at `127.0.0.1:8000`.
 
 ## Threat model
 
@@ -21,8 +21,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 ### API access
 
 - All non-health endpoints require `X-NetWatch-Key`.
-- The configured key is compared with `hmac.compare_digest`.
-- Protected operations return HTTP 503 when the key is missing, a known placeholder, or shorter than 32 characters.
+- Admin, Operator, and Viewer keys are compared with `hmac.compare_digest`.
+- Viewer can read/export, Operator can also scan, and Admin can also edit asset context.
+- Protected operations return HTTP 503 when no valid non-placeholder role key of at least 32 characters is configured.
 - The dashboard stores the key only in session storage.
 
 ### Browser boundary
@@ -53,7 +54,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 
 - SQLite uses WAL mode and busy timeout.
 - Timestamps are stored in UTC.
-- Asset events and normalized observations have bounded retention.
+- Asset events, normalized observations, and operations audit records have bounded retention.
+- Audit records contain role, action, target, outcome, and short details but never raw API keys.
+- Existing databases migrate company-context columns and the audit table in place at schema version 3.
 - Missing ICMP replies preserve the last confirmed sighting and use `Not observed` rather than a definitive offline claim.
 - Database and generated files are ignored by Git.
 - CSV output reduces spreadsheet formula injection, including leading-whitespace variants.
@@ -72,12 +75,13 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 
 ## Residual risks
 
-- A user with access to the local machine and `.env` can obtain the API key.
-- The API key is a single shared local secret, not user-level identity.
+- A user with access to the local machine and `.env` can obtain configured role keys.
+- Role keys are shared secrets, not individual user identity or non-repudiation.
 - Localhost binding does not protect against every malicious process running under the same user account.
 - ICMP and TCP observations can be incomplete or misleading due to filtering and transient network conditions.
 - The in-memory rate limiter resets when the process restarts and is not suitable for a multi-worker deployment.
-- SQLite and the current schema are designed for one local operator, not high-concurrency multi-tenant use.
+- SQLite and the current schema are designed for a trusted local pilot, not high-concurrency multi-tenant use.
+- The local audit table is useful operational evidence but is not centralized or tamper-resistant.
 - Change events remain network evidence and can contain sensitive internal addressing even without hostnames.
 - Reports and screenshots can expose sensitive internal information if shared carelessly.
 
@@ -86,8 +90,8 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 Do not expose the default service to other networks without adding:
 
 - TLS
-- SSO or organization authentication
-- Role-based access control
+- SSO/OIDC organization authentication and individual identities
+- Fine-grained authorization beyond shared role keys
 - Managed secrets
 - Network restrictions
 - Centralized audit logging
@@ -99,4 +103,4 @@ Do not expose the default service to other networks without adding:
 
 ## Review conclusion
 
-The default NetWatch v1.1 configuration is appropriate for a trusted single-user local lab or internal demonstration when used only on authorized networks. It is not approved as-is for public, multi-user, or Internet-accessible deployment.
+The default NetWatch v1.2 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, or Internet-accessible deployment.
