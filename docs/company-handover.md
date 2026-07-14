@@ -1,4 +1,4 @@
-# NetWatch v1 Company Handover
+# NetWatch v1.1 Company Handover
 
 ## Product summary
 
@@ -12,7 +12,7 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1 provides:
+NetWatch v1.1 provides:
 
 - Protected local dashboard with session-only API-key access
 - Approved private/local IPv4 validation
@@ -22,6 +22,7 @@ NetWatch v1 provides:
 - Open, Closed, and Filtered/Unreachable result states
 - Exposure priority scoring and recommendations
 - SQLite asset inventory and scan history
+- Normalized scan snapshots and new/returned/not-observed asset events
 - Deterministic local Risk Advisor
 - Markdown and standalone HTML reports
 - Docker deployment and one-command launcher
@@ -59,7 +60,7 @@ The launcher prints the dashboard URL and generated local API key.
 5. Run Host Check on a known router, VM, or lab server.
 6. Run Port Audit on one known authorized host.
 7. Explain why an open service is exposure—not automatic proof of a vulnerability.
-8. Open Inventory and History to show saved evidence.
+8. Open Inventory and History to show saved evidence and scan-to-scan changes.
 9. Open Risk Advisor to show deterministic local recommendations.
 10. Download Markdown and HTML reports.
 11. Explain the API authentication, scan limits, localhost binding, and data handling.
@@ -92,6 +93,7 @@ This information may include:
 - Private IP addresses
 - Hostnames
 - Scan timestamps
+- Per-scan presence observations and asset-change events
 - Observed service exposure
 - Internal recommendations
 
@@ -128,8 +130,8 @@ Before use by multiple employees or on a remote server, add:
 
 ## Recommended next product improvements
 
-- Historical scan comparison and change detection
-- Normalized findings per scan run
+- Normalized service findings per scan run
+- Configurable retention and cleanup controls
 - Scheduled scans for pre-approved ranges
 - Asset owner, department, location, and business criticality fields
 - PDF reports

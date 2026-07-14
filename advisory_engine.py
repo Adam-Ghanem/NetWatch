@@ -72,8 +72,59 @@ def _inventory_summary(inventory_rows: list[dict]) -> str:
     )
 
 
+def _change_summary(change_rows: list[dict]) -> tuple[str, list[str], list[str]]:
+    if not change_rows:
+        return "No asset changes are recorded yet.", [], []
+
+    new_assets = {
+        str(row.get("ip_address"))
+        for row in change_rows
+        if row.get("event_type") == "new_asset" and row.get("ip_address")
+    }
+    returned_assets = {
+        str(row.get("ip_address"))
+        for row in change_rows
+        if row.get("event_type") == "asset_returned" and row.get("ip_address")
+    }
+    not_observed_assets = {
+        str(row.get("ip_address"))
+        for row in change_rows
+        if row.get("event_type") == "not_observed" and row.get("ip_address")
+    }
+    summary = (
+        f"The recent change log contains {len(new_assets)} newly observed, "
+        f"{len(returned_assets)} returned, and {len(not_observed_assets)} "
+        "not-observed asset(s)."
+    )
+    priorities = []
+    next_steps = []
+    if not_observed_assets:
+        priorities.append(
+            "No reply was recorded for: "
+            f"{', '.join(sorted(not_observed_assets))}. This is not definitive offline evidence."
+        )
+        next_steps.append(
+            "Recheck not-observed assets with the system owner; ICMP filtering or a transient "
+            "network condition can affect this signal."
+        )
+    if new_assets:
+        priorities.append(
+            "Review newly observed assets and confirm they are expected: "
+            f"{', '.join(sorted(new_assets))}."
+        )
+    if returned_assets:
+        next_steps.append(
+            "Confirm why previously absent assets returned: "
+            f"{', '.join(sorted(returned_assets))}."
+        )
+    return summary, priorities, next_steps
+
+
 def build_advice(
-    host_rows: Iterable[dict], port_rows: Iterable[dict], inventory_rows: Iterable[dict]
+    host_rows: Iterable[dict],
+    port_rows: Iterable[dict],
+    inventory_rows: Iterable[dict],
+    change_rows: Iterable[dict] = (),
 ) -> AdvisorResult:
     """Build a local advisory summary from NetWatch results.
 
@@ -83,10 +134,13 @@ def build_advice(
     hosts = list(host_rows)
     ports = list(port_rows)
     inventory = list(inventory_rows)
+    changes = list(change_rows)
 
     host_text = _host_summary(hosts)
     port_text, risk_level, priorities = _port_summary(ports)
     inventory_text = _inventory_summary(inventory)
+    change_text, change_priorities, change_steps = _change_summary(changes)
+    priorities.extend(change_priorities)
 
     next_steps = [
         "Start with one known authorized host and compare Host Check with Port Audit results.",
@@ -99,6 +153,7 @@ def build_advice(
             "project documentation."
         ),
     ]
+    next_steps.extend(change_steps)
 
     if risk_level in {"High", "Medium"}:
         next_steps.insert(
@@ -109,7 +164,7 @@ def build_advice(
             1, "Repeat the check on another approved host to validate the network view."
         )
 
-    summary = " ".join([host_text, port_text, inventory_text])
+    summary = " ".join([host_text, port_text, inventory_text, change_text])
     confidence = "Medium" if ports else "Low"
     if hosts and ports and inventory:
         confidence = "High"

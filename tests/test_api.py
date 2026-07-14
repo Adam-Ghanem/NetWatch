@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import backend.main as api
 import inventory_store
+from inventory_store import NetworkChangeSummary
 
 TEST_API_KEY = "test-secret-with-at-least-32-characters"
 API_HEADERS = {"X-NetWatch-Key": TEST_API_KEY}
@@ -40,7 +41,7 @@ def test_health_is_public(monkeypatch, tmp_path):
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.0.1"
+    assert response.json()["version"] == "1.1.0"
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -92,8 +93,17 @@ def test_authorized_scan_uses_validated_target(monkeypatch, tmp_path):
         "scan_network",
         lambda cidr: [{"IP Address": "192.168.1.1", "Status": "Online", "Details": "mock"}],
     )
-    monkeypatch.setattr(api, "add_scan_run", lambda *args, **kwargs: 1)
-    monkeypatch.setattr(api, "upsert_hosts", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        api,
+        "record_network_scan",
+        lambda *args, **kwargs: NetworkChangeSummary(
+            scan_run_id=1,
+            observed_assets=("192.168.1.1",),
+            new_assets=("192.168.1.1",),
+            returned_assets=(),
+            not_observed_assets=(),
+        ),
+    )
 
     with _client(monkeypatch, tmp_path) as client:
         response = client.post(
@@ -106,6 +116,27 @@ def test_authorized_scan_uses_validated_target(monkeypatch, tmp_path):
     payload = response.json()
     assert payload["target"] == "192.168.1.0/30"
     assert payload["online_hosts"] == 1
+    assert payload["changes"]["new_assets"] == ["192.168.1.1"]
+    assert payload["changes"]["total_changes"] == 1
+
+
+def test_change_and_observation_endpoints_return_saved_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
+    inventory_store.record_network_scan(
+        "192.168.1.0/30",
+        [{"IP Address": "192.168.1.1", "Status": "Online", "Details": "mock"}],
+    )
+
+    with _client(monkeypatch, tmp_path) as client:
+        changes = client.get("/api/changes", headers=API_HEADERS)
+        observations = client.get("/api/observations", headers=API_HEADERS)
+
+    assert changes.status_code == 200
+    assert changes.json()["items"][0]["event_label"] == "New asset"
+    assert observations.status_code == 200
+    assert observations.json()["items"][0]["observed"] == 1
+    assert observations.json()["items"][0]["target"] == "192.168.1.0/30"
 
 
 def test_untrusted_origin_is_not_allowed(monkeypatch, tmp_path):

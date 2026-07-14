@@ -43,3 +43,16 @@ def test_advice_markdown_contains_sections():
     assert "NetWatch Risk Advisor" in markdown
     assert "Priority findings" in markdown
     assert "Suggested next steps" in markdown
+
+
+def test_advisor_surfaces_recent_asset_changes_without_overclaiming():
+    changes = [
+        {"ip_address": "192.168.1.20", "event_type": "new_asset"},
+        {"ip_address": "192.168.1.21", "event_type": "not_observed"},
+    ]
+
+    result = build_advice([], [], [], changes)
+
+    assert "1 newly observed" in result.summary
+    assert any("192.168.1.20" in item for item in result.priorities)
+    assert any("ICMP" in item for item in result.next_steps)

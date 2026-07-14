@@ -1,11 +1,11 @@
-# NetWatch v1 Acceptance Checklist
+# NetWatch v1.1 Acceptance Checklist
 
 Use this checklist before merging, presenting, or handing over NetWatch.
 
 ## Repository and release
 
-- [ ] README shows NetWatch v1 and the correct startup command.
-- [ ] Changelog contains the v1.0.0 release.
+- [ ] README shows NetWatch v1.1 and the correct startup command.
+- [ ] Changelog contains the v1.1.0 release.
 - [ ] Architecture, deployment, and security documentation match the current code.
 - [ ] `.env`, database files, logs, and reports are ignored by Git.
 - [ ] No real API key or internal network evidence is committed.
@@ -38,10 +38,16 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Port Audit displays service status, response time, priority, and recommendation.
 - [ ] Port Audit distinguishes open, closed, and filtered/unreachable states.
 - [ ] Inventory displays saved assets and exposure information.
+- [ ] A first network scan records newly observed assets.
+- [ ] A later missing reply records `Not observed` without changing the last confirmed sighting.
+- [ ] A device seen again after an absence records a Returned event.
+- [ ] Repeated missing results do not create duplicate transition events.
+- [ ] Recent asset changes appear on Overview and Inventory.
 - [ ] History displays recent scan runs.
 - [ ] Risk Advisor rebuilds from saved evidence.
 - [ ] Markdown report downloads correctly.
 - [ ] HTML report downloads and opens correctly.
+- [ ] Both report formats include recent asset changes.
 
 ## Safety and security
 

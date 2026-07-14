@@ -76,9 +76,9 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1</span>
+            <span class="pill">New · NetWatch v1.1</span>
             <h3>Turn local network data into confident decisions.</h3>
-            <p>Discover approved hosts, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
+            <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
               <button class="button primary" data-go="network" type="button">Start a network scan</button>
               <button class="button ghost" data-go="inventory" type="button">View inventory</button>
@@ -110,6 +110,11 @@
             <div id="overview-advisor" class="summary-card skeleton-block"></div>
           </article>
         </div>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div><button class="link-button" data-go="inventory">View inventory →</button></div>
+          <div id="overview-changes" class="table-wrap"></div>
+        </article>
       </section>
 
       <section id="view-network" class="view">
@@ -125,6 +130,7 @@
           </form>
           <article class="panel result-panel">
             <div class="panel-head"><div><p class="eyebrow">Discovery results</p><h3 id="network-result-title">No scan yet</h3></div><span id="network-count" class="count-badge">0 hosts</span></div>
+            <div id="network-changes" class="mini-metrics"></div>
             <div id="network-results" class="table-wrap empty-state">Run an authorized scan to populate this table.</div>
           </article>
         </div>
@@ -172,6 +178,10 @@
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div><button id="inventory-refresh" class="button ghost">Refresh inventory</button></div>
           <div id="inventory-results" class="table-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div></div>
+          <div id="changes-results" class="table-wrap"></div>
         </article>
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">Audit trail</p><h3>Recent history</h3></div></div>

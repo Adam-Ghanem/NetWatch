@@ -1,8 +1,8 @@
-# NetWatch v1 Demo Script
+# NetWatch v1.1 Demo Script
 
 ## 1. Introduction
 
-"NetWatch is a local-first defensive network visibility platform. It helps an authorized operator discover local hosts, review common service exposure, maintain an asset inventory, generate local guidance, and export reports."
+"NetWatch is a local-first defensive network visibility platform. It helps an authorized operator discover local hosts, track meaningful changes between scans, review common service exposure, maintain an asset inventory, generate local guidance, and export reports."
 
 ## 2. Explain the safety boundary
 
@@ -23,6 +23,7 @@ Explain:
 - Observed open-service count
 - Assets with non-zero exposure scores
 - Recent checks
+- Recent new, returned, and not-observed asset events
 - Compact Risk Advisor summary
 
 ## 5. Network scan
@@ -32,6 +33,8 @@ Explain:
 3. Check the authorization confirmation.
 4. Start the scan.
 5. Explain that ICMP filtering may hide active hosts.
+6. Point out the snapshot metrics for observed, new, returned, and not-observed assets.
+7. Explain that `Not observed` is cautious wording, not a confirmed offline state.
 
 ## 6. Host check
 
@@ -57,6 +60,7 @@ Open **Inventory** and explain:
 - Saved open ports
 - Exposure score and priority
 - Recent scan audit trail
+- Normalized change history and the evidence recorded for each event
 
 ## 9. Risk Advisor
 
@@ -78,7 +82,7 @@ Explain that reports can contain sensitive internal network information and must
 
 ## 11. Technical architecture
 
-"The dashboard and API are served by one FastAPI process. SQLite stores local inventory and scan history. Docker runs as a non-root user and publishes the application only on localhost by default."
+"The dashboard and API are served by one FastAPI process. SQLite stores local inventory, normalized scan observations, change events, and scan history. Docker runs as a non-root user and publishes the application only on localhost by default."
 
 ## 12. Close
 

@@ -85,7 +85,8 @@ function text(value) {
 
 function statusClass(value) {
   const normalized = String(value || '').toLowerCase();
-  if (normalized.includes('filtered')) return 'filtered';
+  if (normalized.includes('filtered') || normalized.includes('not observed')) return 'filtered';
+  if (normalized.includes('new asset') || normalized.includes('returned')) return 'online';
   if (normalized.includes('open')) return 'open';
   if (normalized.includes('online')) return 'online';
   if (normalized.includes('complete')) return 'completed';
@@ -213,9 +214,10 @@ async function loadOverview() {
   const advisorBox = $('#overview-advisor');
   advisorBox.classList.add('skeleton-block');
   try {
-    const [inventoryPayload, historyPayload, advice] = await Promise.all([
+    const [inventoryPayload, historyPayload, changesPayload, advice] = await Promise.all([
       apiJson('/api/inventory'),
       apiJson('/api/history?limit=8'),
+      apiJson('/api/changes?limit=8'),
       apiJson('/api/advisor'),
     ]);
     const assets = inventoryPayload.assets || [];
@@ -235,6 +237,13 @@ async function loadOverview() {
       { key: 'status', label: 'Status', chip: true },
     ], 'No checks recorded yet.');
 
+    renderTable($('#overview-changes'), changesPayload.items || [], [
+      { key: 'created_at', label: 'Time' },
+      { key: 'ip_address', label: 'IP address' },
+      { key: 'event_label', label: 'Change', chip: true },
+      { key: 'details', label: 'Evidence' },
+    ], 'No changes recorded yet. Run a network scan to establish a baseline.');
+
     advisorBox.replaceChildren();
     advisorBox.classList.remove('skeleton-block');
     const heading = document.createElement('strong');
@@ -251,9 +260,10 @@ async function loadOverview() {
 }
 
 async function loadInventory() {
-  const [inventoryPayload, historyPayload] = await Promise.all([
+  const [inventoryPayload, historyPayload, changesPayload] = await Promise.all([
     apiJson('/api/inventory'),
     apiJson('/api/history?limit=50'),
+    apiJson('/api/changes?limit=50'),
   ]);
   renderTable($('#inventory-results'), inventoryPayload.assets || [], [
     { key: 'ip_address', label: 'IP address' },
@@ -263,6 +273,12 @@ async function loadInventory() {
     { key: 'exposure_score', label: 'Score' },
     { key: 'exposure_level', label: 'Priority', chip: true },
   ], 'Inventory is empty. Run a network scan or port audit.');
+  renderTable($('#changes-results'), changesPayload.items || [], [
+    { key: 'created_at', label: 'Time' },
+    { key: 'ip_address', label: 'IP address' },
+    { key: 'event_label', label: 'Change', chip: true },
+    { key: 'details', label: 'Evidence' },
+  ], 'No changes recorded yet. Run a network scan to establish a baseline.');
   renderTable($('#history-results'), historyPayload.items || [], [
     { key: 'created_at', label: 'Time' },
     { key: 'scan_type', label: 'Type' },
@@ -395,6 +411,13 @@ $('#network-form').addEventListener('submit', async (event) => {
     });
     $('#network-result-title').textContent = payload.target;
     $('#network-count').textContent = `${payload.online_hosts} host${payload.online_hosts === 1 ? '' : 's'}`;
+    const changes = payload.changes || {};
+    renderMiniMetrics($('#network-changes'), [
+      { label: 'Observed', value: (changes.observed_assets || []).length, note: 'Latest snapshot' },
+      { label: 'New', value: (changes.new_assets || []).length, note: 'First observed' },
+      { label: 'Returned', value: (changes.returned_assets || []).length, note: 'Observed again' },
+      { label: 'Not observed', value: (changes.not_observed_assets || []).length, note: 'Verify manually' },
+    ]);
     renderTable($('#network-results'), payload.hosts || [], [
       { key: 'IP Address', label: 'IP address' },
       { key: 'Status', label: 'Status', chip: true },

@@ -40,7 +40,22 @@ def _dataframe_to_markdown(df: pd.DataFrame) -> str:
     return "\n".join([header, divider, *rows])
 
 
-def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
+def _event_view(changes_df: pd.DataFrame | None) -> pd.DataFrame:
+    if changes_df is None or changes_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in ("created_at", "ip_address", "event_label", "details")
+        if column in changes_df.columns
+    ]
+    return changes_df[columns] if columns else pd.DataFrame()
+
+
+def build_markdown_report(
+    hosts_df: pd.DataFrame,
+    ports_df: pd.DataFrame,
+    changes_df: pd.DataFrame | None = None,
+) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
         summarize_exposure(ports_df.to_dict("records"))
@@ -48,6 +63,7 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
         else summarize_exposure([])
     )
 
+    events = _event_view(changes_df)
     lines = [
         "# NetWatch Local Network Report",
         "",
@@ -55,7 +71,8 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
         "",
         "## Summary",
         "",
-        f"- Online hosts found: **{len(hosts_df) if not hosts_df.empty else 0}**",
+        f"- Saved assets: **{len(hosts_df) if not hosts_df.empty else 0}**",
+        f"- Recent asset changes: **{len(events)}**",
         f"- Ports checked: **{exposure.checked}**",
         f"- Open ports: **{exposure.open_ports}**",
         f"- High risk findings: **{exposure.high}**",
@@ -66,7 +83,7 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
     ]
 
     if not hosts_df.empty:
-        lines.extend(["## Online hosts", "", _dataframe_to_markdown(hosts_df), ""])
+        lines.extend(["## Asset inventory", "", _dataframe_to_markdown(hosts_df), ""])
     if not ports_df.empty:
         open_ports = (
             ports_df[ports_df["Status"] == "Open"]
@@ -89,6 +106,8 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
                         "",
                     ]
                 )
+    if not events.empty:
+        lines.extend(["## Recent asset changes", "", _dataframe_to_markdown(events), ""])
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -104,7 +123,11 @@ def _html_table(df: pd.DataFrame) -> str:
     return f"<table><thead><tr>{headers}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
 
 
-def build_html_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
+def build_html_report(
+    hosts_df: pd.DataFrame,
+    ports_df: pd.DataFrame,
+    changes_df: pd.DataFrame | None = None,
+) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
         summarize_exposure(ports_df.to_dict("records"))
@@ -116,6 +139,7 @@ def build_html_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
         if not ports_df.empty
         else pd.DataFrame()
     )
+    events = _event_view(changes_df)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -143,9 +167,10 @@ th {{ color:#7dd3fc; background:#111827; }}
 <div class="card"><div class="label">Score</div><div class="value">{exposure.score}</div></div>
 <div class="card"><div class="label">Level</div><div class="value">{escape(exposure.level)}</div></div>
 </section>
-<h2>Online hosts</h2>{_html_table(hosts_df)}
+<h2>Asset inventory</h2>{_html_table(hosts_df)}
 <h2>Port assessment</h2>{_html_table(ports_df)}
 <h2>Top recommendations</h2>{_html_table(recommendations)}
+<h2>Recent asset changes</h2>{_html_table(events)}
 </main>
 </body>
 </html>"""
