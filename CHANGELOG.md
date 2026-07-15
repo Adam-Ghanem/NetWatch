@@ -2,6 +2,9 @@
 
 ## v1.6.0
 
+- Redesigned the primary dashboard as a dark liquid-glass SOC command center with a persistent sidebar, compact mobile navigation, official NetWatch identity, focused scan/inventory quick actions, a data-backed seven-day activity chart, exposure distribution, and highest-asset risk gauge.
+- Added a keyboard-accessible, role-aware command palette for fast module navigation and safe refresh actions, plus visible protected-data freshness status.
+- Replaced the full product screenshot gallery with consistent dark liquid-glass previews that use sample private-network data only.
 - Added optional company OIDC/JWT identity with strict HTTPS issuer/JWKS configuration, signature, audience, issuer, expiry, subject, authorized-party, algorithm, and key-header validation.
 - Added exact, non-overlapping OIDC group-to-Admin/Operator/Viewer mapping while preserving unique local role keys as an optional break-glass path.
 - Added automatic same-origin company-session detection in the dashboard so users behind an approved identity gateway do not enter shared or provider keys.

@@ -4,17 +4,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="NetWatch local network visibility and defensive review dashboard." />
-  <meta name="color-scheme" content="light" />
-  <title>NetWatch · Local Network Visibility</title>
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#080d16" />
+  <title>NetWatch · Enterprise Network Intelligence</title>
   <link rel="icon" href="/assets/netwatch-symbol.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <div id="command-palette" class="command-palette" hidden>
+    <section class="command-dialog" role="dialog" aria-modal="true" aria-labelledby="command-title">
+      <div class="command-search-row">
+        <span class="command-search-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+        </span>
+        <div>
+          <label id="command-title" for="command-input">NetWatch command center</label>
+          <input id="command-input" type="search" role="combobox" aria-controls="command-results" aria-autocomplete="list" aria-expanded="true" autocomplete="off" spellcheck="false" placeholder="Search modules and actions…" />
+        </div>
+        <button id="command-close" class="command-close" type="button" aria-label="Close command center">Esc</button>
+      </div>
+      <div id="command-results" class="command-results" role="listbox" aria-label="Available commands"></div>
+      <footer class="command-footer"><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>Enter</kbd> Open</span><span>Actions respect your current role</span></footer>
+    </section>
+  </div>
+
   <div id="connect-overlay" class="overlay">
     <form id="connect-form" class="connect-card">
-      <img src="/assets/netwatch-logo.svg" alt="NetWatch" width="180" height="128" />
+      <div class="connect-brand">
+        <span class="brand-logo-shell large"><img src="/assets/netwatch-symbol.svg" alt="" /></span>
+        <div><strong>NetWatch</strong><span>NetWatch v1.6 · Enterprise Network Intelligence</span></div>
+      </div>
       <p class="eyebrow">Secure company access</p>
       <h1>Connect to NetWatch</h1>
       <p class="muted">A configured company SSO session is detected automatically. Local and break-glass deployments can use an Admin, Operator, or Viewer key that stays only in this browser tab.</p>
@@ -35,23 +56,23 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <img src="/assets/netwatch-symbol.svg" alt="" width="42" height="41" />
+        <span class="brand-logo-shell"><img src="/assets/netwatch-symbol.svg" alt="" /></span>
         <div>
           <strong>NetWatch</strong>
-          <span>Network clarity, fast.</span>
+          <span>Enterprise Security</span>
         </div>
       </div>
 
       <nav id="nav" class="nav" aria-label="Main navigation">
-        <button class="nav-item active" data-view="overview"><span>◫</span> Overview</button>
-        <button class="nav-item" data-view="network"><span>⌁</span> Network scan</button>
-        <button class="nav-item" data-view="host"><span>◎</span> Host check</button>
-        <button class="nav-item" data-view="ports"><span>⇄</span> Port audit</button>
-        <button class="nav-item" data-view="inventory"><span>▦</span> Inventory</button>
-        <button class="nav-item" data-view="advisor"><span>✦</span> Risk advisor</button>
-        <button class="nav-item" data-view="audit"><span>≡</span> Audit log</button>
-        <button class="nav-item" data-view="operations"><span>◷</span> Operations</button>
-        <button class="nav-item" data-view="reports"><span>⇩</span> Reports</button>
+        <button class="nav-item active" data-view="overview"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></span><span class="nav-label">Overview</span></button>
+        <button class="nav-item" data-view="network"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 4v3M20 12h-3M12 20v-3M4 12h3"/></svg></span><span class="nav-label">Network scan</span></button>
+        <button class="nav-item" data-view="host"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="nav-label">Host check</span></button>
+        <button class="nav-item" data-view="ports"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M18 7l-3 3M17 17H6l3 3M6 17l3-3"/></svg></span><span class="nav-label">Port audit</span></button>
+        <button class="nav-item" data-view="inventory"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><span class="nav-label">Inventory</span></button>
+        <button class="nav-item" data-view="advisor"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span><span class="nav-label">Risk advisor</span></button>
+        <button class="nav-item" data-view="audit"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9"/><path d="M9 3H4a1 1 0 0 0-1 1v5h6zM9 12h8M9 16h8"/></svg></span><span class="nav-label">Audit log</span></button>
+        <button class="nav-item" data-view="operations"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg></span><span class="nav-label">Operations</span></button>
+        <button class="nav-item" data-view="reports"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></span><span class="nav-label">Reports</span></button>
       </nav>
 
       <div class="sidebar-foot">
@@ -65,11 +86,17 @@
 
     <main class="main">
       <header class="topbar">
-        <div>
+        <div class="page-heading">
           <p class="eyebrow">Authorized local networks only</p>
           <h2 id="page-title">Overview</h2>
         </div>
+        <button id="command-trigger" class="command-trigger" type="button" aria-haspopup="dialog" aria-controls="command-palette" aria-expanded="false">
+          <span class="command-trigger-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></span>
+          <span>Search modules and actions</span>
+          <kbd>Ctrl K</kbd>
+        </button>
         <div class="top-actions">
+          <span id="data-freshness" class="freshness-chip waiting" title="No protected data loaded yet"><i aria-hidden="true"></i><span>Waiting for data</span></span>
           <span id="session-role" class="role-badge">Disconnected</span>
           <button id="refresh" class="button ghost" type="button">Refresh</button>
           <span id="clock" class="clock"></span>
@@ -77,47 +104,93 @@
       </header>
 
       <section id="view-overview" class="view active">
-        <div class="hero-panel">
+        <div class="soc-toolbar">
           <div>
-            <span class="pill">New · NetWatch v1.6 Enterprise</span>
-            <h3>Turn local network data into confident decisions.</h3>
-            <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
-            <div class="hero-actions">
-              <button class="button primary" data-go="network" data-scan-control type="button">Start a network scan</button>
-              <button class="button ghost" data-go="inventory" type="button">View inventory</button>
+            <p class="eyebrow">Security operations</p>
+            <h3>Network risk overview</h3>
+            <p>Live evidence from approved private network scopes.</p>
+          </div>
+          <div class="scan-actions" role="group" aria-label="Overview quick actions">
+            <button class="button primary scan-action scan-action-primary" data-go="network" data-scan-control type="button">
+              <span class="scan-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 4v3M20 12h-3M12 20v-3M4 12h3"/></svg>
+              </span>
+              <span class="scan-action-copy"><strong>Start network scan</strong><small>Discover authorized assets</small></span>
+              <span class="scan-action-arrow" aria-hidden="true">&#8599;</span>
+            </button>
+            <button class="button ghost scan-action scan-action-secondary" data-go="inventory" type="button">
+              <span class="scan-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg>
+              </span>
+              <span class="scan-action-copy"><strong>Asset inventory</strong><small>Review monitored devices</small></span>
+              <span class="scan-action-arrow" aria-hidden="true">&#8594;</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="soc-top-grid">
+          <article class="panel posture-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Current posture</p><h3>Monitored environment</h3></div>
+              <span class="status-chip online">Live evidence</span>
             </div>
-          </div>
-          <div class="hero-signal" aria-hidden="true">
-            <div class="radar"><i></i><i></i><i></i><b></b></div>
-          </div>
+            <div class="metric-grid">
+              <article class="metric violet"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><strong id="metric-assets">—</strong><span>Saved assets</span><small>Inventory records</small></article>
+              <article class="metric blue"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M18 7l-3 3M17 17H6l3 3M6 17l3-3"/></svg></span><strong id="metric-open">—</strong><span>Open services</span><small>Latest audits</small></article>
+              <article class="metric pink"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4z"/><path d="M12 9v5M12 17h.01"/></svg></span><strong id="metric-risk">—</strong><span>Priority assets</span><small>Require review</small></article>
+              <article class="metric cyan"><span class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><strong id="metric-runs">—</strong><span>Recent checks</span><small>Last 7 days</small></article>
+            </div>
+          </article>
+
+          <article class="panel risk-score-panel">
+            <div class="panel-head"><div><p class="eyebrow">Asset exposure</p><h3>Highest risk score</h3></div></div>
+            <div id="overview-risk-gauge" class="risk-gauge neutral">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="gauge-track" cx="60" cy="60" r="48" pathLength="100" />
+                <circle id="overview-risk-ring" class="gauge-value" cx="60" cy="60" r="48" pathLength="100" />
+              </svg>
+              <div><span>Score</span><strong id="overview-risk-score">—</strong></div>
+            </div>
+            <span id="overview-risk-level" class="risk-badge neutral">No exposure data</span>
+          </article>
         </div>
 
-        <div class="trust-strip">
-          <span>OIDC-ready</span><span>Integrity-signed audit</span><span>SLA triage</span><span>De-identified AI</span>
+        <div class="soc-analysis-grid">
+          <article class="panel trend-panel">
+            <div class="panel-head"><div><p class="eyebrow">Activity trend</p><h3>Checks over the last 7 days</h3></div><span class="count-badge">Daily</span></div>
+            <div class="trend-chart">
+              <svg viewBox="0 0 700 190" role="img" aria-label="Seven day check activity trend">
+                <g class="chart-grid"><line x1="34" y1="24" x2="680" y2="24"/><line x1="34" y1="72" x2="680" y2="72"/><line x1="34" y1="120" x2="680" y2="120"/><line x1="34" y1="168" x2="680" y2="168"/></g>
+                <path id="overview-trend-area" class="trend-area" d="M34 168 L680 168 Z" />
+                <polyline id="overview-trend-line" class="trend-line" points="34,168 142,168 250,168 357,168 465,168 573,168 680,168" />
+                <g id="overview-trend-points" class="trend-points"></g>
+              </svg>
+              <div id="overview-trend-labels" class="trend-labels"><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span><span>—</span></div>
+            </div>
+          </article>
+
+          <article class="panel exposure-panel">
+            <div class="panel-head"><div><p class="eyebrow">Asset distribution</p><h3>Exposure levels</h3></div></div>
+            <div class="exposure-bars">
+              <div class="exposure-row"><span>High</span><progress id="exposure-high-bar" max="100" value="0"></progress><strong id="exposure-high-count">0</strong></div>
+              <div class="exposure-row"><span>Medium</span><progress id="exposure-medium-bar" max="100" value="0"></progress><strong id="exposure-medium-count">0</strong></div>
+              <div class="exposure-row"><span>Low</span><progress id="exposure-low-bar" max="100" value="0"></progress><strong id="exposure-low-count">0</strong></div>
+              <div class="exposure-row"><span>Clean</span><progress id="exposure-clean-bar" max="100" value="0"></progress><strong id="exposure-clean-count">0</strong></div>
+            </div>
+            <div class="advisor-inline"><p class="eyebrow">Advisor summary</p><div id="overview-advisor" class="summary-card skeleton-block"></div><button class="link-button" data-go="advisor">Open full advisor →</button></div>
+          </article>
         </div>
 
-        <div class="metric-grid">
-          <article class="metric"><span>Saved assets</span><strong id="metric-assets">—</strong><small>Local SQLite inventory</small></article>
-          <article class="metric"><span>Open services</span><strong id="metric-open">—</strong><small>Across saved audits</small></article>
-          <article class="metric"><span>Priority assets</span><strong id="metric-risk">—</strong><small>Non-zero exposure score</small></article>
-          <article class="metric"><span>Recent checks</span><strong id="metric-runs">—</strong><small>Latest recorded activity</small></article>
-        </div>
-
-        <div class="split-grid">
+        <div class="soc-data-grid">
           <article class="panel">
             <div class="panel-head"><div><p class="eyebrow">Latest activity</p><h3>Recent checks</h3></div><button class="link-button" data-go="network">Run a scan →</button></div>
             <div id="overview-history" class="table-wrap"></div>
           </article>
-          <article class="panel accent-panel">
-            <div class="panel-head"><div><p class="eyebrow">Local analysis</p><h3>Advisor summary</h3></div><button class="link-button" data-go="advisor">Open advisor →</button></div>
-            <div id="overview-advisor" class="summary-card skeleton-block"></div>
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div><button class="link-button" data-go="inventory">Open inventory →</button></div>
+            <div id="overview-changes" class="table-wrap"></div>
           </article>
         </div>
-
-        <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div><button class="link-button" data-go="inventory">View inventory →</button></div>
-          <div id="overview-changes" class="table-wrap"></div>
-        </article>
       </section>
 
       <section id="view-network" class="view">
