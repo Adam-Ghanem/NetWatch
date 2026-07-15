@@ -40,6 +40,18 @@ jobs:
       - name: Audit application dependencies
         run: pip-audit -r requirements-dev.txt
 
+      - name: Verify secret boundaries
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "The local .env file must never be tracked."
+            exit 1
+          fi
+          if git grep -I -q -E 'sk-(proj-)?[A-Za-z0-9_-]{20,}'; then
+            echo "A secret-like OpenAI key pattern was found in tracked content."
+            exit 1
+          fi
+          rg -q '^\.env$' .dockerignore
+
       - name: Scan Python for high-confidence, high-severity findings
         run: bandit -q -r . -x ./.venv,./venv,./tests -lll -iii
 

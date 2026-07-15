@@ -9,6 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE = ROOT / ".env"
 MIN_API_KEY_LENGTH = 32
+MIN_AI_SAFETY_SECRET_LENGTH = 32
+MIN_AI_SUBJECT_LENGTH = 16
+AI_SAFETY_SECRET_PLACEHOLDER = "replace-with-an-independent-random-secret"
+AI_SUBJECT_PLACEHOLDER = "replace-with-an-opaque-random-subject"
 DEFAULTS = {
     "NETWATCH_OPERATOR_KEY": "",
     "NETWATCH_VIEWER_KEY": "",
@@ -21,6 +25,15 @@ DEFAULTS = {
     "NETWATCH_PORT_SCAN_WORKERS": "12",
     "NETWATCH_SCHEDULER_ENABLED": "false",
     "NETWATCH_SCHEDULER_POLL_SECONDS": "30",
+    "NETWATCH_AI_ENABLED": "true",
+    "NETWATCH_AI_MODEL": "gpt-5.6-luna",
+    "NETWATCH_AI_TIMEOUT_SECONDS": "25",
+    "NETWATCH_AI_MAX_OUTPUT_TOKENS": "1200",
+    "NETWATCH_AI_MAX_CONCURRENT_REQUESTS": "2",
+    "NETWATCH_AI_RATE_LIMIT_REQUESTS": "5",
+    "NETWATCH_AI_RATE_LIMIT_WINDOW_SECONDS": "600",
+    "NETWATCH_AI_DAILY_REQUEST_LIMIT": "50",
+    "NETWATCH_AI_CACHE_TTL_SECONDS": "900",
 }
 
 
@@ -40,7 +53,13 @@ def read_env() -> dict[str, str]:
 
 
 def write_env(values: dict[str, str]) -> None:
-    preferred = ["NETWATCH_API_KEY", *DEFAULTS.keys()]
+    preferred = [
+        "NETWATCH_API_KEY",
+        "OPENAI_API_KEY",
+        "NETWATCH_AI_SAFETY_SECRET",
+        "NETWATCH_AI_SUBJECT_ID",
+        *DEFAULTS.keys(),
+    ]
     extras = sorted(key for key in values if key not in preferred)
     ordered = [key for key in preferred if key in values] + extras
     lines = ["# Local NetWatch settings. Do not commit this file."]
@@ -58,6 +77,20 @@ def ensure_configuration() -> str:
     current_key = values.get("NETWATCH_API_KEY", "")
     if len(current_key) < MIN_API_KEY_LENGTH or current_key == "replace-with-a-long-random-secret":
         values["NETWATCH_API_KEY"] = secrets.token_urlsafe(32)
+
+    provider_key = values.get("OPENAI_API_KEY", "").strip()
+    safety_secret = values.get("NETWATCH_AI_SAFETY_SECRET", "").strip()
+    if (
+        len(safety_secret) < MIN_AI_SAFETY_SECRET_LENGTH
+        or safety_secret == AI_SAFETY_SECRET_PLACEHOLDER
+        or (provider_key and secrets.compare_digest(safety_secret, provider_key))
+    ):
+        values["NETWATCH_AI_SAFETY_SECRET"] = secrets.token_urlsafe(32)
+
+    subject_id = values.get("NETWATCH_AI_SUBJECT_ID", "").strip()
+    if len(subject_id) < MIN_AI_SUBJECT_LENGTH or subject_id == AI_SUBJECT_PLACEHOLDER:
+        values["NETWATCH_AI_SUBJECT_ID"] = secrets.token_urlsafe(18)
+
     for key, default in DEFAULTS.items():
         values.setdefault(key, default)
     write_env(values)
@@ -88,6 +121,8 @@ def main() -> int:
     print("The key is stored in .env and is required by the dashboard connection screen.")
     print("Optional Operator and Viewer keys can also be configured in .env.")
     print("Scheduled policy execution is opt-in with NETWATCH_SCHEDULER_ENABLED=true.")
+    print("AI safety identity is generated automatically and never shown to dashboard users.")
+    print("Server-side intelligence is available only when OPENAI_API_KEY is configured.")
     return 0
 
 

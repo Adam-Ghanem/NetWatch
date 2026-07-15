@@ -407,6 +407,17 @@ tbody tr:hover { background: #f8fbfa; }
 .action-list { margin: 0; padding-left: 20px; color: var(--muted); line-height: 1.65; }
 .action-list li { margin-bottom: 9px; padding-left: 5px; }
 .big-number { display: block; margin: 12px 0; color: var(--ink-strong); font-size: 3.8rem; letter-spacing: -0.08em; }
+.intelligence-panel { margin-top: 18px; border-color: #bfded8; background: linear-gradient(145deg, #ffffff, #edf9f6); }
+.intelligence-privacy { max-width: 980px; line-height: 1.7; }
+.intelligence-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.intelligence-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-height: 0; border: 0; background: transparent; }
+.intelligence-action { padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 255, 255, 0.82); }
+.intelligence-action-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.intelligence-action strong { color: var(--ink-strong); line-height: 1.4; }
+.intelligence-action p { margin: 12px 0; color: var(--muted); font-size: 0.78rem; line-height: 1.65; }
+.intelligence-action small { display: block; color: #597178; line-height: 1.55; }
+.intelligence-controls { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.intelligence-controls .form-status { margin: 0; text-align: right; }
 .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .report-card { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start; }
 .report-card .button { grid-column: 1 / -1; }
@@ -474,6 +485,7 @@ tbody tr:hover { background: #f8fbfa; }
   .split-grid, .content-grid.form-layout { grid-template-columns: 1fr; }
   .form-panel { position: static; }
   .advisor-grid { grid-template-columns: 1fr; }
+  .intelligence-actions { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -484,6 +496,9 @@ tbody tr:hover { background: #f8fbfa; }
   .nav-item { min-height: 38px; padding: 0 10px; font-size: 0.7rem; }
   .nav-item span { display: none; }
   .main { padding: 20px 13px 60px; }
+  .intelligence-grid, .intelligence-actions { grid-template-columns: 1fr; }
+  .intelligence-controls { align-items: stretch; flex-direction: column; }
+  .intelligence-controls .form-status { text-align: left; }
   .topbar { align-items: flex-end; margin-bottom: 20px; }
   .topbar h2 { font-size: 2rem; }
   .clock { display: none; }

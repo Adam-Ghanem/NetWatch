@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.5.0
+
+- Added optional server-side NetWatch Intelligence using the OpenAI Responses API with strict structured output and response storage disabled.
+- Added a de-identification gate that excludes IP addresses, CIDRs, hostnames, owners, departments, locations, notes, and raw event details before provider calls.
+- Added key-separated safety identifiers derived from an independent server secret and opaque deployment subject, fixed defensive instructions, no model tools, no arbitrary user prompts, and human-review-required output.
+- Added separate AI rate and concurrency limits, an atomic day-keyed provider-call budget independent of event retention, bounded response size and timeout, and SQLite-backed cache retention.
+- Refused every provider redirect before a follow-up request can carry the bearer credential, and mapped redirects to a safe error.
+- Added authenticated intelligence status and brief endpoints while preserving the deterministic local Risk Advisor as a no-provider fallback.
+- Added bounded `intelligence_events` metadata and cache storage without prompts, snapshots, API keys, or raw network evidence; upgraded SQLite to schema version 6.
+- Added role-aware NetWatch Intelligence dashboard controls and safe DOM rendering for structured observations, limitations, and actions.
+- Restricted dashboard API destinations to the page's own origin and removed the query-controlled API override so role keys cannot be redirected cross-origin.
+- Kept `OPENAI_API_KEY` server-side through ignored local environment files and runtime-only Compose injection; added CI checks for tracked `.env` files, Docker exclusion, and secret-like key patterns.
+- Added de-identification, structured-response, provider-failure, redirect, key-separation, concurrent-budget, cache-retention, role, endpoint, same-origin, and secret-boundary regression tests.
+- Updated architecture, deployment, handover, security, advisor, demo, and acceptance documentation for the v1.5 data boundary.
+
 ## v1.4.0
 
 - Consolidated repeated unresolved findings into one alert case with occurrence count and last-seen evidence.

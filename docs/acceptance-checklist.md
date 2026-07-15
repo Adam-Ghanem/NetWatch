@@ -1,11 +1,11 @@
-# NetWatch v1.4 Acceptance Checklist
+# NetWatch v1.5 Acceptance Checklist
 
 Use this checklist before merging, presenting, or handing over NetWatch.
 
 ## Repository and release
 
-- [ ] README shows NetWatch v1.4 and the correct startup command.
-- [ ] Changelog contains the v1.4.0 release.
+- [ ] README shows NetWatch v1.5 and the correct startup command.
+- [ ] Changelog contains the v1.5.0 release.
 - [ ] Architecture, deployment, and security documentation match the current code.
 - [ ] `.env`, database files, logs, and reports are ignored by Git.
 - [ ] No real API key or internal network evidence is committed.
@@ -57,7 +57,27 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.4 database migrates to schema version 5 without losing saved assets or alerts.
+- [ ] An existing pre-v1.5 database migrates to schema version 6 without losing saved assets or alerts.
+
+## NetWatch Intelligence
+
+- [ ] `/api/intelligence/status` and `/api/intelligence/brief` require a valid NetWatch role key.
+- [ ] End users can request a brief without entering or receiving `OPENAI_API_KEY`.
+- [ ] `OPENAI_API_KEY` is absent from tracked files, browser JavaScript, API responses, logs, reports, database rows, and the Docker image.
+- [ ] The launcher creates distinct `NETWATCH_AI_SAFETY_SECRET` and `NETWATCH_AI_SUBJECT_ID` values without printing them; Intelligence fails closed if either is missing or the safety secret equals `OPENAI_API_KEY`.
+- [ ] `.env` is ignored by Git and excluded by `.dockerignore`.
+- [ ] The provider snapshot contains no IP address, CIDR, hostname, owner, department, location, note, or raw event detail.
+- [ ] The request uses a fixed defensive instruction, no tools, no arbitrary user prompt, strict structured output, and response storage disabled.
+- [ ] Invalid, refused, timed-out, oversized, rate-limited, or unavailable provider responses fail closed with a safe error.
+- [ ] Provider redirects (301, 302, 303, 307, and 308) are refused without forwarding the bearer credential.
+- [ ] A provider failure leaves the deterministic local Risk Advisor and core monitoring usable.
+- [ ] Repeated requests for unchanged evidence use the bounded cache.
+- [ ] Only Admin can force a provider refresh; all authenticated roles can use a valid cached or normal brief.
+- [ ] Separate AI rate, concurrency, timeout, output, atomic daily-budget, and retention limits are enforced; concurrent requests cannot exceed the budget and event pruning cannot reset it.
+- [ ] Dashboard query parameters and cross-origin configuration cannot change the destination that receives `X-NetWatch-Key`.
+- [ ] Intelligence audit/metric records contain only bounded metadata and no high-cardinality target labels.
+- [ ] Provider project spend and rate limits are configured outside NetWatch before shared use.
+- [ ] A human validates recommendations against the original local evidence before action.
 
 ## Company operations
 
@@ -100,6 +120,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Docker runs as a non-root user.
 - [ ] Port `8000` is published only on localhost.
 - [ ] No exploitation, brute-force, credential, stealth, or evasion logic exists.
+- [ ] The model cannot choose targets, start scans, mutate cases, call tools, or execute recommendations.
 - [ ] Role keys are distinct, at least 32 characters, and not committed.
 - [ ] Scheduler is not enabled in a multi-worker or multi-instance deployment.
 - [ ] Monitoring metrics are collected only through an authenticated local connection.
@@ -114,6 +135,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] `pytest -q` passes.
 - [ ] Python CI passes on GitHub.
 - [ ] Security CI passes on GitHub.
+- [ ] De-identification and secret-boundary regression tests pass.
 
 ## Presentation and handover
 

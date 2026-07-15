@@ -45,9 +45,11 @@ export_utils.py
 
 HTML reports escape table values before export. Markdown report cells escape table delimiters, backslashes, and line breaks.
 
-## Risk Advisor privacy
+## Advisor and intelligence privacy
 
 The Risk Advisor is a local rule-based module. It uses the current dashboard data and generated inventory files on the same machine.
+
+Optional NetWatch Intelligence is server-side only. Before a provider call, NetWatch creates a bounded aggregate snapshot and excludes private addresses, CIDRs, hostnames, asset ownership/location fields, notes, and raw event details. The provider key is read from runtime environment only, and `.env` is excluded from both Git and Docker build context. Requests use storage-disabled structured output, no tools, a key-separated opaque safety identifier, a no-redirect provider transport, bounded time/output, separate rate/concurrency limits, an atomic day-keyed budget independent of cache retention, and a local cache. The dashboard attaches role keys only to same-origin API requests. Provider failure does not disable the local advisor or core monitoring.
 
 ## Local data
 
@@ -63,10 +65,10 @@ These files can contain internal IP information and should not be shared publicl
 
 Asset/company context, approved policies, maintenance windows, operational cases, and operations audit records are stored in SQLite. Audit, case, policy, and maintenance retention are bounded, and raw role keys are never written to audit details. Unresolved repeats are deduplicated, and closure requires a resolution note.
 
-The authenticated metrics endpoint exports only fixed numeric counters. It does not use target, IP, hostname, owner, or free-text labels.
+The authenticated metrics endpoint exports only fixed numeric counters. It does not use target, IP, hostname, owner, or free-text labels. Intelligence metrics are counts only and contain no model prompts, responses, safety identifiers, user identifiers, or targets.
 
 Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. Snapshots are sensitive and must be stored in an approved encrypted location. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database.
 
 ## Remaining production requirements
 
-For a remote or multi-user production deployment, add SSO/OIDC with individual identities, fine-grained authorization, managed secrets, centralized tamper-resistant logging, TLS, an external scheduler with leader election, automated encrypted off-host backups with restore drills, monitoring, report approval workflow, and a formal retention policy.
+For a remote or multi-user production deployment, add SSO/OIDC with individual identities, fine-grained authorization, managed secrets, provider project spend/rate controls, centralized tamper-resistant logging, TLS, an external scheduler with leader election, automated encrypted off-host backups with restore drills, monitoring, report approval workflow, AI/privacy review, and a formal retention policy.

@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.4 is a local-first defensive network visibility application. The professional dashboard, role-protected API, optional bounded scheduler, maintenance controls, case workflow, and authenticated metrics are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.5 is a local-first defensive network visibility application. The professional dashboard, role-protected API, optional bounded scheduler, maintenance controls, case workflow, authenticated metrics, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -24,6 +24,8 @@ FastAPI application (`backend/main.py`)
           +--> Exposure analysis
           |      - `risk_engine.py`
           |      - `advisory_engine.py`
+          |      - de-identification (`ai_advisor.py`)
+          |      - optional structured provider request
           |
           +--> Company operations
           |      - approved scan policies
@@ -67,6 +69,7 @@ It provides:
 - Authenticated Prometheus text-format operational counters without target labels
 - Admin-only SQLite snapshot download
 - Local Risk Advisor
+- Optional NetWatch Intelligence with de-identified structured briefs and local fallback
 - Markdown and HTML report downloads
 
 ### Legacy interface
@@ -91,6 +94,8 @@ It is not the default deployment path.
 - `port_scanner.py`: bounded concurrent TCP service review.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
+- `ai_advisor.py`: de-identified snapshot construction, fixed defensive provider contract, strict response validation, key-separated safety identifiers, redirect refusal, and safe upstream error mapping.
+- `intelligence_store.py`: bounded provider-call metadata, atomic day-keyed budget evidence, and structured brief cache without prompts, keys, or raw network evidence.
 - `inventory_store.py`: SQLite inventory, company context, scan snapshots, transition detection, audit records, and scan-run persistence.
 - `operations_store.py`: approved scan policies, maintenance-aware atomic due-policy claims, alert-case lifecycle, SLA/retention counters, monitoring snapshots, and SQLite snapshot creation.
 - `report_builder.py`: Markdown and standalone HTML reports.
@@ -109,11 +114,11 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 5 with company asset context, operational audit records, policies, maintenance windows, and alert cases
-- Bounded change-event, observation, audit, alert, policy, and maintenance-window retention
+- Schema version 6 with company asset context, operational audit records, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
+- Bounded change-event, observation, audit, alert, policy, maintenance-window, and intelligence-event retention
 - Named Docker volumes in the default Compose deployment
 
-The eight operational tables have separate responsibilities:
+The nine operational tables have separate responsibilities:
 
 - `scan_runs` records each check and its summary.
 - `assets` stores current inventory state, last confirmed sighting, owner, department, location, criticality, and notes.
@@ -123,6 +128,7 @@ The eight operational tables have separate responsibilities:
 - `scan_policies` records immutable approved private CIDRs, bounded intervals, enablement, and last/next execution state.
 - `operation_alerts` records transition-derived cases, severity, repeated occurrence evidence, SLA due time, assignee, acknowledgement, and resolution evidence.
 - `maintenance_windows` records global or policy-specific UTC execution pauses and their change reason.
+- `intelligence_events` records bounded call status, safe error codes, token counts, model metadata, expiry, and de-identified structured output. It does not store prompts, snapshots, keys, or raw scan evidence.
 
 A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery.
 
@@ -146,6 +152,13 @@ NetWatch is intended for approved local environments and applies these controls:
 - Active maintenance windows are checked by scheduler claims and manual policy runs
 - Repeated unresolved findings are deduplicated; a resolution note is required for closure
 - Authenticated metrics expose bounded counters only, without private target labels
+- Provider keys are server-only runtime secrets and never enter browser code, API payloads, Git history, Docker images, logs, reports, or SQLite records
+- Intelligence requests contain bounded aggregates and exclude IPs, CIDRs, hostnames, ownership/location fields, notes, and raw details
+- The provider receives no tools or arbitrary user prompt; output must match a strict schema and remains advisory
+- Intelligence has a separate rate limiter, concurrency semaphore, atomic day-keyed request budget, timeout, output-size limit, and cache
+- Provider authentication, internal client rate identity, and the external opaque safety identifier use separate credentials and identity domains
+- Provider redirects are refused, and the dashboard sends role keys only to its own origin
+- Core monitoring and the deterministic local advisor continue when the provider is disabled or unavailable
 - Scheduled and manual policy scans share the normal target validation and scan semaphore
 - Restricted CORS origins
 - Content Security Policy and defensive HTTP headers
@@ -162,4 +175,4 @@ The default Docker Compose service is intentionally single-process and local-onl
 127.0.0.1:8000 -> FastAPI + dashboard + API
 ```
 
-This keeps setup simple and avoids cross-origin configuration. The scheduler is intentionally in-process and supports this single-instance model only. Role keys provide coarse separation for a trusted internal pilot, not individual identity. For shared or remote deployment, add an external job platform with leader election, a reviewed reverse proxy, TLS, organization authentication, network restrictions, centralized logging, encrypted off-host backups with tested restoration, and stronger operational monitoring.
+This keeps setup simple and avoids cross-origin configuration. The scheduler is intentionally in-process and supports this single-instance model only. Role keys provide coarse separation for a trusted internal pilot, not individual identity. The application-level AI budget is not a billing guarantee and the local `.env` is not a production secret manager. For shared or remote deployment, add an external job platform with leader election, a reviewed reverse proxy, TLS, organization authentication, network restrictions, centralized logging, managed secrets, provider project spend controls, encrypted off-host backups with tested restoration, and stronger operational monitoring.

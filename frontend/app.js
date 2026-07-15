@@ -1,5 +1,17 @@
-const queryApi = new URLSearchParams(window.location.search).get('api');
-const API_BASE = window.NETWATCH_API_BASE || queryApi || window.location.origin;
+function sameOriginApiBase(value) {
+  if (!value) return window.location.origin;
+  try {
+    const candidate = new URL(String(value), window.location.origin);
+    if (candidate.origin !== window.location.origin) return window.location.origin;
+    candidate.search = '';
+    candidate.hash = '';
+    return candidate.href.replace(/\/+$/, '');
+  } catch (_) {
+    return window.location.origin;
+  }
+}
+
+const API_BASE = sameOriginApiBase(window.NETWATCH_API_BASE);
 
 const state = {
   key: sessionStorage.getItem('netwatchApiKey') || '',
@@ -13,11 +25,13 @@ const state = {
     manage_alerts: false,
     manage_operations: false,
     backup: false,
+    use_intelligence: false,
   },
   assets: [],
   policies: [],
   operationAlerts: [],
   selectedAlertId: null,
+  intelligenceAvailable: false,
 };
 
 const titles = {
@@ -116,6 +130,9 @@ function statusClass(value) {
   if (normalized.includes('maintenance') || normalized.includes('paused')) return 'medium';
   if (normalized.includes('overdue')) return 'high';
   if (normalized.includes('deferred')) return 'medium';
+  if (normalized.includes('immediate')) return 'high';
+  if (normalized === 'next') return 'medium';
+  if (normalized.includes('monitor')) return 'completed';
   if (normalized.includes('open')) return 'open';
   if (normalized.includes('online')) return 'online';
   if (normalized.includes('complete')) return 'completed';
@@ -240,7 +257,9 @@ function setConnected(connected) {
       manage_alerts: false,
       manage_operations: false,
       backup: false,
+      use_intelligence: false,
     };
+    state.intelligenceAvailable = false;
     applyRoleAccess();
   }
 }
@@ -292,6 +311,10 @@ function applyRoleAccess() {
   $('#policy-run-authorized').disabled = !canScan;
   $('#database-backup').disabled = !Boolean(state.capabilities.backup);
   $('#metrics-download').disabled = !Boolean(state.capabilities.read);
+  $('#intelligence-generate').disabled = !Boolean(
+    state.capabilities.use_intelligence && state.intelligenceAvailable,
+  );
+  $('#intelligence-refresh').disabled = !(state.role === 'admin' && state.intelligenceAvailable);
 }
 
 async function connectWithKey(key) {
@@ -672,8 +695,80 @@ async function loadOperations() {
   applyRoleAccess();
 }
 
+function renderIntelligenceList(container, items) {
+  container.replaceChildren();
+  (items || []).forEach((item) => {
+    const li = document.createElement('li');
+    li.textContent = item;
+    container.appendChild(li);
+  });
+}
+
+function renderIntelligenceBrief(payload) {
+  const brief = payload.brief || {};
+  applyRiskBadge($('#intelligence-state'), brief.risk_level || 'Unknown');
+  $('#intelligence-summary').textContent = brief.executive_summary || 'No summary was returned.';
+  renderIntelligenceList($('#intelligence-observations'), brief.key_observations);
+  renderIntelligenceList($('#intelligence-limitations'), brief.limitations);
+
+  const actions = $('#intelligence-actions');
+  actions.replaceChildren();
+  actions.classList.remove('empty-state');
+  (brief.recommended_actions || []).forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'intelligence-action';
+    const head = document.createElement('div');
+    head.className = 'intelligence-action-head';
+    const title = document.createElement('strong');
+    title.textContent = item.title;
+    const priority = document.createElement('span');
+    priority.className = `status-chip ${statusClass(item.priority)}`;
+    priority.textContent = item.priority;
+    head.append(title, priority);
+    const rationale = document.createElement('p');
+    rationale.textContent = item.rationale;
+    const validation = document.createElement('small');
+    validation.textContent = `Validate: ${item.validation}`;
+    card.append(head, rationale, validation);
+    actions.appendChild(card);
+  });
+  if (!actions.children.length) {
+    actions.classList.add('empty-state');
+    actions.textContent = 'No actions were returned.';
+  }
+  setFormStatus(
+    'intelligence-status',
+    `${payload.cached ? 'Cached brief' : 'New brief'} · ${localTimestamp(payload.generated_at)} · Human review required.`,
+    'success',
+  );
+}
+
+async function loadIntelligenceStatus() {
+  const status = await apiJson('/api/intelligence/status');
+  state.intelligenceAvailable = Boolean(status.available);
+  const badge = $('#intelligence-state');
+  badge.textContent = status.available ? 'Ready' : 'Local fallback';
+  badge.className = `risk-badge ${status.available ? 'low' : 'medium'}`;
+  renderMiniMetrics($('#intelligence-meta'), [
+    { label: 'Provider', value: status.available ? 'Server-side' : 'Disabled', note: 'No browser key' },
+    { label: 'Model', value: status.model || '—', note: 'Configurable by Admin' },
+    { label: 'Daily remaining', value: status.daily_requests_remaining, note: `Limit ${status.daily_request_limit}` },
+    { label: 'Cache', value: `${Math.round(status.cache_ttl_seconds / 60)} min`, note: 'Cost protection' },
+  ]);
+  setFormStatus(
+    'intelligence-status',
+    status.available
+      ? 'Ready. Only aggregated, de-identified evidence will leave NetWatch.'
+      : 'Provider unavailable. The deterministic local advisor remains active.',
+  );
+  applyRoleAccess();
+}
+
 async function loadAdvisor() {
-  const advice = await apiJson('/api/advisor');
+  const [advice] = await Promise.all([
+    apiJson('/api/advisor'),
+    loadIntelligenceStatus(),
+  ]);
   applyRiskBadge($('#advisor-level'), advice.risk_level);
   $('#advisor-summary').textContent = advice.summary;
   $('#advisor-confidence').textContent = advice.confidence;
@@ -692,6 +787,25 @@ async function loadAdvisor() {
     li.textContent = item;
     steps.appendChild(li);
   });
+}
+
+async function generateIntelligenceBrief(refresh, button) {
+  setBusy(button, true, refresh ? 'Refreshing…' : 'Analyzing…');
+  setFormStatus('intelligence-status', 'Building a de-identified operational snapshot…');
+  try {
+    const payload = await apiJson('/api/intelligence/brief', {
+      method: 'POST',
+      body: JSON.stringify({ refresh }),
+    });
+    await loadIntelligenceStatus();
+    renderIntelligenceBrief(payload);
+    showToast(payload.cached ? 'Cached intelligence brief loaded.' : 'Secure intelligence brief generated.');
+  } catch (error) {
+    setFormStatus('intelligence-status', `${error.message} Local advisor is still available.`, 'error');
+  } finally {
+    setBusy(button, false);
+    applyRoleAccess();
+  }
 }
 
 async function refreshCurrentView() {
@@ -1150,6 +1264,14 @@ $('#advisor-refresh').addEventListener('click', async (event) => {
   finally { setBusy(event.currentTarget, false); }
 });
 
+$('#intelligence-generate').addEventListener('click', (event) => {
+  generateIntelligenceBrief(false, event.currentTarget);
+});
+
+$('#intelligence-refresh').addEventListener('click', (event) => {
+  generateIntelligenceBrief(true, event.currentTarget);
+});
+
 $$('[data-report]').forEach((button) => button.addEventListener('click', () => downloadReport(button.dataset.report, button)));
 
 function updateClock() {
@@ -1191,5 +1313,5 @@ async function init() {
   setConnected(false);
 }
 
-window.NetWatchApi = { API_BASE, apiFetch, setApiKey };
+window.NetWatchApi = { API_BASE, apiFetch, sameOriginApiBase, setApiKey };
 init();

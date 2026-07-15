@@ -1,4 +1,4 @@
-# NetWatch v1.4 Company Handover
+# NetWatch v1.5 Company Handover
 
 ## Product summary
 
@@ -12,7 +12,7 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1.4 provides:
+NetWatch v1.5 provides:
 
 - Protected local dashboard with session-only Admin, Operator, and Viewer access
 - Approved private/local IPv4 validation
@@ -31,6 +31,7 @@ NetWatch v1.4 provides:
 - Authenticated label-free operational metrics for a local collector
 - Admin-only consistent SQLite snapshot download
 - Deterministic local Risk Advisor
+- Optional server-side NetWatch Intelligence using aggregated, de-identified evidence, strict structured output, bounded usage, and local fallback
 - Markdown and standalone HTML reports
 - Docker deployment and one-command launcher
 - Automated API, frontend, security, and container validation
@@ -75,8 +76,9 @@ The launcher prints the dashboard URL and generated local API key.
 13. Download a consistent database snapshot and explain protected storage and staged restoration.
 14. Open Audit Log and explain role/action/target accountability without stored keys.
 15. Open Risk Advisor to show business-critical asset prioritization.
-16. Export the inventory CSV and download Markdown and HTML reports.
-17. Explain the role boundary, scan limits, localhost binding, single-process scheduler, and data handling.
+16. Open NetWatch Intelligence, explain the excluded fields, generate a structured brief, and confirm that the user never enters a provider key.
+17. Export the inventory CSV and download Markdown and HTML reports.
+18. Explain the role boundary, scan limits, localhost binding, single-process scheduler, provider budget, and data handling.
 
 ## Main files
 
@@ -91,6 +93,8 @@ The launcher prints the dashboard URL and generated local API key.
 - `port_scanner.py`: bounded common-service review.
 - `risk_engine.py`: exposure scoring.
 - `advisory_engine.py`: local evidence-based summary.
+- `ai_advisor.py`: de-identification, fixed defensive provider request, key-separated opaque safety identifier, redirect refusal, and structured response validation.
+- `intelligence_store.py`: bounded provider-call metadata, atomic day-keyed budget evidence, and expiring structured brief cache.
 - `inventory_store.py`: SQLite inventory, company context, changes, and operations audit persistence.
 - `operations_store.py`: approved policies, maintenance-aware scheduler claims, case/SLA workflow, metrics, and consistent SQLite snapshots.
 - `report_builder.py`: Markdown and HTML exports.
@@ -115,6 +119,7 @@ This information may include:
 - Operational cases, repeated-occurrence/SLA evidence, assignment, acknowledgement, and resolution notes
 - Maintenance windows and their change reasons
 - Internal recommendations
+- De-identified structured intelligence briefs and bounded provider-call metadata
 
 Treat database exports, screenshots, logs, and reports as internal information.
 
@@ -130,7 +135,8 @@ Treat database exports, screenshots, logs, and reports as internal information.
 - Rate and concurrency limits
 - Non-root container
 - Defensive browser security headers
-- No external advisory service or telemetry
+- Deterministic advisor stays local; optional intelligence sends only documented de-identified aggregates when requested
+- Provider key is backend-only and excluded from Git, Docker images, browser code, logs, reports, and SQLite
 - Scheduled execution disabled by default
 
 ## Company deployment requirements
@@ -142,6 +148,7 @@ Before use by multiple employees or on a remote server, add:
 - TLS and reviewed reverse proxy
 - Network allowlists or VPN-only access
 - Managed secret storage
+- Provider spend/rate controls and approved AI/data-processing policy
 - Centralized tamper-resistant audit logs
 - Retention and deletion policy
 - Automated encrypted off-host backups, restore drills, and migrations
@@ -159,3 +166,4 @@ Before use by multiple employees or on a remote server, add:
 - SSO/OIDC and individual RBAC for shared deployments
 - External scheduler/worker coordination for multi-instance deployment
 - Automated encrypted backup rotation and tested restoration
+- Representative intelligence evaluations, privacy review, and centralized cost monitoring
