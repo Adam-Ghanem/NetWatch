@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.0
+
+- Consolidated repeated unresolved findings into one alert case with occurrence count and last-seen evidence.
+- Added severity-based local SLA due times, overdue counters, assignee fields, acknowledgement, resolution notes, and reopen controls.
+- Required resolution evidence before an alert case can be closed.
+- Added bounded timezone-aware global and policy-specific maintenance windows with a 31-day maximum duration.
+- Paused scheduler claims and manual policy execution while applicable maintenance windows are active.
+- Added authenticated Prometheus text-format counters without target, IP, hostname, or other high-cardinality labels.
+- Added maintenance, SLA, case workflow, and monitoring controls to the responsive Operations dashboard.
+- Included case/SLA and maintenance evidence in Markdown and HTML reports.
+- Upgraded the SQLite schema to version 5 with an in-place alert-table migration that preserves existing records.
+- Added migration, deduplication, resolution, maintenance, RBAC, metrics, API, and report regression tests.
+
 ## v1.3.0
 
 - Added Admin-managed scan policies with immutable validated private CIDR scope, bounded 15-minute-to-7-day intervals, and a maximum of 50 saved policies.

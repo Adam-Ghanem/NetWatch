@@ -155,7 +155,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_id ON audit_log(id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
         create_operations_schema(conn)
-        conn.execute("PRAGMA user_version = 4")
+        conn.execute("PRAGMA user_version = 5")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:

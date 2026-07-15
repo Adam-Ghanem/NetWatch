@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, triage operational alerts, create consistent backups, and export evidence-backed reports.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, and generate evidence-backed reports.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.3
+## NetWatch v1.4
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -51,7 +51,7 @@ http://127.0.0.1:8000
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
-v1.3 adds a controlled operations layer for a trusted internal deployment. Admins can persist approved private CIDRs, optionally enable a single-process scheduler, Operators can run approved policies and acknowledge alerts, and Admins can download consistent SQLite snapshots. It is suitable for a local pilot or small internal team when deployed according to the security guidance. Its local role keys and in-process scheduler are intentionally simple and are not replacements for SSO, centralized identity, TLS, an external job platform, automated off-host backups, or a deployment review.
+v1.4 adds a maintenance-aware incident workflow for a trusted internal deployment. Repeated unresolved findings are consolidated into one alert case with occurrence count, assignee, severity-based due time, acknowledgement, and resolution evidence. Admins can schedule bounded global or policy-specific maintenance windows that pause automatic and manual policy execution, while authenticated label-free metrics support local monitoring. It remains suitable for a local pilot or small internal team when deployed according to the security guidance. Shared role keys and the in-process scheduler are not replacements for SSO, centralized identity, TLS, an external job platform, automated off-host backups, or a deployment review.
 
 ## Highlights
 
@@ -68,8 +68,10 @@ v1.3 adds a controlled operations layer for a trusted internal deployment. Admin
 - Bounded operations audit log for scans and asset-context changes
 - Approved scan policies with immutable private CIDR scope and 15-minute minimum intervals
 - Opt-in single-process scheduler using the existing scan concurrency limit
-- Bounded operational alert inbox for new, returned, and not-observed assets
-- Criticality-aware alert severity and Operator acknowledgement workflow
+- Deduplicated operational alert cases for new, returned, and not-observed assets
+- Criticality-aware severity, local SLA due times, assignment, acknowledgement, and evidence-backed resolution
+- Bounded global or policy-specific maintenance windows that pause policy execution
+- Authenticated Prometheus text-format operational counters without target labels
 - Admin-only consistent SQLite backup download
 - Exposure priority score and deterministic local Risk Advisor
 - Markdown and standalone HTML report downloads
@@ -190,11 +192,13 @@ Records successful network scans, host checks, port audits, and asset-context up
 
 ### Company operations
 
-The Operations view supports three controlled workflows:
+The Operations view supports five controlled workflows:
 
 - Admins save one policy per approved private CIDR, choose a bounded interval from 15 minutes to 7 days, and enable or disable scheduled execution.
 - Operators and Admins can run a saved policy after confirming current authorization. The same target validation, 256-host limit, rate boundary, and scan semaphore apply.
-- Viewer roles can review policies and alerts. Operators and Admins can acknowledge or reopen alerts. Admins can download a consistent SQLite snapshot.
+- Admins can document a bounded global or policy-specific maintenance window. Active windows pause both scheduled and manual policy runs.
+- Viewer roles can review policies, cases, SLA state, and maintenance windows. Operators and Admins can assign, acknowledge, resolve with evidence, or reopen cases.
+- Authenticated users can export bounded monitoring counters without private IP or target labels. Admins can download a consistent SQLite snapshot.
 
 Scheduled execution is disabled by default. Enable it explicitly with `NETWATCH_SCHEDULER_ENABLED=true` after the approved policies and operating procedure have been reviewed. The scheduler runs inside the single FastAPI process and is not intended for multi-worker or multi-instance deployment.
 
@@ -209,7 +213,7 @@ Downloads:
 - Markdown report for GitHub, notes, or handover documents
 - Standalone HTML report for review and sharing inside an authorized environment
 
-Both formats include asset business context, recent changes, operational alerts, approved scan policies, operations audit events, inventory, and port evidence.
+Both formats include asset business context, recent changes, alert case/SLA evidence, approved scan policies, maintenance windows, operations audit events, inventory, and port evidence.
 
 ## Architecture
 
@@ -237,7 +241,7 @@ NetWatch applies defense in depth:
 
 - `X-NetWatch-Key` required for all non-health API endpoints
 - Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys
-- Viewer can read and export; Operator can also run authorized checks and triage alerts; Admin can also edit asset context, manage approved policies, and create backups
+- Viewer can read and export; Operator can also run authorized checks and triage alert cases; Admin can also edit asset context, manage approved policies and maintenance windows, and create backups
 - Protected access disabled until at least one valid role key is configured
 - Server-side `authorized: true` required for scan requests
 - Explicit local IPv4 allowlists
@@ -247,6 +251,9 @@ NetWatch applies defense in depth:
 - One simultaneous scan by default
 - Scheduled scans are opt-in, use persisted Admin-approved private CIDRs, and share the same scan semaphore
 - Policy intervals are limited to 15 minutes through 7 days and policy count is bounded to 50
+- Maintenance windows are timezone-aware, limited to 31 days, bounded to 100 records, and enforced before policy execution
+- Unresolved alert repeats are deduplicated; closure requires resolution evidence
+- Authenticated metrics expose only bounded numeric counters and never target labels
 - Restricted CORS origins
 - Content Security Policy
 - `X-Frame-Options: DENY`
@@ -336,6 +343,23 @@ Review open operational alerts:
 ```bash
 curl "http://127.0.0.1:8000/api/alerts?status=open" \
   -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Create a policy-specific maintenance window (Admin only):
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/maintenance-windows \
+  -H "Content-Type: application/json" \
+  -H "X-NetWatch-Key: YOUR_ADMIN_KEY" \
+  -d '{"name":"HQ firewall change","starts_at":"2026-07-15T20:00:00+00:00","ends_at":"2026-07-15T22:00:00+00:00","reason":"CHG-1042","policy_id":1,"enabled":true}'
+```
+
+Export authenticated operational metrics:
+
+```bash
+curl http://127.0.0.1:8000/api/metrics \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY" \
+  -o netwatch-metrics.prom
 ```
 
 Download a consistent database snapshot (Admin only):
@@ -428,9 +452,10 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 - `asset_events`: new, returned, and not-observed transitions
 - `audit_log`: bounded role/action/target records for operational accountability
 - `scan_policies`: Admin-approved private CIDRs, intervals, enablement, and last/next run state
-- `operation_alerts`: bounded transition alerts with severity and acknowledgement evidence
+- `operation_alerts`: deduplicated alert cases with severity, occurrence count, SLA, assignment, acknowledgement, and resolution evidence
+- `maintenance_windows`: bounded global or policy-specific execution pauses with UTC schedule and change reason
 
-Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, and 50 scan policies so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50 scan policies, and 100 maintenance windows so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 

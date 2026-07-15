@@ -1,8 +1,8 @@
-# NetWatch v1.3 Demo Script
+# NetWatch v1.4 Demo Script
 
 ## 1. Introduction
 
-"NetWatch is a local-first defensive network visibility platform. It helps an authorized internal team discover local hosts, track meaningful changes, review common service exposure, assign accountable business context, operate approved scan policies, triage alerts, create consistent snapshots, and export reports."
+"NetWatch is a local-first defensive network visibility platform. It helps an authorized internal team discover local hosts, track meaningful changes, review common service exposure, assign accountable business context, operate approved scan policies, pause work during maintenance, manage alert cases against local SLAs, create consistent snapshots, and export reports and metrics."
 
 ## 2. Explain the safety boundary
 
@@ -83,10 +83,13 @@ Open **Operations** first and explain:
 - Intervals are bounded from 15 minutes to 7 days
 - Scheduled execution is disabled by default and runs only in the single API process
 - Manual policy runs require a current authorization confirmation
-- Alerts are created from saved asset transitions
+- Cases are created from saved asset transitions and repeated unresolved findings are deduplicated
 - Critical business context raises the priority of a not-observed alert
+- Severity sets a local response due time; cases can be assigned, acknowledged, resolved with evidence, and reopened
+- Global or policy-specific maintenance windows pause applicable scans
+- Authenticated metrics export counters without private target labels
 
-Run a disabled sample policy manually, acknowledge one sample alert, and show that both actions appear in the audit log. Download a database snapshot and explain that it contains sensitive internal evidence and must be stored encrypted.
+Run a disabled sample policy manually. Create a short maintenance window and show that a policy run is paused, then disable the window. Assign and acknowledge one sample case, resolve it with a note, and show that the actions appear in the audit log. Export metrics, then download a database snapshot and explain that it contains sensitive internal evidence and must be stored encrypted.
 
 ## 11. Risk Advisor
 
@@ -109,8 +112,8 @@ Explain that reports can contain sensitive internal network information and must
 
 ## 13. Technical architecture
 
-"The dashboard, API, and optional scheduler are served by one FastAPI process. SQLite stores local inventory, business context, normalized observations, change events, approved policies, alerts, scan history, and a bounded operations audit log. Docker runs as a non-root user and publishes the application only on localhost by default."
+"The dashboard, API, and optional scheduler are served by one FastAPI process. SQLite stores local inventory, business context, normalized observations, change events, approved policies, maintenance windows, alert cases, scan history, and a bounded operations audit log. Docker runs as a non-root user and publishes the application only on localhost by default."
 
 ## 14. Close
 
-"NetWatch v1.3 is designed for a trusted local pilot or small internal team. Its shared role keys, in-process scheduler, and snapshot download are not enterprise identity, distributed job coordination, or automated disaster recovery; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, centralized tamper-resistant logs, monitoring, encrypted off-host backups with restore drills, and a deployment-specific security review."
+"NetWatch v1.4 is designed for a trusted local pilot or small internal team. Its shared role keys, local SLA settings, in-process scheduler, and snapshot download are not enterprise identity, distributed job coordination, an external incident platform, or automated disaster recovery; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, centralized tamper-resistant logs, monitoring, encrypted off-host backups with restore drills, and a deployment-specific security review."

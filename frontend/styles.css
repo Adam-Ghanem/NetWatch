@@ -334,6 +334,19 @@ input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; color:
 .company-form-grid label { margin-top: 4px; }
 .company-form-grid > div { margin-bottom: 16px; }
 .company-form-grid .field-span-2 { grid-column: 1 / -1; }
+.triage-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.35fr) minmax(220px, 0.65fr);
+  gap: 14px 18px;
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fbfa;
+}
+.triage-grid label { display: block; margin: 0 0 7px; color: #385159; font-size: 0.75rem; font-weight: 780; }
+.triage-grid .field-span-2 { grid-column: 1 / -1; }
+.triage-grid textarea { min-height: 82px; }
 .form-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
 .form-actions .form-status { flex: 1; margin: 0; }
 .check-row { display: flex; align-items: flex-start; gap: 10px; margin: 19px 0; color: var(--muted); font-size: 0.8rem; line-height: 1.55; }
@@ -482,6 +495,8 @@ tbody tr:hover { background: #f8fbfa; }
   .metric-grid, .report-grid, .advisor-columns { grid-template-columns: 1fr; }
   .company-form-grid { grid-template-columns: 1fr; }
   .company-form-grid .field-span-2 { grid-column: auto; }
+  .triage-grid { grid-template-columns: 1fr; }
+  .triage-grid .field-span-2 { grid-column: auto; }
   .mini-metrics { grid-template-columns: 1fr 1fr; }
   .panel { padding: 19px; }
   .panel-head { align-items: flex-start; flex-direction: column; }

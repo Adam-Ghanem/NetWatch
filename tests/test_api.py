@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -31,7 +32,7 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
         response = client.get("/")
     assert response.status_code == 200
     assert "Connect to NetWatch" in response.text
-    assert "NetWatch v1.3" in response.text
+    assert "NetWatch v1.4" in response.text
     assert "Company context" in response.text
     assert "Operations audit log" in response.text
     assert "Company operations" in response.text
@@ -54,7 +55,7 @@ def test_health_is_public(monkeypatch, tmp_path):
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.3.0"
+    assert response.json()["version"] == "1.4.0"
     assert response.json()["access_enabled"] is True
     assert response.headers["cache-control"] == "no-store"
 
@@ -122,7 +123,11 @@ def test_authorized_scan_uses_validated_target(monkeypatch, tmp_path):
             not_observed_assets=(),
         ),
     )
-    monkeypatch.setattr(api, "create_alerts_for_changes", lambda _: 1)
+    monkeypatch.setattr(
+        api,
+        "create_alerts_for_changes",
+        lambda _: operations_store.AlertChangeSummary(created=1),
+    )
 
     with _client(monkeypatch, tmp_path) as client:
         response = client.post(
@@ -507,3 +512,122 @@ def test_due_scheduler_cycle_runs_claimed_policy_with_system_audit(monkeypatch, 
     assert saved["last_status"] == "completed"
     assert audit[0]["actor_role"] == "scheduler"
     assert audit[0]["action"] == "scheduled_network_scan"
+
+
+def test_admin_maintenance_window_pauses_manual_policy_runs(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "scan_network", lambda _: [])
+    now = datetime.now(timezone.utc)
+    with _client(monkeypatch, tmp_path) as client:
+        policy = client.post(
+            "/api/scan-policies",
+            headers=API_HEADERS,
+            json={
+                "name": "Maintenance-aware HQ",
+                "cidr": "10.44.0.0/30",
+                "interval_minutes": 60,
+                "enabled": True,
+                "authorized": True,
+            },
+        ).json()["policy"]
+        created = client.post(
+            "/api/maintenance-windows",
+            headers=API_HEADERS,
+            json={
+                "name": "Approved firewall change",
+                "starts_at": (now - timedelta(minutes=5)).isoformat(),
+                "ends_at": (now + timedelta(hours=1)).isoformat(),
+                "reason": "CHG-1042",
+                "policy_id": policy["id"],
+                "enabled": True,
+            },
+        )
+        listed = client.get("/api/maintenance-windows", headers=API_HEADERS)
+        policies = client.get("/api/scan-policies", headers=API_HEADERS)
+        blocked = client.post(
+            f"/api/scan-policies/{policy['id']}/run",
+            headers=API_HEADERS,
+            json={"authorized": True},
+        )
+
+        monkeypatch.setenv("NETWATCH_VIEWER_KEY", VIEWER_API_KEY)
+        viewer_create = client.post(
+            "/api/maintenance-windows",
+            headers={"X-NetWatch-Key": VIEWER_API_KEY},
+            json={
+                "name": "Unauthorized window",
+                "starts_at": now.isoformat(),
+                "ends_at": (now + timedelta(hours=1)).isoformat(),
+            },
+        )
+        disabled = client.patch(
+            f"/api/maintenance-windows/{created.json()['window']['id']}",
+            headers=API_HEADERS,
+            json={"enabled": False},
+        )
+        allowed = client.post(
+            f"/api/scan-policies/{policy['id']}/run",
+            headers=API_HEADERS,
+            json={"authorized": True},
+        )
+
+    assert created.status_code == 200
+    assert created.json()["window"]["active"] is True
+    assert listed.json()["active_count"] == 1
+    assert policies.json()["items"][0]["maintenance_active"] is True
+    assert blocked.status_code == 409
+    assert viewer_create.status_code == 403
+    assert disabled.json()["window"]["enabled"] is False
+    assert allowed.status_code == 200
+
+
+def test_alert_case_assignment_resolution_and_filters(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        run_id = inventory_store.add_scan_run("network", "192.168.60.0/24", "case test")
+        changes = NetworkChangeSummary(
+            scan_run_id=run_id,
+            observed_assets=("192.168.60.10",),
+            new_assets=("192.168.60.10",),
+            returned_assets=(),
+            not_observed_assets=(),
+        )
+        operations_store.create_alerts_for_changes(changes)
+        alert_id = client.get("/api/alerts?status=open", headers=API_HEADERS).json()["items"][0][
+            "id"
+        ]
+        missing_evidence = client.patch(
+            f"/api/alerts/{alert_id}",
+            headers=API_HEADERS,
+            json={"status": "resolved", "assigned_to": "SOC"},
+        )
+        monkeypatch.setenv("NETWATCH_OPERATOR_KEY", OPERATOR_API_KEY)
+        resolved = client.patch(
+            f"/api/alerts/{alert_id}",
+            headers={"X-NetWatch-Key": OPERATOR_API_KEY},
+            json={
+                "status": "resolved",
+                "assigned_to": "Network Operations",
+                "resolution_note": "Asset validated with its business owner.",
+            },
+        )
+        resolved_list = client.get("/api/alerts?status=resolved", headers=API_HEADERS)
+
+    assert missing_evidence.status_code == 400
+    assert resolved.status_code == 200
+    assert resolved.json()["alert"]["assigned_to"] == "Network Operations"
+    assert resolved.json()["alert"]["sla_state"] == "resolved"
+    assert resolved_list.json()["resolved_count"] == 1
+    assert resolved_list.json()["items"][0]["resolution_note"]
+
+
+def test_authenticated_metrics_are_bounded_and_do_not_export_targets(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        inventory_store.upsert_hosts([{"IP Address": "192.168.70.10", "Status": "Online"}])
+        unauthorized = client.get("/api/metrics")
+        response = client.get("/api/metrics", headers=API_HEADERS)
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    assert "netwatch_assets_total 1" in response.text
+    assert "netwatch_scheduler_enabled" in response.text
+    assert "192.168.70.10" not in response.text
+    assert response.headers["cache-control"] == "no-store"

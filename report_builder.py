@@ -67,7 +67,19 @@ def _alert_view(alerts_df: pd.DataFrame | None) -> pd.DataFrame:
         return pd.DataFrame()
     columns = [
         column
-        for column in ("created_at", "severity", "title", "target", "status", "details")
+        for column in (
+            "last_seen_at",
+            "severity",
+            "title",
+            "target",
+            "occurrence_count",
+            "status",
+            "assigned_to",
+            "due_at",
+            "sla_state",
+            "details",
+            "resolution_note",
+        )
         if column in alerts_df.columns
     ]
     return alerts_df[columns] if columns else pd.DataFrame()
@@ -92,6 +104,26 @@ def _policy_view(policies_df: pd.DataFrame | None) -> pd.DataFrame:
     return policies_df[columns] if columns else pd.DataFrame()
 
 
+def _maintenance_view(maintenance_df: pd.DataFrame | None) -> pd.DataFrame:
+    if maintenance_df is None or maintenance_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in (
+            "name",
+            "policy_name",
+            "starts_at",
+            "ends_at",
+            "reason",
+            "enabled",
+            "active",
+            "created_by",
+        )
+        if column in maintenance_df.columns
+    ]
+    return maintenance_df[columns] if columns else pd.DataFrame()
+
+
 def build_markdown_report(
     hosts_df: pd.DataFrame,
     ports_df: pd.DataFrame,
@@ -99,6 +131,7 @@ def build_markdown_report(
     audit_df: pd.DataFrame | None = None,
     alerts_df: pd.DataFrame | None = None,
     policies_df: pd.DataFrame | None = None,
+    maintenance_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -111,6 +144,7 @@ def build_markdown_report(
     audit_events = _audit_view(audit_df)
     alerts = _alert_view(alerts_df)
     policies = _policy_view(policies_df)
+    maintenance = _maintenance_view(maintenance_df)
     open_alerts = (
         int((alerts["status"] == "open").sum()) if "status" in alerts.columns else len(alerts)
     )
@@ -126,6 +160,7 @@ def build_markdown_report(
         f"- Recent operational events: **{len(audit_events)}**",
         f"- Open operational alerts: **{open_alerts}**",
         f"- Approved scan policies: **{len(policies)}**",
+        f"- Active maintenance windows: **{int(maintenance['active'].sum()) if 'active' in maintenance.columns else 0}**",
         f"- Ports checked: **{exposure.checked}**",
         f"- Open ports: **{exposure.open_ports}**",
         f"- High risk findings: **{exposure.high}**",
@@ -167,6 +202,8 @@ def build_markdown_report(
         lines.extend(["## Operational alerts", "", _dataframe_to_markdown(alerts), ""])
     if not policies.empty:
         lines.extend(["## Approved scan policies", "", _dataframe_to_markdown(policies), ""])
+    if not maintenance.empty:
+        lines.extend(["## Maintenance windows", "", _dataframe_to_markdown(maintenance), ""])
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -189,6 +226,7 @@ def build_html_report(
     audit_df: pd.DataFrame | None = None,
     alerts_df: pd.DataFrame | None = None,
     policies_df: pd.DataFrame | None = None,
+    maintenance_df: pd.DataFrame | None = None,
 ) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exposure = (
@@ -205,6 +243,7 @@ def build_html_report(
     audit_events = _audit_view(audit_df)
     alerts = _alert_view(alerts_df)
     policies = _policy_view(policies_df)
+    maintenance = _maintenance_view(maintenance_df)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -239,6 +278,7 @@ th {{ color:#7dd3fc; background:#111827; }}
 <h2>Operations audit log</h2>{_html_table(audit_events)}
 <h2>Operational alerts</h2>{_html_table(alerts)}
 <h2>Approved scan policies</h2>{_html_table(policies)}
+<h2>Maintenance windows</h2>{_html_table(maintenance)}
 </main>
 </body>
 </html>"""

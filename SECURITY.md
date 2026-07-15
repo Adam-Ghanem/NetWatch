@@ -8,7 +8,7 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1.3 includes:
+NetWatch v1.4 includes:
 
 - Valid Admin, Operator, or Viewer key required for every non-health API endpoint
 - Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
@@ -39,7 +39,9 @@ NetWatch v1.3 includes:
 - Bounded operations audit records that never store raw role keys
 - Admin-approved private CIDR scan policies with bounded count and intervals
 - Opt-in single-process scheduler that shares the normal scan concurrency limit
-- Bounded criticality-aware operational alerts with acknowledgement evidence
+- Deduplicated criticality-aware alert cases with bounded retention, occurrence evidence, assignment, local SLA due times, acknowledgement, and evidence-backed resolution
+- Bounded timezone-aware maintenance windows that pause applicable scheduled and manual policy execution
+- Authenticated monitoring counters without target, IP, hostname, or other high-cardinality labels
 - Admin-only consistent SQLite snapshot downloads and no destructive restore endpoint
 
 ## Secrets

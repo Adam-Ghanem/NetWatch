@@ -79,7 +79,7 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1.3</span>
+            <span class="pill">New · NetWatch v1.4</span>
             <h3>Turn local network data into confident decisions.</h3>
             <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
@@ -93,7 +93,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Approved scheduling</span><span>Actionable alerts</span><span>No external telemetry</span>
+          <span>Local-first</span><span>Maintenance-aware</span><span>SLA triage</span><span>No external telemetry</span>
         </div>
 
         <div class="metric-grid">
@@ -225,7 +225,7 @@
             <div><p class="eyebrow">Controlled automation</p><h3>Company operations</h3></div>
             <span id="scheduler-state" class="risk-badge neutral">Checking scheduler</span>
           </div>
-          <p class="muted">Store approved private CIDRs, run them on a bounded interval, triage change alerts, and download a consistent SQLite backup. Scheduled execution is opt-in through deployment configuration.</p>
+          <p class="muted">Operate approved private CIDRs with maintenance-aware scheduling, deduplicated alert cases, SLA evidence, authenticated monitoring metrics, and consistent SQLite snapshots.</p>
           <div id="operations-metrics" class="mini-metrics"></div>
         </article>
 
@@ -255,15 +255,55 @@
           </article>
         </div>
 
+        <div class="content-grid form-layout operations-layout">
+          <form id="maintenance-form" class="panel form-panel">
+            <p class="eyebrow">Change control</p><h3>Schedule maintenance</h3>
+            <p class="muted">Pause one policy or every approved policy during a bounded, documented maintenance window.</p>
+            <label for="maintenance-name">Window name</label>
+            <input id="maintenance-name" maxlength="120" placeholder="HQ firewall change" required />
+            <label for="maintenance-policy">Scope</label>
+            <select id="maintenance-policy"><option value="">All approved policies</option></select>
+            <label for="maintenance-start">Starts</label>
+            <input id="maintenance-start" type="datetime-local" required />
+            <label for="maintenance-end">Ends</label>
+            <input id="maintenance-end" type="datetime-local" required />
+            <label for="maintenance-reason">Change reference / reason</label>
+            <textarea id="maintenance-reason" maxlength="500" placeholder="CHG-1042 · Planned network maintenance"></textarea>
+            <label class="check-row"><input id="maintenance-enabled" type="checkbox" checked /><span>Enable this window after it is saved.</span></label>
+            <button class="button primary" type="submit">Save maintenance window</button>
+            <p id="maintenance-status" class="form-status">Admin access is required to manage maintenance windows.</p>
+          </form>
+
+          <article class="panel result-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Schedule protection</p><h3>Maintenance windows</h3></div>
+              <span id="maintenance-active-count" class="risk-badge neutral">0 active</span>
+            </div>
+            <p class="muted">Active global windows pause all scheduled and manual policy runs. Policy-specific windows pause only their approved scope.</p>
+            <div id="maintenance-results" class="table-wrap"></div>
+          </article>
+        </div>
+
         <article class="panel">
           <div class="panel-head">
             <div><p class="eyebrow">Operational triage</p><h3>Alert inbox</h3></div>
             <div class="button-row">
-              <select id="alert-filter" aria-label="Alert status filter"><option value="open">Open alerts</option><option value="acknowledged">Acknowledged</option><option value="">All alerts</option></select>
+              <select id="alert-filter" aria-label="Alert status filter"><option value="open">Open alerts</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option><option value="">All alerts</option></select>
               <button id="alerts-refresh" class="button ghost" type="button">Refresh alerts</button>
             </div>
           </div>
-          <p class="muted">Alerts come only from saved scan transitions. “Not observed” remains evidence to validate, not proof that a device is offline.</p>
+          <p class="muted">Repeated unresolved findings are deduplicated into one case. “Not observed” remains evidence to validate, not proof that a device is offline.</p>
+          <form id="alert-triage-form" class="triage-grid">
+            <div><label for="triage-alert-id">Selected case</label><input id="triage-alert-id" readonly placeholder="Choose Manage on an alert" /></div>
+            <div><label for="triage-assignee">Assignee / team</label><input id="triage-assignee" maxlength="120" placeholder="Network Operations" /></div>
+            <div class="field-span-2"><label for="triage-resolution">Resolution evidence</label><textarea id="triage-resolution" maxlength="1000" placeholder="Validated with the asset owner; expected maintenance completed."></textarea></div>
+            <div class="field-span-2 form-actions">
+              <button id="alert-acknowledge" class="button ghost" type="button">Save & acknowledge</button>
+              <button id="alert-resolve" class="button primary" type="button">Resolve with evidence</button>
+              <button id="alert-reopen" class="button ghost" type="button">Reopen</button>
+              <p id="triage-status" class="form-status">Select an alert case to manage it.</p>
+            </div>
+          </form>
           <div id="alert-results" class="table-wrap"></div>
         </article>
 
@@ -273,7 +313,10 @@
             <h3>Consistent database snapshot</h3>
             <p class="muted">Download a point-in-time SQLite backup without copying the live WAL files. Keep the file in an approved encrypted location.</p>
           </div>
-          <button id="database-backup" class="button primary" type="button">Download database backup</button>
+          <div class="button-row">
+            <button id="metrics-download" class="button ghost" type="button">Export monitoring metrics</button>
+            <button id="database-backup" class="button primary" type="button">Download database backup</button>
+          </div>
         </article>
       </section>
 

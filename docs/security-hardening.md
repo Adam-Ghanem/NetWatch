@@ -12,6 +12,7 @@ This document records the defensive controls used in NetWatch.
 - Scheduled policies accept only the same validated private CIDRs and have a 15-minute minimum interval.
 - Policy scope is immutable after Admin approval; changed scope requires a new approval record.
 - Scheduled execution is opt-in and shares the normal scan semaphore.
+- Active bounded maintenance windows are checked before scheduler claims and manual policy runs.
 
 ## API boundary
 
@@ -60,7 +61,9 @@ logs/netwatch.log
 
 These files can contain internal IP information and should not be shared publicly.
 
-Asset/company context, approved policies, operational alerts, and operations audit records are stored in SQLite. Audit and alert retention are bounded, and raw role keys are never written to audit details.
+Asset/company context, approved policies, maintenance windows, operational cases, and operations audit records are stored in SQLite. Audit, case, policy, and maintenance retention are bounded, and raw role keys are never written to audit details. Unresolved repeats are deduplicated, and closure requires a resolution note.
+
+The authenticated metrics endpoint exports only fixed numeric counters. It does not use target, IP, hostname, owner, or free-text labels.
 
 Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. Snapshots are sensitive and must be stored in an approved encrypted location. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database.
 
