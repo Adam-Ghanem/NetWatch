@@ -43,7 +43,7 @@ Capture guidance for future screenshots and short demos is documented in [`docs/
 
 ## NetWatch v1.6 Enterprise foundations
 
-The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
+The default product is a responsive dark, liquid-glass SOC command-center dashboard served together with the protected FastAPI API at one local address:
 
 ```text
 http://127.0.0.1:8000
@@ -59,8 +59,9 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 
 ## Highlights
 
-- Responsive light corporate dashboard
-- User-provided NetWatch identity and local SVG assets
+- Responsive liquid-glass SOC command center with focused scan actions and live, data-backed risk and activity visuals
+- Keyboard-accessible, role-aware command center (`Ctrl`/`Cmd` + `K`) with protected-data freshness status
+- Official NetWatch shield-and-network identity across navigation, secure access, favicon, and product previews
 - Automatic company SSO session detection plus session-only local role-key fallback
 - Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization

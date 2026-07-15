@@ -35,6 +35,7 @@ const state = {
   operationAlerts: [],
   selectedAlertId: null,
   intelligenceAvailable: false,
+  lastUpdatedAt: null,
 };
 
 const titles = {
@@ -48,6 +49,19 @@ const titles = {
   operations: 'Operations',
   reports: 'Reports',
 };
+
+const commandCatalog = [
+  { id: 'overview', label: 'Open overview', description: 'Return to live posture, exposure, and recent activity.', view: 'overview', marker: 'OV', tag: 'Module', keywords: 'dashboard home posture risk' },
+  { id: 'network', label: 'Start a network scan', description: 'Open the authorization-first private network discovery form.', view: 'network', marker: 'NS', tag: 'Scan', keywords: 'cidr discover hosts assets' },
+  { id: 'host', label: 'Check one host', description: 'Profile an approved device without starting a broad scan.', view: 'host', marker: 'HC', tag: 'Scan', keywords: 'ip device ping profile' },
+  { id: 'ports', label: 'Audit TCP services', description: 'Review the bounded common-service exposure list.', view: 'ports', marker: 'PA', tag: 'Scan', keywords: 'ports tcp services exposure' },
+  { id: 'inventory', label: 'Open asset inventory', description: 'Review monitored devices, ownership, and business context.', view: 'inventory', marker: 'AI', tag: 'Data', keywords: 'assets devices owner department' },
+  { id: 'advisor', label: 'Open risk advisor', description: 'Review evidence-backed priorities and recommended next steps.', view: 'advisor', marker: 'RA', tag: 'Analysis', keywords: 'priority advice intelligence' },
+  { id: 'operations', label: 'Open operations', description: 'Manage approved policies, maintenance, alerts, and backups.', view: 'operations', marker: 'OP', tag: 'Module', keywords: 'alerts policies maintenance backup' },
+  { id: 'reports', label: 'Open reports', description: 'Create consistent evidence exports for review and handover.', view: 'reports', marker: 'RP', tag: 'Export', keywords: 'html markdown evidence download' },
+  { id: 'audit', label: 'Open audit log', description: 'Review protected administrative activity and integrity status.', view: 'audit', marker: 'AL', tag: 'Admin', keywords: 'identity accountability integrity', requires: 'view_audit_identity' },
+  { id: 'refresh', label: 'Refresh current view', description: 'Fetch the latest protected evidence for the open module.', action: 'refresh', marker: 'RF', tag: 'Action', keywords: 'reload sync update data' },
+];
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -125,6 +139,31 @@ function localTimestamp(value) {
   return Number.isNaN(parsed.getTime()) ? text(value) : parsed.toLocaleString();
 }
 
+function updateDataFreshness() {
+  const node = $('#data-freshness');
+  if (!node) return;
+  const label = $('span', node);
+  if (!state.lastUpdatedAt) {
+    node.className = 'freshness-chip waiting';
+    node.title = 'No protected data loaded yet';
+    label.textContent = 'Waiting for data';
+    return;
+  }
+
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - state.lastUpdatedAt.getTime()) / 1000));
+  const stale = ageSeconds >= 300;
+  node.className = `freshness-chip ${stale ? 'stale' : ''}`;
+  if (ageSeconds < 60) label.textContent = 'Updated now';
+  else if (ageSeconds < 3600) label.textContent = `Updated ${Math.floor(ageSeconds / 60)}m ago`;
+  else label.textContent = `Updated ${Math.floor(ageSeconds / 3600)}h ago`;
+  node.title = `Protected data last updated ${state.lastUpdatedAt.toLocaleString()}`;
+}
+
+function markDataUpdated() {
+  state.lastUpdatedAt = new Date();
+  updateDataFreshness();
+}
+
 function statusClass(value) {
   const normalized = String(value || '').toLowerCase();
   if (normalized.includes('filtered') || normalized.includes('not observed')) return 'filtered';
@@ -148,6 +187,99 @@ function statusClass(value) {
   if (normalized.includes('block')) return 'blocked';
   if (normalized.includes('error') || normalized.includes('offline')) return 'error';
   return '';
+}
+
+function exposureBucket(asset) {
+  const label = String(asset?.exposure_level || '').toLowerCase();
+  if (label.includes('critical') || label.includes('high')) return 'high';
+  if (label.includes('medium')) return 'medium';
+  if (label.includes('low')) return 'low';
+  if (label.includes('clean')) return 'clean';
+  const score = Number(asset?.exposure_score || 0);
+  if (score >= 70) return 'high';
+  if (score >= 40) return 'medium';
+  if (score > 0) return 'low';
+  return 'clean';
+}
+
+function renderOverviewRisk(assets) {
+  const ranked = [...assets].sort(
+    (left, right) => Number(right.exposure_score || 0) - Number(left.exposure_score || 0),
+  );
+  const highest = ranked[0] || null;
+  const score = highest
+    ? Math.max(0, Math.min(100, Math.round(Number(highest.exposure_score || 0))))
+    : 0;
+  const level = highest ? exposureBucket(highest) : 'neutral';
+  const labels = { high: 'High', medium: 'Medium', low: 'Low', clean: 'Clean' };
+
+  $('#overview-risk-score').textContent = score;
+  $('#overview-risk-ring').setAttribute('stroke-dasharray', `${score} ${100 - score}`);
+  $('#overview-risk-gauge').className = `risk-gauge ${level}`;
+  const badge = $('#overview-risk-level');
+  badge.textContent = highest ? `${labels[level]} · ${highest.ip_address}` : 'No exposure data';
+  badge.className = `risk-badge ${level}`;
+}
+
+function renderExposureDistribution(assets) {
+  const counts = { high: 0, medium: 0, low: 0, clean: 0 };
+  assets.forEach((asset) => { counts[exposureBucket(asset)] += 1; });
+  const total = Math.max(1, assets.length);
+  Object.entries(counts).forEach(([level, count]) => {
+    $(`#exposure-${level}-count`).textContent = count;
+    $(`#exposure-${level}-bar`).value = Math.round((count / total) * 100);
+  });
+}
+
+function renderOverviewActivity(history) {
+  const end = new Date();
+  end.setUTCHours(0, 0, 0, 0);
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(end);
+    date.setUTCDate(end.getUTCDate() - (6 - index));
+    return date;
+  });
+  const counts = new Map(days.map((date) => [date.toISOString().slice(0, 10), 0]));
+  history.forEach((item) => {
+    const parsed = new Date(item.created_at);
+    if (Number.isNaN(parsed.getTime())) return;
+    const key = parsed.toISOString().slice(0, 10);
+    if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+  });
+
+  const values = days.map((date) => counts.get(date.toISOString().slice(0, 10)) || 0);
+  const maximum = Math.max(1, ...values);
+  const points = values.map((value, index) => ({
+    x: 34 + ((680 - 34) * index) / 6,
+    y: 168 - (value / maximum) * 132,
+    value,
+  }));
+  const pointText = points.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  $('#overview-trend-line').setAttribute('points', pointText);
+  $('#overview-trend-area').setAttribute(
+    'd',
+    `M34 168 L${pointText.replaceAll(' ', ' L')} L680 168 Z`,
+  );
+
+  const pointLayer = $('#overview-trend-points');
+  pointLayer.replaceChildren();
+  const svgNamespace = 'http://www.w3.org/2000/svg';
+  points.forEach(({ x, y, value }) => {
+    const circle = document.createElementNS(svgNamespace, 'circle');
+    circle.setAttribute('cx', x.toFixed(1));
+    circle.setAttribute('cy', y.toFixed(1));
+    circle.setAttribute('r', value > 0 ? '4.5' : '3');
+    const title = document.createElementNS(svgNamespace, 'title');
+    title.textContent = `${value} check${value === 1 ? '' : 's'}`;
+    circle.appendChild(title);
+    pointLayer.appendChild(circle);
+  });
+
+  const labels = $$('#overview-trend-labels span');
+  days.forEach((date, index) => {
+    labels[index].textContent = date.toLocaleDateString(undefined, { weekday: 'short' });
+  });
+  return values.reduce((sum, value) => sum + value, 0);
 }
 
 function renderTable(container, rows, columns, emptyMessage = 'No data available.') {
@@ -270,6 +402,9 @@ function setConnected(connected) {
       use_intelligence: false,
     };
     state.intelligenceAvailable = false;
+    state.lastUpdatedAt = null;
+    updateDataFreshness();
+    closeCommandPalette(false);
     applyRoleAccess();
   }
 }
@@ -282,6 +417,7 @@ function applyRoleAccess() {
     : 'Disconnected';
   roleBadge.textContent = roleLabel;
   roleBadge.className = `role-badge ${state.role || ''}`;
+  $('#command-trigger').disabled = !Boolean(state.role);
 
   const canScan = Boolean(state.capabilities.scan);
   ['#network-form', '#host-form', '#ports-form'].forEach((selector) => {
@@ -329,6 +465,7 @@ function applyRoleAccess() {
     state.capabilities.use_intelligence && state.intelligenceAvailable,
   );
   $('#intelligence-refresh').disabled = !(state.role === 'admin' && state.intelligenceAvailable);
+  if (!$('#command-palette').hidden) renderCommandResults($('#command-input').value);
 }
 
 async function connectSession() {
@@ -360,7 +497,7 @@ async function loadOverview() {
   try {
     const [inventoryPayload, historyPayload, changesPayload, advice] = await Promise.all([
       apiJson('/api/inventory'),
-      apiJson('/api/history?limit=8'),
+      apiJson('/api/history?limit=50'),
       apiJson('/api/changes?limit=8'),
       apiJson('/api/advisor'),
     ]);
@@ -372,7 +509,9 @@ async function loadOverview() {
     $('#metric-assets').textContent = assets.length;
     $('#metric-open').textContent = openCount;
     $('#metric-risk').textContent = priorityCount;
-    $('#metric-runs').textContent = history.length;
+    $('#metric-runs').textContent = renderOverviewActivity(history);
+    renderOverviewRisk(assets);
+    renderExposureDistribution(assets);
 
     renderTable($('#overview-history'), history.slice(0, 6), [
       { key: 'created_at', label: 'Time' },
@@ -395,6 +534,7 @@ async function loadOverview() {
     const copy = document.createElement('p');
     copy.textContent = advice.summary;
     advisorBox.append(heading, copy);
+    markDataUpdated();
   } catch (error) {
     advisorBox.classList.remove('skeleton-block');
     advisorBox.textContent = error.message;
@@ -437,6 +577,7 @@ async function loadInventory() {
   ], 'No history recorded yet.');
   populateAssetOptions();
   fillAssetContext($('#asset-ip').value);
+  markDataUpdated();
 }
 
 function populateAssetOptions() {
@@ -486,6 +627,7 @@ async function loadAudit() {
     { key: 'integrity_protected', label: 'Integrity', format: (value) => (value ? 'Protected' : 'Legacy') },
     { key: 'details', label: 'Details' },
   ], 'No operational events have been recorded yet.');
+  markDataUpdated();
 }
 
 function actionButton(label, action, itemId, enabled = true, primary = false) {
@@ -730,6 +872,7 @@ async function loadOperations() {
   renderAlerts(alerts);
   if (state.selectedAlertId) selectAlertCase(state.selectedAlertId);
   applyRoleAccess();
+  markDataUpdated();
 }
 
 function renderIntelligenceList(container, items) {
@@ -824,6 +967,7 @@ async function loadAdvisor() {
     li.textContent = item;
     steps.appendChild(li);
   });
+  markDataUpdated();
 }
 
 async function generateIntelligenceBrief(refresh, button) {
@@ -843,6 +987,118 @@ async function generateIntelligenceBrief(refresh, button) {
     setBusy(button, false);
     applyRoleAccess();
   }
+}
+
+let commandMatches = [];
+let commandSelection = 0;
+let commandReturnFocus = null;
+
+function availableCommands() {
+  return commandCatalog.filter(
+    (command) => !command.requires || Boolean(state.capabilities[command.requires]),
+  );
+}
+
+function setCommandSelection(index, scroll = true) {
+  const items = $$('.command-item', $('#command-results'));
+  if (!items.length) {
+    commandSelection = 0;
+    $('#command-input').removeAttribute('aria-activedescendant');
+    return;
+  }
+  commandSelection = (index + items.length) % items.length;
+  items.forEach((item, itemIndex) => {
+    item.setAttribute('aria-selected', String(itemIndex === commandSelection));
+  });
+  $('#command-input').setAttribute('aria-activedescendant', items[commandSelection].id);
+  if (scroll) items[commandSelection].scrollIntoView({ block: 'nearest' });
+}
+
+function renderCommandResults(query = '') {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+  commandMatches = availableCommands().filter((command) => {
+    const searchable = `${command.label} ${command.description} ${command.keywords}`.toLowerCase();
+    return !normalizedQuery || searchable.includes(normalizedQuery);
+  });
+  commandSelection = 0;
+
+  const results = $('#command-results');
+  results.replaceChildren();
+  if (!commandMatches.length) {
+    const empty = document.createElement('div');
+    empty.className = 'command-empty';
+    empty.textContent = 'No matching modules or actions.';
+    results.appendChild(empty);
+    return;
+  }
+
+  commandMatches.forEach((command, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = `command-option-${command.id}`;
+    button.className = 'command-item';
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', String(index === 0));
+
+    const marker = document.createElement('span');
+    marker.className = 'command-item-icon';
+    marker.textContent = command.marker;
+    marker.setAttribute('aria-hidden', 'true');
+
+    const copy = document.createElement('span');
+    copy.className = 'command-item-copy';
+    const label = document.createElement('strong');
+    label.textContent = command.label;
+    const description = document.createElement('small');
+    description.textContent = command.description;
+    copy.append(label, description);
+
+    const tag = document.createElement('span');
+    tag.className = 'command-item-tag';
+    const isScanModule = ['network', 'host', 'ports'].includes(command.view);
+    if (command.view === state.view) tag.textContent = 'Current';
+    else if (isScanModule && !state.capabilities.scan) tag.textContent = 'View only';
+    else tag.textContent = command.tag;
+
+    button.append(marker, copy, tag);
+    button.addEventListener('mouseenter', () => setCommandSelection(index, false));
+    button.addEventListener('click', () => executeCommand(command));
+    results.appendChild(button);
+  });
+  setCommandSelection(0, false);
+}
+
+function openCommandPalette() {
+  const trigger = $('#command-trigger');
+  if (trigger.disabled || !$('#connect-overlay').classList.contains('hidden')) return;
+  commandReturnFocus = document.activeElement;
+  $('#command-palette').hidden = false;
+  trigger.setAttribute('aria-expanded', 'true');
+  document.body.classList.add('modal-open');
+  $('#command-input').value = '';
+  renderCommandResults();
+  requestAnimationFrame(() => $('#command-input').focus());
+}
+
+function closeCommandPalette(restoreFocus = true) {
+  const palette = $('#command-palette');
+  const wasOpen = !palette.hidden;
+  palette.hidden = true;
+  $('#command-trigger').setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('modal-open');
+  if (wasOpen && restoreFocus && commandReturnFocus instanceof HTMLElement) {
+    commandReturnFocus.focus();
+  }
+  commandReturnFocus = null;
+}
+
+function executeCommand(command) {
+  closeCommandPalette();
+  if (command.view) {
+    navigate(command.view);
+    return;
+  }
+  if (command.action === 'refresh') $('#refresh').click();
 }
 
 async function refreshCurrentView() {
@@ -938,6 +1194,42 @@ $('#nav').addEventListener('click', (event) => {
 });
 
 $$('[data-go]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.go)));
+$('#command-trigger').addEventListener('click', openCommandPalette);
+$('#command-close').addEventListener('click', () => closeCommandPalette());
+$('#command-palette').addEventListener('mousedown', (event) => {
+  if (event.target === event.currentTarget) closeCommandPalette();
+});
+$('#command-input').addEventListener('input', (event) => {
+  renderCommandResults(event.currentTarget.value);
+});
+$('#command-input').addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    setCommandSelection(commandSelection + 1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    setCommandSelection(commandSelection - 1);
+  } else if (event.key === 'Enter' && commandMatches[commandSelection]) {
+    event.preventDefault();
+    executeCommand(commandMatches[commandSelection]);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCommandPalette();
+  }
+});
+document.addEventListener('keydown', (event) => {
+  const commandShortcut = (event.ctrlKey || event.metaKey)
+    && !event.altKey
+    && event.key.toLowerCase() === 'k';
+  if (commandShortcut) {
+    event.preventDefault();
+    if ($('#command-palette').hidden) openCommandPalette();
+    else $('#command-input').focus();
+    return;
+  }
+  if (event.key === 'Escape' && !$('#command-palette').hidden) closeCommandPalette();
+});
 $('#refresh').addEventListener('click', async (event) => {
   setBusy(event.currentTarget, true, 'Refreshing…');
   try {
@@ -1329,7 +1621,9 @@ function setMaintenanceDefaults() {
   $('#maintenance-end').value = asLocalInput(end);
 }
 setInterval(updateClock, 1000);
+setInterval(updateDataFreshness, 30_000);
 updateClock();
+updateDataFreshness();
 setMaintenanceDefaults();
 
 async function init() {
