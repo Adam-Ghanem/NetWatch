@@ -8,9 +8,12 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1.5 includes:
+NetWatch v1.6 includes:
 
-- Valid Admin, Operator, or Viewer key required for every non-health API endpoint
+- Verified OIDC bearer identity or valid Admin, Operator, or Viewer key required for every non-health API endpoint
+- Strict issuer, audience, asymmetric algorithm, signing key, expiry, subject, authorized-party, and exact group-to-role validation
+- Invalid bearer tokens never fall back to a simultaneously supplied local key
+- Malformed or ambiguous authorization headers are rejected, and local role-key values must be unique
 - Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
 - Protected operations disabled until at least one non-placeholder role key of 32+ characters is configured
 - Constant-time API-key comparison
@@ -18,7 +21,7 @@ NetWatch v1.5 includes:
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
-- Request rate limiting
+- Per-identity, route-template request rate limiting with bounded in-memory identity buckets
 - Bounded simultaneous scans
 - Bounded common-port worker count
 - Restricted CORS origins
@@ -39,7 +42,9 @@ NetWatch v1.5 includes:
 - Optional server-side intelligence that excludes private identifiers and free-text evidence before provider calls
 - Strict structured provider output with `store: false`, no model tools, no arbitrary prompts, and human review required
 - Separate provider rate/concurrency limits, daily request budget, bounded timeout/output/cache, and safe local fallback
-- Bounded operations audit records that never store raw role keys
+- Admin-only individual actor and request correlation in bounded audit records that never store raw role keys or bearer tokens
+- Separate-key HMAC audit chain with a keyed head checkpoint, a five-second maximum public readiness cache, fresh privileged-operation fail-closed verification, and explicit legacy-row labeling
+- Public liveness/readiness separation, generated response request IDs, and low-cardinality HTTP metrics/log correlation
 - Admin-approved private CIDR scan policies with bounded count and intervals
 - Opt-in single-process scheduler that shares the normal scan concurrency limit
 - Deduplicated criticality-aware alert cases with bounded retention, occurrence evidence, assignment, local SLA due times, acknowledgement, and evidence-backed resolution
@@ -49,7 +54,7 @@ NetWatch v1.5 includes:
 
 ## Secrets
 
-The `.env` file can contain the local role keys, optional `OPENAI_API_KEY`, and automatically generated AI safety identity; it is ignored by Git and excluded from Docker build context.
+The `.env` file can contain local role keys, the separate audit HMAC key, optional `OPENAI_API_KEY`, and automatically generated AI safety identity; it is ignored by Git and excluded from Docker build context.
 
 Do not:
 
@@ -57,7 +62,7 @@ Do not:
 - Paste role or provider keys into issues, screenshots, reports, or chat messages
 - Reuse a sensitive account password as a NetWatch role key
 - Publish role keys in frontend source code
-- Put `OPENAI_API_KEY`, `NETWATCH_AI_SAFETY_SECRET`, or `NETWATCH_AI_SUBJECT_ID` in JavaScript, API responses, Dockerfiles, reports, logs, or tracked production configuration
+- Put `NETWATCH_AUDIT_HMAC_KEY`, `OPENAI_API_KEY`, `NETWATCH_AI_SAFETY_SECRET`, or `NETWATCH_AI_SUBJECT_ID` in JavaScript, API responses, Dockerfiles, reports, logs, or tracked production configuration
 
 Generate a new key with:
 
@@ -94,11 +99,11 @@ The default deployment is designed for a trusted local pilot or small internal t
 Before shared, remote, or public deployment, add and review:
 
 - TLS
-- SSO/OIDC organization authentication with individual identities
-- Fine-grained authorization beyond shared role secrets
+- An approved OIDC-aware gateway that forwards signed bearer tokens
+- Least-privilege dedicated IdP groups and controlled break-glass access
 - Network access controls
 - Managed secret storage
-- Centralized tamper-resistant audit logs
+- Centralized append-only export of the locally integrity-protected audit stream
 - External scheduler/worker coordination for multi-instance deployments
 - Centralized monitoring and alert delivery
 - Automated encrypted off-host backups, restore drills, and database migrations

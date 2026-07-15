@@ -1,4 +1,6 @@
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -137,11 +139,12 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-        assert version == 6
+        assert version == 7
     assert {
         "network_observations",
         "asset_events",
         "audit_log",
+        "audit_chain_state",
         "scan_policies",
         "operation_alerts",
         "maintenance_windows",
@@ -283,3 +286,247 @@ def test_audit_log_retention_is_bounded(monkeypatch, tmp_path):
     audit = inventory_store.recent_audit_log(20)
     assert len(audit) == 2
     assert [item["action"] for item in audit] == ["check_2", "check_1"]
+
+
+def test_audit_hmac_chain_detects_retained_row_tampering(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    inventory_store.record_audit_event(
+        "admin",
+        "policy_created",
+        "192.168.1.0/24",
+        "completed",
+        "Approved company scope.",
+        actor_id="oidc:employee-1042",
+        auth_method="oidc",
+        request_id="request-1042",
+    )
+    inventory_store.record_audit_event(
+        "operator",
+        "policy_run",
+        "192.168.1.0/24",
+        "completed",
+        "Authorized run completed.",
+        actor_id="oidc:employee-2042",
+        auth_method="oidc",
+        request_id="request-2042",
+    )
+
+    before = inventory_store.verify_audit_integrity()
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute("UPDATE audit_log SET details = 'changed' WHERE id = 1")
+    after = inventory_store.verify_audit_integrity()
+
+    assert before["status"] == "valid"
+    assert before["protected_entries"] == 2
+    assert after["status"] == "invalid"
+    assert after["valid"] is False
+    assert inventory_store.audit_integrity_is_ready() is False
+    with pytest.raises(inventory_store.AuditIntegrityError):
+        inventory_store.record_audit_event(
+            "admin",
+            "policy_updated",
+            "192.168.1.0/24",
+            "completed",
+            "This write must be blocked.",
+        )
+
+
+def test_audit_checkpoint_detects_suffix_deletion(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    for action in ("policy_created", "policy_run"):
+        inventory_store.record_audit_event(
+            "admin",
+            action,
+            "192.168.1.0/24",
+            "completed",
+            "Approved operation.",
+        )
+
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute("DELETE FROM audit_log WHERE id = (SELECT MAX(id) FROM audit_log)")
+
+    status = inventory_store.verify_audit_integrity()
+    assert status["status"] == "invalid"
+    assert status["valid"] is False
+
+
+def test_audit_checkpoint_treats_malformed_state_as_invalid(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    inventory_store.record_audit_event(
+        "admin", "policy_created", "192.168.1.0/24", "completed", "Approved scope."
+    )
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute("UPDATE audit_chain_state SET last_event_id = 'malformed'")
+
+    status = inventory_store.verify_audit_integrity()
+    assert status["status"] == "invalid"
+    assert inventory_store.audit_integrity_is_ready(use_cache=False) is False
+
+
+def test_audit_chain_rejects_unprotected_rows_after_protected_segment(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    inventory_store.record_audit_event(
+        "admin",
+        "policy_created",
+        "192.168.1.0/24",
+        "completed",
+        "Approved operation.",
+    )
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute(
+            """
+            INSERT INTO audit_log (
+                created_at, actor_role, action, target, outcome, details
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "2026-07-15T12:00:00+00:00",
+                "admin",
+                "injected",
+                "192.168.1.1",
+                "completed",
+                "Unprotected suffix.",
+            ),
+        )
+
+    status = inventory_store.verify_audit_integrity()
+    assert status["status"] == "invalid"
+    assert inventory_store.audit_integrity_is_ready() is False
+
+
+def test_protected_audit_retention_keeps_retained_segment_verifiable(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    monkeypatch.setattr(inventory_store, "MAX_AUDIT_LOG_ENTRIES", 2)
+    for index in range(3):
+        inventory_store.record_audit_event(
+            "operator",
+            f"check_{index}",
+            "192.168.1.1",
+            "completed",
+            "Bounded protected test.",
+        )
+
+    status = inventory_store.verify_audit_integrity()
+    assert status["status"] == "valid"
+    assert status["protected_entries"] == 2
+
+
+def test_audit_key_must_be_separate_from_role_keys(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    reused_key = "reused-sensitive-key-with-at-least-32-characters"
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", reused_key)
+    monkeypatch.setenv("NETWATCH_API_KEY", reused_key)
+    inventory_store.init_db()
+
+    assert inventory_store.audit_integrity_enabled() is False
+    assert inventory_store.audit_integrity_is_ready() is False
+
+
+def test_audit_integrity_reports_unavailable_without_separate_key(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    inventory_store.record_audit_event(
+        "legacy", "host_check", "192.168.1.1", "completed", "Legacy event."
+    )
+
+    status = inventory_store.verify_audit_integrity()
+
+    assert status["status"] == "unavailable"
+    assert status["valid"] is False
+
+
+def test_concurrent_protected_audit_writes_keep_one_linear_chain(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    inventory_store.init_db()
+    worker_count = 6
+    start = threading.Barrier(worker_count)
+
+    def write_event(index: int) -> None:
+        start.wait(timeout=5)
+        inventory_store.record_audit_event(
+            "operator",
+            "concurrent_check",
+            f"asset-{index}",
+            "completed",
+            "Concurrent audit-chain test.",
+        )
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        list(executor.map(write_event, range(worker_count)))
+
+    status = inventory_store.verify_audit_integrity()
+    assert status["status"] == "valid"
+    assert status["protected_entries"] == worker_count
+
+
+def test_public_audit_readiness_is_briefly_cached_but_forced_checks_are_fresh(
+    monkeypatch, tmp_path
+):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    inventory_store.record_audit_event(
+        "admin", "policy_created", "192.168.1.0/24", "completed", "Approved scope."
+    )
+    original_check = inventory_store._audit_chain_is_valid
+    check_count = 0
+
+    def counted_check(conn, key):
+        nonlocal check_count
+        check_count += 1
+        return original_check(conn, key)
+
+    monkeypatch.setattr(inventory_store, "_audit_chain_is_valid", counted_check)
+
+    assert inventory_store.audit_integrity_is_ready() is True
+    assert inventory_store.audit_integrity_is_ready() is True
+    assert check_count == 1
+    assert inventory_store.audit_integrity_is_ready(use_cache=False) is True
+    assert check_count == 2
+
+
+def test_audit_identity_preserves_bounded_oidc_subject(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    actor_id = f"oidc:{'s' * 160}"
+    inventory_store.record_audit_event(
+        "viewer",
+        "inventory_viewed",
+        "inventory",
+        "completed",
+        "Authorized view.",
+        actor_id=actor_id,
+        auth_method="oidc",
+    )
+
+    saved = inventory_store.recent_audit_log(include_identity=True)
+    assert saved[0]["actor_id"] == actor_id

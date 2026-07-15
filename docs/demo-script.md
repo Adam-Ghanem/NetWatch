@@ -1,4 +1,4 @@
-# NetWatch v1.5 Demo Script
+# NetWatch v1.6 Demo Script
 
 ## 1. Introduction
 
@@ -124,4 +124,4 @@ Explain that reports can contain sensitive internal network information and must
 
 ## 14. Close
 
-"NetWatch v1.5 is designed for a trusted local pilot or small internal team. Its shared role keys, local SLA settings, in-process scheduler, application AI budget, and snapshot download are not enterprise identity, distributed job coordination, provider billing control, an external incident platform, or automated disaster recovery; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, provider spend controls, centralized tamper-resistant logs, monitoring, encrypted off-host backups with restore drills, and a deployment-specific security and privacy review."
+"NetWatch v1.6 adds verified OIDC identity, individual audit attribution, HMAC integrity, probes, and request observability for a reviewed internal deployment. Its SQLite store, in-process scheduler, application AI budget, and snapshot download are not multi-replica coordination, provider billing control, an external incident platform, or automated disaster recovery; production still requires an approved identity-aware TLS gateway, managed secrets, centralized append-only log export, monitoring, encrypted off-host backups with restore drills, and deployment-specific security, privacy, and AI reviews."

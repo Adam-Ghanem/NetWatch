@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.5
+## NetWatch v1.6 Enterprise foundations
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -51,15 +51,18 @@ http://127.0.0.1:8000
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
-v1.5 adds optional NetWatch Intelligence on top of the deterministic local Risk Advisor. Authenticated users can request a structured defensive brief without entering a provider key: the browser calls NetWatch, and only the backend can access `OPENAI_API_KEY`. Before a request leaves NetWatch, the application reduces saved evidence to bounded aggregates and excludes IP addresses, CIDRs, hostnames, owners, departments, locations, notes, and raw event details. Responses are schema-validated, cached, rate limited, concurrency limited, protected by an atomic UTC daily budget, and recorded without prompts or secrets. A dedicated server-only safety secret derives an opaque deployment identifier without roles or client addresses, and provider redirects are refused. The model cannot choose targets, call tools, or start scans. The local advisor remains available when the provider is disabled or unavailable.
+v1.6 adds an optional enterprise identity boundary. A reviewed OIDC-aware reverse proxy can forward signed bearer tokens, which NetWatch validates against one configured HTTPS JWKS endpoint with an explicit issuer, audience, algorithm allowlist, expiry, subject, and exact company-group mapping. Users then authenticate through company SSO without receiving a NetWatch role key or provider key. Local role keys remain available for local and controlled break-glass use.
 
-This remains a trusted local pilot or small-team architecture. Shared role keys, an in-process scheduler, an application-level AI budget, and a local `.env` are not replacements for SSO, centralized identity, TLS, a managed secret store, an external job platform, provider project spend controls, automated off-host backups, or a deployment review.
+Every protected audit event can now carry an individual actor, authentication method, and request ID inside a separate-key HMAC chain with a keyed head checkpoint. Fresh full retained-chain verification gates every privileged operation; the public readiness probe reuses a result for at most five seconds to bound its cost. NetWatch also exposes separate liveness/readiness probes, low-cardinality HTTP metrics, safe correlation logs, and stricter browser headers. See the [enterprise deployment guide](docs/enterprise-deployment.md) and [Kubernetes template](deploy/kubernetes.yaml).
+
+These controls make NetWatch suitable for a reviewed internal deployment foundation; they do not turn the current SQLite and in-process scheduler design into multi-replica HA. Large deployments still need the external controls and scale-out work listed in the enterprise guide.
 
 ## Highlights
 
 - Responsive light corporate dashboard
 - User-provided NetWatch identity and local SVG assets
-- Session-only API-key connection screen
+- Automatic company SSO session detection plus session-only local role-key fallback
+- Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization
 - Authorized local IPv4 CIDR discovery
 - Historical scan snapshots with new, returned, and not-observed asset detection
@@ -67,13 +70,15 @@ This remains a trusted local pilot or small-team architecture. Shared role keys,
 - Bounded concurrent common-port audit
 - Clear Open, Closed, and Filtered/Unreachable states
 - SQLite asset inventory with owner, department, location, criticality, and operational notes
-- Bounded operations audit log for scans and asset-context changes
+- Admin-only individual audit identities and request correlation
+- Separate-key HMAC audit chain, keyed head checkpoint, and privileged-operation fail-closed behavior
 - Approved scan policies with immutable private CIDR scope and 15-minute minimum intervals
 - Opt-in single-process scheduler using the existing scan concurrency limit
 - Deduplicated operational alert cases for new, returned, and not-observed assets
 - Criticality-aware severity, local SLA due times, assignment, acknowledgement, and evidence-backed resolution
 - Bounded global or policy-specific maintenance windows that pause policy execution
-- Authenticated Prometheus text-format operational counters without target labels
+- Authenticated Prometheus text-format operational and HTTP counters without target labels
+- Separate public liveness and readiness endpoints
 - Admin-only consistent SQLite backup download
 - Exposure priority score and deterministic local Risk Advisor
 - Optional server-side NetWatch Intelligence with structured defensive output
@@ -82,7 +87,7 @@ This remains a trusted local pilot or small-team architecture. Shared role keys,
 - Markdown and standalone HTML report downloads
 - Formula-safe inventory CSV export
 - Public, oversized, and unsupported targets blocked
-- API authentication, rate limits, scan concurrency limits, and security headers
+- API authentication, bounded per-identity rate-limit state, scan concurrency limits, and security headers
 - Minimum-length API secrets and explicit HTTP Host/CORS allowlists
 - Non-root Docker container with localhost-only publishing
 - One-command secure launcher
@@ -108,10 +113,11 @@ The launcher automatically:
 
 1. Creates a local `.env` file.
 2. Generates a strong random Admin key.
-3. Generates an independent AI safety secret and opaque deployment subject without printing them.
-4. Builds the NetWatch container.
-5. Starts it on `127.0.0.1:8000`.
-6. Prints the dashboard URL and Admin key.
+3. Generates a separate audit HMAC key without printing it.
+4. Generates an independent AI safety secret and opaque deployment subject without printing them.
+5. Builds the NetWatch container.
+6. Starts it on `127.0.0.1:8000`.
+7. Prints the dashboard URL without exposing any credential in terminal history.
 
 Open the displayed URL and enter the displayed key. The browser stores the key only in session storage, so closing the tab clears it.
 
@@ -119,7 +125,7 @@ The launcher leaves the optional Operator and Viewer keys blank. Configure them 
 
 ## Manual Docker deployment
 
-Create the environment file and let the launcher replace all local placeholders with independent random values. Only the Admin key is printed:
+Create the environment file and let the launcher replace all local placeholders with independent random values. The launcher does not print secrets; the local break-glass Admin key stays in the private `.env` file:
 
 ```bash
 cp .env.example .env
@@ -194,7 +200,7 @@ Inventory can be exported as formula-safe CSV for an approved internal workflow.
 
 ### Operations audit log
 
-Records successful network scans, host checks, port audits, and asset-context updates with UTC time, actor role, action, target, outcome, and a short summary. Raw API keys are never written to the log. Retention is bounded to the latest 10,000 events.
+Records successful network scans, host checks, port audits, and controlled operations with UTC time, individual actor, role, authentication method, request ID, target, outcome, and a short summary. A separate server-only key protects new records with a chained HMAC and keyed latest-event checkpoint; full retained-chain verification pauses privileged operations after detected tampering. Raw API keys and bearer tokens are never written to the log. Retention is bounded to the latest 10,000 events, and pre-v1.6 rows remain clearly marked as legacy rather than being silently re-signed.
 
 ### Company operations
 
@@ -253,15 +259,19 @@ The FastAPI process serves both the dashboard and the `/api/*` endpoints. This s
 
 NetWatch applies defense in depth:
 
-- `X-NetWatch-Key` required for all non-health API endpoints
-- Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys
+- A verified company bearer token or `X-NetWatch-Key` is required for all non-health API endpoints
+- Exact OIDC issuer, audience, asymmetric algorithm, signing key, expiry, subject, authorized-party, and group validation
+- Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys remain available for local/break-glass use
 - Viewer can read and export; Operator can also run authorized checks and triage alert cases; Admin can also edit asset context, manage approved policies and maintenance windows, and create backups
-- Protected access disabled until at least one valid role key is configured
+- Protected access disabled until a valid OIDC mapping or at least one unique valid role key is configured
 - Server-side `authorized: true` required for scan requests
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - CIDR scans limited to 256 hosts
-- Rate limiting per client and endpoint
+- Rate limiting per authenticated identity and endpoint
+- Invalid bearer tokens never fall back to a simultaneously supplied shared key
+- Admin-only individual audit identity plus separate-key retained HMAC-chain verification
+- Generated response request IDs, safe route-template correlation logs, and separate liveness/readiness probes
 - One simultaneous scan by default
 - Scheduled scans are opt-in, use persisted Admin-approved private CIDRs, and share the same scan semaphore
 - Policy intervals are limited to 15 minutes through 7 days and policy count is bounded to 50
@@ -284,7 +294,7 @@ NetWatch applies defense in depth:
 - Docker port published only on `127.0.0.1`
 - No exploitation, brute force, credential testing, stealth, persistence, or evasion functionality
 
-The health endpoint is public so Docker and local operators can verify service availability. Inventory, scan, history, audit, advisor, and report endpoints require authentication. These local shared-secret roles improve separation for a trusted internal pilot; they do not provide individual user identity or non-repudiation.
+The liveness, readiness, and summary health endpoints are public so orchestration can assess service state without credentials. All operational endpoints require authentication. OIDC provides individual identity when a reviewed gateway forwards the signed token; local role keys identify a shared role and should be limited to local or break-glass use.
 
 ## API examples
 
@@ -461,6 +471,20 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_API_KEY` | empty | Admin key; 32+ characters; read, scan, and asset-context access |
 | `NETWATCH_OPERATOR_KEY` | empty | Optional Operator key; read and authorized scan access |
 | `NETWATCH_VIEWER_KEY` | empty | Optional Viewer key; read and export access only |
+| `NETWATCH_AUDIT_HMAC_KEY` | generated by launcher | Independent server-only key for protected audit links and the head checkpoint |
+| `NETWATCH_OIDC_ENABLED` | `false` | Enables fail-closed company bearer-token verification |
+| `NETWATCH_OIDC_ISSUER` | empty | Exact HTTPS issuer |
+| `NETWATCH_OIDC_AUDIENCE` | empty | Exact NetWatch audience/client identifier |
+| `NETWATCH_OIDC_JWKS_URL` | empty | Deployment-controlled HTTPS signing-key endpoint |
+| `NETWATCH_OIDC_GROUPS_CLAIM` | `groups` | Bounded token claim containing the company groups list |
+| `NETWATCH_OIDC_ADMIN_GROUPS` | empty | Exact comma-separated groups mapped to Admin |
+| `NETWATCH_OIDC_OPERATOR_GROUPS` | empty | Exact comma-separated groups mapped to Operator |
+| `NETWATCH_OIDC_VIEWER_GROUPS` | empty | Exact comma-separated groups mapped to Viewer |
+| `NETWATCH_OIDC_ALGORITHMS` | `RS256` | Explicit asymmetric signing-algorithm allowlist |
+| `NETWATCH_OIDC_CLOCK_SKEW_SECONDS` | `30` | Bounded identity-provider clock tolerance |
+| `NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS` | `3600` | Maximum signed token lifetime, bounded from 5 minutes to 24 hours |
+| `NETWATCH_OIDC_JWKS_CACHE_SECONDS` | `300` | Bounded provider signing-key-set cache lifetime |
+| `NETWATCH_OIDC_JWKS_TIMEOUT_SECONDS` | `5` | Bounded HTTPS signing-key lookup timeout |
 | `NETWATCH_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Accepted HTTP Host headers |
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI docs for local development |
@@ -604,7 +628,8 @@ NetWatch/
 - Progress updates and cancellation for longer scans
 - PDF reports
 - Safe public demo mode with sample data and scanning disabled
-- Organization authentication with SSO/OIDC and individual identities
+- PostgreSQL-backed multi-instance persistence and distributed rate/quota state
+- External scheduler/worker coordination with leader election
 - Encrypted off-host backup rotation, restore drills, and migration tooling
 
 ## Contributing
@@ -617,4 +642,4 @@ NetWatch is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-NetWatch is a defensive local visibility tool. Use it only with clear authorization. The default deployment is designed for a trusted local pilot or small internal team and must not be exposed publicly or treated as a multi-tenant enterprise service without TLS, organization identity, network restrictions, secret management, centralized logging, automated encrypted off-host backups with tested restoration, monitoring, and a deployment-specific security review.
+NetWatch is a defensive local visibility tool. Use it only with clear authorization. v1.6 can form the application layer of a reviewed internal company deployment, but it must not be exposed directly to the Internet or treated as a multi-tenant or multi-replica HA service without the external controls and architecture described in the enterprise deployment guide.
