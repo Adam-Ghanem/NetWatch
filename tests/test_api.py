@@ -4,12 +4,14 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.main as api
 import inventory_store
 import operations_store
 from ai_advisor import AIProviderResult, IntelligenceBrief, safety_identifier
+from enterprise_auth import OIDCAuthenticationError, OIDCIdentity
 from inventory_store import NetworkChangeSummary
 
 TEST_API_KEY = "test-secret-with-at-least-32-characters"
@@ -18,6 +20,7 @@ VIEWER_API_KEY = "viewer-secret-with-at-least-32-characters"
 AI_PROVIDER_KEY = "test-openai-project-key-with-enough-characters"
 AI_SAFETY_SECRET = "test-independent-safety-secret-with-enough-characters"
 AI_SUBJECT_ID = "deployment_subject_12345"
+AUDIT_HMAC_KEY = "test-independent-audit-hmac-key-with-enough-characters"
 API_HEADERS = {"X-NetWatch-Key": TEST_API_KEY}
 
 
@@ -25,6 +28,8 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.delenv("NETWATCH_OPERATOR_KEY", raising=False)
     monkeypatch.delenv("NETWATCH_VIEWER_KEY", raising=False)
     monkeypatch.setenv("NETWATCH_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", AUDIT_HMAC_KEY)
+    monkeypatch.setenv("NETWATCH_OIDC_ENABLED", "false")
     monkeypatch.setenv("NETWATCH_AI_SAFETY_SECRET", AI_SAFETY_SECRET)
     monkeypatch.setenv("NETWATCH_AI_SUBJECT_ID", AI_SUBJECT_ID)
     api._rate_events.clear()
@@ -39,13 +44,15 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
         response = client.get("/")
     assert response.status_code == 200
     assert "Connect to NetWatch" in response.text
-    assert "NetWatch v1.5" in response.text
+    assert "NetWatch v1.6" in response.text
     assert "Company context" in response.text
     assert "Operations audit log" in response.text
     assert "Company operations" in response.text
     assert "NetWatch Intelligence" in response.text
     assert response.headers["x-frame-options"] == "DENY"
     assert "default-src 'self'" in response.headers["content-security-policy"]
+    assert response.headers["strict-transport-security"].startswith("max-age=31536000")
+    assert len(response.headers["x-request-id"]) == 32
 
 
 def test_frontend_assets_are_served(monkeypatch, tmp_path):
@@ -65,9 +72,23 @@ def test_health_is_public(monkeypatch, tmp_path):
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.5.0"
+    assert response.json()["version"] == "1.6.0"
     assert response.json()["access_enabled"] is True
+    assert response.json()["auth_methods"] == ["api_key"]
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_liveness_and_readiness_are_public_and_separate(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        live = client.get("/api/health/live")
+        ready = client.get("/api/health/ready")
+
+    assert live.status_code == 200
+    assert live.json() == {"status": "ok"}
+    assert ready.status_code == 200
+    assert ready.json()["database"] == "ready"
+    assert ready.json()["role_keys"] == "configured"
+    assert ready.json()["audit_integrity"] == "ready"
 
 
 def test_protected_endpoint_rejects_missing_key(monkeypatch, tmp_path):
@@ -82,10 +103,63 @@ def test_protected_endpoint_rejects_wrong_key(monkeypatch, tmp_path):
     assert response.status_code == 401
 
 
+def test_malformed_authorization_never_falls_back_to_shared_key(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get(
+            "/api/session",
+            headers={"Authorization": "Basic unexpected", **API_HEADERS},
+        )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_duplicate_role_key_values_fail_readiness_and_authentication(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_OPERATOR_KEY", TEST_API_KEY)
+        ready = client.get("/api/health/ready")
+        session = client.get("/api/session", headers=API_HEADERS)
+
+    assert ready.status_code == 503
+    assert ready.json()["role_keys"] == "invalid"
+    assert session.status_code == 503
+
+
+def test_invalid_oidc_configuration_fails_closed_for_shared_keys(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_OIDC_ENABLED", "treu")
+        ready = client.get("/api/health/ready")
+        session = client.get("/api/session", headers=API_HEADERS)
+
+    assert ready.status_code == 503
+    assert ready.json()["oidc"] == "invalid"
+    assert session.status_code == 503
+
+
+def test_rate_limit_identity_buckets_are_bounded_and_stale_entries_are_reclaimed(
+    monkeypatch,
+):
+    api._rate_events.clear()
+    monkeypatch.setattr(api, "_MAX_API_RATE_LIMIT_BUCKETS", 2)
+    monkeypatch.setattr(api.time, "monotonic", lambda: 1_000.0)
+
+    api._enforce_rate_limit("identity-a")
+    api._enforce_rate_limit("identity-b")
+    with pytest.raises(api.HTTPException) as error:
+        api._enforce_rate_limit("identity-c")
+    assert error.value.status_code == 429
+    assert len(api._rate_events) == 2
+
+    api._rate_events["identity-a"].clear()
+    api._enforce_rate_limit("identity-c")
+    assert set(api._rate_events) == {"identity-b", "identity-c"}
+
+
 def test_api_is_disabled_without_configured_key(monkeypatch, tmp_path):
     monkeypatch.delenv("NETWATCH_API_KEY", raising=False)
     monkeypatch.delenv("NETWATCH_OPERATOR_KEY", raising=False)
     monkeypatch.delenv("NETWATCH_VIEWER_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_OIDC_ENABLED", "false")
     monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
     monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
     with TestClient(api.app, base_url="http://127.0.0.1") as client:
@@ -242,9 +316,66 @@ def test_session_reports_admin_capabilities(monkeypatch, tmp_path):
             "manage_alerts": True,
             "manage_operations": True,
             "backup": True,
+            "view_audit_identity": True,
             "use_intelligence": True,
         },
+        "auth_method": "api_key",
+        "actor_id": "shared-key:admin",
     }
+
+
+def test_verified_oidc_identity_maps_to_individual_session(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        api,
+        "verify_oidc_token",
+        lambda _: OIDCIdentity(subject="employee-1042", role="operator"),
+    )
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get(
+            "/api/session",
+            headers={"Authorization": "Bearer signed-company-token"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "operator"
+    assert response.json()["actor_id"] == "oidc:employee-1042"
+    assert response.json()["auth_method"] == "oidc"
+
+
+def test_invalid_bearer_token_never_falls_back_to_supplied_shared_key(monkeypatch, tmp_path):
+    def reject(_: str):
+        raise OIDCAuthenticationError("invalid")
+
+    monkeypatch.setattr(api, "verify_oidc_token", reject)
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get(
+            "/api/session",
+            headers={
+                "Authorization": "Bearer invalid-token",
+                "X-NetWatch-Key": TEST_API_KEY,
+            },
+        )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_ambiguous_authorization_headers_are_rejected(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        api,
+        "verify_oidc_token",
+        lambda _: OIDCIdentity(subject="employee-1042", role="admin"),
+    )
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get(
+            "/api/session",
+            headers=[
+                ("Authorization", "Bearer token-one"),
+                ("Authorization", "Bearer token-two"),
+            ],
+        )
+
+    assert response.status_code == 401
 
 
 def test_viewer_can_read_but_cannot_scan(monkeypatch, tmp_path):
@@ -328,6 +459,56 @@ def test_admin_can_update_asset_context_and_audit_event(monkeypatch, tmp_path):
     assert audit.status_code == 200
     assert audit.json()["items"][0]["action"] == "asset_context_updated"
     assert audit.json()["items"][0]["actor_role"] == "admin"
+    assert audit.json()["items"][0]["actor_id"] == "shared-key:admin"
+    assert audit.json()["items"][0]["auth_method"] == "api_key"
+    assert audit.json()["items"][0]["integrity_protected"] is True
+
+
+def test_audit_identity_and_integrity_are_admin_only(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_OPERATOR_KEY", OPERATOR_API_KEY)
+        operator_headers = {"X-NetWatch-Key": OPERATOR_API_KEY}
+        audit = client.get("/api/audit-log", headers=operator_headers)
+        integrity = client.get("/api/audit-log/integrity", headers=operator_headers)
+
+    assert audit.status_code == 403
+    assert integrity.status_code == 403
+
+
+def test_tampered_audit_chain_pauses_privileged_operations_but_remains_inspectable(
+    monkeypatch, tmp_path
+):
+    profiler_called = False
+
+    def fake_profile(_):
+        nonlocal profiler_called
+        profiler_called = True
+
+    monkeypatch.setattr(api, "profile_host", fake_profile)
+    with _client(monkeypatch, tmp_path) as client:
+        inventory_store.record_audit_event(
+            "admin",
+            "policy_created",
+            "192.168.1.0/24",
+            "completed",
+            "Approved scope.",
+        )
+        with sqlite3.connect(inventory_store.DB_FILE) as conn:
+            conn.execute("UPDATE audit_log SET details = 'tampered' WHERE id = 1")
+
+        ready = client.get("/api/health/ready")
+        blocked = client.post(
+            "/api/scan/host",
+            headers=API_HEADERS,
+            json={"ip": "192.168.1.1", "authorized": True},
+        )
+        integrity = client.get("/api/audit-log/integrity", headers=API_HEADERS)
+
+    assert ready.status_code == 503
+    assert blocked.status_code == 503
+    assert profiler_called is False
+    assert integrity.status_code == 200
+    assert integrity.json()["status"] == "invalid"
 
 
 def test_inventory_csv_export_is_downloadable_and_formula_safe(monkeypatch, tmp_path):
@@ -380,7 +561,7 @@ def test_admin_manages_approved_scan_policies_and_other_roles_are_isolated(monke
 
     assert created.status_code == 200
     assert created.json()["policy"]["cidr"] == "192.168.20.0/24"
-    assert created.json()["policy"]["authorized_by"] == "admin"
+    assert created.json()["policy"]["authorized_by"] == "shared-key:admin"
     assert listed.status_code == 200
     assert listed.json()["count"] == 1
     assert viewer_update.status_code == 403
@@ -471,7 +652,7 @@ def test_manual_policy_run_creates_alert_and_operator_can_acknowledge(monkeypatc
     assert alerts.status_code == 200
     assert alerts.json()["open_count"] == 1
     assert acknowledged.status_code == 200
-    assert acknowledged.json()["alert"]["acknowledged_by"] == "operator"
+    assert acknowledged.json()["alert"]["acknowledged_by"] == "shared-key:operator"
     assert viewer_update.status_code == 403
 
 
@@ -501,6 +682,8 @@ def test_database_backup_is_admin_only_and_downloadable(monkeypatch, tmp_path):
 def test_due_scheduler_cycle_runs_claimed_policy_with_system_audit(monkeypatch, tmp_path):
     monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
     monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", AUDIT_HMAC_KEY)
+    monkeypatch.delenv("NETWATCH_API_KEY", raising=False)
     monkeypatch.setattr(api, "scan_network", lambda _: [])
     policy = operations_store.create_scan_policy(
         name="Scheduled lab baseline",

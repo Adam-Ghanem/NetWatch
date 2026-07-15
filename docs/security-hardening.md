@@ -71,4 +71,4 @@ Admin snapshot downloads use SQLite's backup API instead of copying live databas
 
 ## Remaining production requirements
 
-For a remote or multi-user production deployment, add SSO/OIDC with individual identities, fine-grained authorization, managed secrets, provider project spend/rate controls, centralized tamper-resistant logging, TLS, an external scheduler with leader election, automated encrypted off-host backups with restore drills, monitoring, report approval workflow, AI/privacy review, and a formal retention policy.
+For a remote or multi-user production deployment, place NetWatch behind an approved OIDC-aware TLS gateway, configure dedicated least-privilege groups, inject managed secrets, export audit/log evidence to append-only storage, configure provider spend/rate controls, automate encrypted off-host backups with restore drills, and complete monitoring, report approval, AI/privacy, retention, and deployment security reviews. Multi-instance operation additionally requires external workers with leader election, shared transactional storage, and distributed rate/quota state.

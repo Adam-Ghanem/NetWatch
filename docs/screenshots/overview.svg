@@ -14,7 +14,7 @@
   <g font-family="Arial,sans-serif" font-size="15" fill="#405a62">
     <text x="390" y="48" fill="#087f8c" font-weight="700">Overview</text><text x="490" y="48">Network scan</text><text x="620" y="48">Host check</text><text x="730" y="48">Port audit</text><text x="830" y="48">Inventory</text><text x="920" y="48">Risk advisor</text><text x="1045" y="48">Reports</text>
   </g>
-<rect x="1180" y="19" width="185" height="42" rx="12" fill="#fff" stroke="#c5d7d4"/><circle cx="1204" cy="40" r="6" fill="#179b67"/><text x="1221" y="45" font-family="Arial,sans-serif" font-size="14" fill="#102c35">API online · v1.5</text>
+<rect x="1180" y="19" width="185" height="42" rx="12" fill="#fff" stroke="#c5d7d4"/><circle cx="1204" cy="40" r="6" fill="#179b67"/><text x="1221" y="45" font-family="Arial,sans-serif" font-size="14" fill="#102c35">API online · v1.6</text>
 
   <text x="58" y="130" font-family="Arial,sans-serif" font-size="13" font-weight="800" fill="#087f8c" letter-spacing="2">AUTHORIZED LOCAL NETWORKS ONLY</text>
   <text x="58" y="174" font-family="Arial,sans-serif" font-size="36" font-weight="800" fill="#081f27">Overview</text>

@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.5 is a local-first defensive network visibility application. The professional dashboard, role-protected API, optional bounded scheduler, maintenance controls, case workflow, authenticated metrics, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.6 is a local-first defensive network visibility application with optional enterprise identity. The professional dashboard, protected API, bounded scheduler, maintenance controls, case workflow, authenticated metrics, audit integrity verification, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -11,7 +11,10 @@ Browser dashboard (`frontend/`)
           v
 FastAPI application (`backend/main.py`)
           |
-          +--> Role keys, rate limits, authorization confirmation
+          +--> OIDC identity or local role keys
+          |      - issuer/audience/signature/expiry verification
+          |      - exact company-group role mapping
+          |      - rate limits and authorization confirmation
           |
           +--> IPv4/CIDR validation (`security.py`)
           |
@@ -36,7 +39,7 @@ FastAPI application (`backend/main.py`)
           |      - consistent database snapshots
           |      - `operations_store.py`
           |
-          +--> SQLite inventory, company context, changes, audit log (`inventory_store.py`)
+          +--> SQLite inventory, company context, changes, HMAC audit chain (`inventory_store.py`)
           |
           +--> Markdown/HTML reports (`report_builder.py`)
 ```
@@ -53,7 +56,7 @@ http://127.0.0.1:8000
 
 It provides:
 
-- Secure API-key connection screen
+- Automatic company SSO session detection and local role-key fallback
 - Admin, Operator, and Viewer capabilities
 - Overview metrics and recent checks
 - Authorized local CIDR discovery
@@ -84,7 +87,8 @@ It is not the default deployment path.
 
 ## Main modules
 
-- `backend/main.py`: FastAPI routes, role authorization, security headers, rate limits, scan concurrency, and frontend hosting.
+- `backend/main.py`: FastAPI routes, role authorization, request correlation, probes, metrics, security headers, bounded rate-limit state, scan concurrency, and frontend hosting.
+- `enterprise_auth.py`: fail-closed OIDC configuration, JWKS key lookup/cache, JWT validation, and exact group-to-role mapping.
 - `frontend/index.html`: accessible dashboard structure.
 - `frontend/styles.css`: responsive visual system.
 - `frontend/app.js`: API client, dashboard state, scan workflows, rendering, and report downloads.
@@ -114,7 +118,7 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 6 with company asset context, operational audit records, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
+- Schema version 7 with individual integrity-protected audit metadata, company asset context, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
 - Bounded change-event, observation, audit, alert, policy, maintenance-window, and intelligence-event retention
 - Named Docker volumes in the default Compose deployment
 
@@ -124,7 +128,7 @@ The nine operational tables have separate responsibilities:
 - `assets` stores current inventory state, last confirmed sighting, owner, department, location, criticality, and notes.
 - `network_observations` records observed and not-observed evidence for each network scan.
 - `asset_events` records meaningful transitions: new asset, returned asset, and not observed.
-- `audit_log` records actor role, action, target, outcome, and a bounded operational summary.
+- `audit_log` records actor identity, role, authentication method, request correlation, action, target, outcome, bounded summary, and an optional separate-key HMAC link. Legacy rows remain unprotected and labeled.
 - `scan_policies` records immutable approved private CIDRs, bounded intervals, enablement, and last/next execution state.
 - `operation_alerts` records transition-derived cases, severity, repeated occurrence evidence, SLA due time, assignee, acknowledgement, and resolution evidence.
 - `maintenance_windows` records global or policy-specific UTC execution pauses and their change reason.
@@ -138,14 +142,20 @@ The older CSV history remains only for Streamlit compatibility.
 
 NetWatch is intended for approved local environments and applies these controls:
 
-- A valid Admin, Operator, or Viewer key required for every non-health API route
+- A valid signed company token or local Admin, Operator, or Viewer key is required for every non-health API route
+- Company tokens require the configured issuer, audience, signing algorithm/key, time claims, subject, and exact group mapping
+- A supplied invalid bearer token is never allowed to fall back to a valid shared key
 - Viewer can read/export, Operator can also scan and triage alerts, and Admin can also edit asset context, manage policies, and download backups
-- API disabled until at least one valid role key is configured
+- API disabled until valid OIDC mapping or at least one unique valid role key is configured
 - Server-side `authorized: true` confirmation for scans
 - Explicit RFC1918, loopback, and link-local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
-- Rate limiting per client and endpoint
+- Rate limiting per authenticated identity and endpoint
+- Individual audit identities are Admin-only; reports use identity-redacted audit rows
+- Separate-key HMAC audit integrity with a keyed head checkpoint, a five-second maximum public readiness cache, and fresh fail-closed verification for privileged operations
+- Generated response request IDs and safe route-template correlation logs
+- Separate liveness and readiness probes
 - Bounded simultaneous scans
 - Scheduler disabled by default and limited to persisted Admin-approved CIDRs
 - Atomic due-policy claims and one policy execution per scheduler cycle
@@ -175,4 +185,4 @@ The default Docker Compose service is intentionally single-process and local-onl
 127.0.0.1:8000 -> FastAPI + dashboard + API
 ```
 
-This keeps setup simple and avoids cross-origin configuration. The scheduler is intentionally in-process and supports this single-instance model only. Role keys provide coarse separation for a trusted internal pilot, not individual identity. The application-level AI budget is not a billing guarantee and the local `.env` is not a production secret manager. For shared or remote deployment, add an external job platform with leader election, a reviewed reverse proxy, TLS, organization authentication, network restrictions, centralized logging, managed secrets, provider project spend controls, encrypted off-host backups with tested restoration, and stronger operational monitoring.
+This keeps setup simple and avoids cross-origin configuration. OIDC provides individual identity when a reviewed gateway forwards signed bearer tokens, but the scheduler and SQLite storage remain intentionally single-instance. The application-level AI budget is not a billing guarantee and the local `.env` is not a production secret manager. For shared deployment use TLS, managed secrets, network restrictions, centralized log shipping, provider spend controls, encrypted off-host backups, and the controls in `docs/enterprise-deployment.md`. Multi-replica HA additionally requires shared transactional storage, distributed rate/quota state, and external worker coordination.

@@ -8,6 +8,20 @@ services:
       NETWATCH_API_KEY: "${NETWATCH_API_KEY:-}"
       NETWATCH_OPERATOR_KEY: "${NETWATCH_OPERATOR_KEY:-}"
       NETWATCH_VIEWER_KEY: "${NETWATCH_VIEWER_KEY:-}"
+      NETWATCH_AUDIT_HMAC_KEY: "${NETWATCH_AUDIT_HMAC_KEY:-}"
+      NETWATCH_OIDC_ENABLED: "${NETWATCH_OIDC_ENABLED:-false}"
+      NETWATCH_OIDC_ISSUER: "${NETWATCH_OIDC_ISSUER:-}"
+      NETWATCH_OIDC_AUDIENCE: "${NETWATCH_OIDC_AUDIENCE:-}"
+      NETWATCH_OIDC_JWKS_URL: "${NETWATCH_OIDC_JWKS_URL:-}"
+      NETWATCH_OIDC_GROUPS_CLAIM: "${NETWATCH_OIDC_GROUPS_CLAIM:-groups}"
+      NETWATCH_OIDC_ADMIN_GROUPS: "${NETWATCH_OIDC_ADMIN_GROUPS:-}"
+      NETWATCH_OIDC_OPERATOR_GROUPS: "${NETWATCH_OIDC_OPERATOR_GROUPS:-}"
+      NETWATCH_OIDC_VIEWER_GROUPS: "${NETWATCH_OIDC_VIEWER_GROUPS:-}"
+      NETWATCH_OIDC_ALGORITHMS: "${NETWATCH_OIDC_ALGORITHMS:-RS256}"
+      NETWATCH_OIDC_CLOCK_SKEW_SECONDS: "${NETWATCH_OIDC_CLOCK_SKEW_SECONDS:-30}"
+      NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS: "${NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS:-3600}"
+      NETWATCH_OIDC_JWKS_CACHE_SECONDS: "${NETWATCH_OIDC_JWKS_CACHE_SECONDS:-300}"
+      NETWATCH_OIDC_JWKS_TIMEOUT_SECONDS: "${NETWATCH_OIDC_JWKS_TIMEOUT_SECONDS:-5}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
       NETWATCH_AI_SAFETY_SECRET: "${NETWATCH_AI_SAFETY_SECRET:-}"
       NETWATCH_AI_SUBJECT_ID: "${NETWATCH_AI_SUBJECT_ID:-}"
@@ -32,6 +46,11 @@ services:
     volumes:
       - netwatch-data:/app/data
       - netwatch-logs:/app/logs
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=268435456
+    init: true
+    pids_limit: 256
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -50,6 +69,11 @@ services:
     volumes:
       - netwatch-data:/app/data
       - netwatch-logs:/app/logs
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=268435456
+    init: true
+    pids_limit: 256
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -11,11 +11,26 @@ ENV_FILE = ROOT / ".env"
 MIN_API_KEY_LENGTH = 32
 MIN_AI_SAFETY_SECRET_LENGTH = 32
 MIN_AI_SUBJECT_LENGTH = 16
+MIN_AUDIT_HMAC_KEY_LENGTH = 32
 AI_SAFETY_SECRET_PLACEHOLDER = "replace-with-an-independent-random-secret"
 AI_SUBJECT_PLACEHOLDER = "replace-with-an-opaque-random-subject"
+AUDIT_HMAC_KEY_PLACEHOLDER = "replace-with-an-independent-audit-hmac-key"
 DEFAULTS = {
     "NETWATCH_OPERATOR_KEY": "",
     "NETWATCH_VIEWER_KEY": "",
+    "NETWATCH_OIDC_ENABLED": "false",
+    "NETWATCH_OIDC_ISSUER": "",
+    "NETWATCH_OIDC_AUDIENCE": "",
+    "NETWATCH_OIDC_JWKS_URL": "",
+    "NETWATCH_OIDC_GROUPS_CLAIM": "groups",
+    "NETWATCH_OIDC_ADMIN_GROUPS": "",
+    "NETWATCH_OIDC_OPERATOR_GROUPS": "",
+    "NETWATCH_OIDC_VIEWER_GROUPS": "",
+    "NETWATCH_OIDC_ALGORITHMS": "RS256",
+    "NETWATCH_OIDC_CLOCK_SKEW_SECONDS": "30",
+    "NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS": "3600",
+    "NETWATCH_OIDC_JWKS_CACHE_SECONDS": "300",
+    "NETWATCH_OIDC_JWKS_TIMEOUT_SECONDS": "5",
     "NETWATCH_ALLOWED_HOSTS": "127.0.0.1,localhost",
     "NETWATCH_ALLOWED_ORIGINS": "http://127.0.0.1:8000,http://localhost:8000",
     "NETWATCH_API_DOCS": "false",
@@ -55,6 +70,7 @@ def read_env() -> dict[str, str]:
 def write_env(values: dict[str, str]) -> None:
     preferred = [
         "NETWATCH_API_KEY",
+        "NETWATCH_AUDIT_HMAC_KEY",
         "OPENAI_API_KEY",
         "NETWATCH_AI_SAFETY_SECRET",
         "NETWATCH_AI_SUBJECT_ID",
@@ -78,6 +94,20 @@ def ensure_configuration() -> str:
     if len(current_key) < MIN_API_KEY_LENGTH or current_key == "replace-with-a-long-random-secret":
         values["NETWATCH_API_KEY"] = secrets.token_urlsafe(32)
 
+    configured_role_keys = [
+        value
+        for value in (
+            values.get("NETWATCH_API_KEY", "").strip(),
+            values.get("NETWATCH_OPERATOR_KEY", "").strip(),
+            values.get("NETWATCH_VIEWER_KEY", "").strip(),
+        )
+        if value
+    ]
+    if any(len(value) < MIN_API_KEY_LENGTH for value in configured_role_keys):
+        raise ValueError("Each configured NetWatch role key must contain at least 32 characters.")
+    if len(configured_role_keys) != len(set(configured_role_keys)):
+        raise ValueError("Each configured NetWatch role must use a unique key.")
+
     provider_key = values.get("OPENAI_API_KEY", "").strip()
     safety_secret = values.get("NETWATCH_AI_SAFETY_SECRET", "").strip()
     if (
@@ -86,6 +116,25 @@ def ensure_configuration() -> str:
         or (provider_key and secrets.compare_digest(safety_secret, provider_key))
     ):
         values["NETWATCH_AI_SAFETY_SECRET"] = secrets.token_urlsafe(32)
+
+    audit_hmac_key = values.get("NETWATCH_AUDIT_HMAC_KEY", "").strip()
+    separated_values = tuple(
+        value
+        for value in (
+            values.get("NETWATCH_API_KEY", "").strip(),
+            values.get("NETWATCH_OPERATOR_KEY", "").strip(),
+            values.get("NETWATCH_VIEWER_KEY", "").strip(),
+            provider_key,
+            values.get("NETWATCH_AI_SAFETY_SECRET", "").strip(),
+        )
+        if value
+    )
+    if (
+        len(audit_hmac_key) < MIN_AUDIT_HMAC_KEY_LENGTH
+        or audit_hmac_key == AUDIT_HMAC_KEY_PLACEHOLDER
+        or any(secrets.compare_digest(audit_hmac_key, value) for value in separated_values)
+    ):
+        values["NETWATCH_AUDIT_HMAC_KEY"] = secrets.token_urlsafe(32)
 
     subject_id = values.get("NETWATCH_AI_SUBJECT_ID", "").strip()
     if len(subject_id) < MIN_AI_SUBJECT_LENGTH or subject_id == AI_SUBJECT_PLACEHOLDER:
@@ -102,7 +151,11 @@ def run(command: list[str]) -> None:
 
 
 def main() -> int:
-    api_key = ensure_configuration()
+    try:
+        ensure_configuration()
+    except ValueError as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return 1
     try:
         run(["docker", "compose", "version"])
         run(["docker", "compose", "up", "-d", "--build", "netwatch"])
@@ -117,9 +170,10 @@ def main() -> int:
 
     print("\nNetWatch is ready.")
     print("URL:     http://127.0.0.1:8000")
-    print(f"Admin key: {api_key}")
-    print("The key is stored in .env and is required by the dashboard connection screen.")
+    print("The local break-glass Admin key is stored only in the private .env file.")
     print("Optional Operator and Viewer keys can also be configured in .env.")
+    print("Company OIDC users connect without entering NetWatch or AI provider keys.")
+    print("Tamper-evident audit signing is enabled with a separate server-only key.")
     print("Scheduled policy execution is opt-in with NETWATCH_SCHEDULER_ENABLED=true.")
     print("AI safety identity is generated automatically and never shown to dashboard users.")
     print("Server-side intelligence is available only when OPENAI_API_KEY is configured.")

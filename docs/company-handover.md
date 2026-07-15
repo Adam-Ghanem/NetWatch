@@ -1,4 +1,4 @@
-# NetWatch v1.5 Company Handover
+# NetWatch v1.6 Company Handover
 
 ## Product summary
 
@@ -12,9 +12,10 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1.5 provides:
+NetWatch v1.6 provides:
 
-- Protected local dashboard with session-only Admin, Operator, and Viewer access
+- Protected dashboard with automatic company SSO detection and local role-key fallback
+- Strict OIDC token verification and exact company-group role mapping
 - Approved private/local IPv4 validation
 - Local CIDR discovery up to 256 hosts
 - Single-host latency, TTL, hostname, and OS hints
@@ -23,7 +24,8 @@ NetWatch v1.5 provides:
 - Exposure priority scoring and recommendations
 - SQLite asset inventory with owner, department, location, criticality, and notes
 - Normalized scan snapshots and new/returned/not-observed asset events
-- Bounded operations audit log and formula-safe inventory CSV export
+- Admin-only individual audit identity, request correlation, and separate-key HMAC verification
+- Formula-safe inventory CSV export
 - Admin-approved private CIDR policies with bounded intervals
 - Opt-in single-process scheduled execution using the normal scan limit
 - Deduplicated operational cases with occurrence count, assignee, local SLA, acknowledgement, resolution evidence, and reopening
@@ -57,7 +59,7 @@ cd NetWatch
 python scripts/start.py
 ```
 
-The launcher prints the dashboard URL and generated local API key.
+The launcher prints the dashboard URL but never prints generated credentials. The local break-glass Admin key remains only in the private `.env` file; company SSO users never receive NetWatch or provider keys.
 
 ## Suggested demonstration flow
 
@@ -82,7 +84,8 @@ The launcher prints the dashboard URL and generated local API key.
 
 ## Main files
 
-- `backend/main.py`: FastAPI app, role authorization, API routes, rate limits, security headers, and frontend hosting.
+- `backend/main.py`: FastAPI app, role authorization, API routes, request correlation, probes, metrics, security headers, and frontend hosting.
+- `enterprise_auth.py`: OIDC/JWKS validation and exact group-to-role mapping.
 - `frontend/index.html`: dashboard structure.
 - `frontend/styles.css`: responsive visual system.
 - `frontend/app.js`: dashboard behavior and protected API workflows.
@@ -114,7 +117,7 @@ This information may include:
 - Per-scan presence observations and asset-change events
 - Observed service exposure
 - Asset owners, departments, locations, criticality, and operational notes
-- Operations audit events and actor roles
+- Integrity-protected operations audit events, actor identities, roles, and request IDs
 - Approved scan policies and execution state
 - Operational cases, repeated-occurrence/SLA evidence, assignment, acknowledgement, and resolution notes
 - Maintenance windows and their change reasons
@@ -126,9 +129,9 @@ Treat database exports, screenshots, logs, and reports as internal information.
 ## Default security posture
 
 - Localhost-only service exposure
-- Valid Admin, Operator, or Viewer key required
+- Verified company identity or valid local Admin, Operator, or Viewer key required
 - Viewer is read-only, Operator can run authorized checks and triage cases, and Admin can edit asset context, manage policies/maintenance, and download snapshots
-- Protected API disabled without at least one configured role key
+- Protected API disabled without usable OIDC mapping or a configured local role key
 - Explicit authorization confirmation on scans
 - Local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
@@ -141,15 +144,14 @@ Treat database exports, screenshots, logs, and reports as internal information.
 
 ## Company deployment requirements
 
-Before use by multiple employees or on a remote server, add:
+Before use by multiple employees or on a remote server, configure and review:
 
-- SSO/OIDC organization authentication with individual identities
-- Fine-grained authorization beyond shared role secrets
-- TLS and reviewed reverse proxy
+- The built-in OIDC verifier behind an approved identity-aware TLS gateway
+- Dedicated least-privilege IdP groups and controlled break-glass keys
 - Network allowlists or VPN-only access
 - Managed secret storage
 - Provider spend/rate controls and approved AI/data-processing policy
-- Centralized tamper-resistant audit logs
+- Centralized append-only export of the locally integrity-protected audit stream
 - Retention and deletion policy
 - Automated encrypted off-host backups, restore drills, and migrations
 - Health monitoring and alerting
@@ -163,7 +165,7 @@ Before use by multiple employees or on a remote server, add:
 - PDF reports
 - ARP discovery where permissions allow
 - Progress and cancellation for long scans
-- SSO/OIDC and individual RBAC for shared deployments
+- PostgreSQL/distributed coordination for multi-replica deployments
 - External scheduler/worker coordination for multi-instance deployment
 - Automated encrypted backup rotation and tested restoration
 - Representative intelligence evaluations, privacy review, and centralized cost monitoring
