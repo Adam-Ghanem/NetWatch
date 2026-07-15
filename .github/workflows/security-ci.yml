@@ -50,7 +50,7 @@ jobs:
             echo "A secret-like OpenAI key pattern was found in tracked content."
             exit 1
           fi
-          rg -q '^\.env$' .dockerignore
+          grep -qxF '.env' .dockerignore
 
       - name: Scan Python for high-confidence, high-severity findings
         run: bandit -q -r . -x ./.venv,./venv,./tests -lll -iii
