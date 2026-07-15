@@ -18,6 +18,8 @@ const state = {
   view: 'overview',
   health: null,
   role: '',
+  authMethod: '',
+  actorId: '',
   capabilities: {
     read: false,
     scan: false,
@@ -25,6 +27,7 @@ const state = {
     manage_alerts: false,
     manage_operations: false,
     backup: false,
+    view_audit_identity: false,
     use_intelligence: false,
   },
   assets: [],
@@ -60,7 +63,11 @@ async function apiFetch(path, options = {}) {
   if (state.key) headers.set('X-NetWatch-Key', state.key);
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: 'same-origin',
+    ...options,
+    headers,
+  });
   if (!response.ok) {
     let detail = `Request failed with status ${response.status}`;
     try {
@@ -250,6 +257,8 @@ function setConnected(connected) {
   if (connected) $('#api-key').value = '';
   if (!connected) {
     state.role = '';
+    state.authMethod = '';
+    state.actorId = '';
     state.capabilities = {
       read: false,
       scan: false,
@@ -257,6 +266,7 @@ function setConnected(connected) {
       manage_alerts: false,
       manage_operations: false,
       backup: false,
+      view_audit_identity: false,
       use_intelligence: false,
     };
     state.intelligenceAvailable = false;
@@ -266,7 +276,10 @@ function setConnected(connected) {
 
 function applyRoleAccess() {
   const roleBadge = $('#session-role');
-  const roleLabel = state.role ? `${state.role[0].toUpperCase()}${state.role.slice(1)}` : 'Disconnected';
+  const roleName = state.role ? `${state.role[0].toUpperCase()}${state.role.slice(1)}` : '';
+  const roleLabel = roleName
+    ? `${roleName}${state.authMethod === 'oidc' ? ' · SSO' : ''}`
+    : 'Disconnected';
   roleBadge.textContent = roleLabel;
   roleBadge.className = `role-badge ${state.role || ''}`;
 
@@ -310,6 +323,7 @@ function applyRoleAccess() {
   $('#triage-alert-id').disabled = false;
   $('#policy-run-authorized').disabled = !canScan;
   $('#database-backup').disabled = !Boolean(state.capabilities.backup);
+  $('#nav [data-view="audit"]').hidden = !Boolean(state.capabilities.view_audit_identity);
   $('#metrics-download').disabled = !Boolean(state.capabilities.read);
   $('#intelligence-generate').disabled = !Boolean(
     state.capabilities.use_intelligence && state.intelligenceAvailable,
@@ -317,15 +331,27 @@ function applyRoleAccess() {
   $('#intelligence-refresh').disabled = !(state.role === 'admin' && state.intelligenceAvailable);
 }
 
-async function connectWithKey(key) {
-  setApiKey(key);
+async function connectSession() {
   const session = await apiJson('/api/session');
   state.role = session.role || '';
+  state.authMethod = session.auth_method || '';
+  state.actorId = session.actor_id || '';
   state.capabilities = session.capabilities || {};
   applyRoleAccess();
   await loadOverview();
   setConnected(true);
-  showToast(`Connected with ${state.role} access.`);
+  const method = state.authMethod === 'oidc' ? 'company SSO' : 'local role key';
+  showToast(`Connected with ${state.role} access through ${method}.`);
+}
+
+async function connectWithKey(key) {
+  setApiKey(key);
+  return connectSession();
+}
+
+async function connectWithCompanySso() {
+  setApiKey('');
+  return connectSession();
 }
 
 async function loadOverview() {
@@ -440,13 +466,24 @@ function fillAssetContext(ipAddress) {
 }
 
 async function loadAudit() {
-  const payload = await apiJson('/api/audit-log?limit=200');
+  const [payload, integrity] = await Promise.all([
+    apiJson('/api/audit-log?limit=200'),
+    apiJson('/api/audit-log/integrity'),
+  ]);
+  const integrityBadge = $('#audit-integrity');
+  integrityBadge.textContent = integrity.valid
+    ? `Chain ${integrity.status} · ${integrity.protected_entries}`
+    : `Chain ${integrity.status}`;
+  integrityBadge.className = `risk-badge ${integrity.valid ? 'completed' : 'high'}`;
   renderTable($('#audit-results'), payload.items || [], [
     { key: 'created_at', label: 'Time' },
+    { key: 'actor_id', label: 'Actor' },
     { key: 'actor_role', label: 'Role', chip: true },
+    { key: 'auth_method', label: 'Auth', chip: true },
     { key: 'action', label: 'Action', format: (value) => text(value).replaceAll('_', ' ') },
     { key: 'target', label: 'Target' },
     { key: 'outcome', label: 'Outcome', chip: true },
+    { key: 'integrity_protected', label: 'Integrity', format: (value) => (value ? 'Protected' : 'Legacy') },
     { key: 'details', label: 'Details' },
   ], 'No operational events have been recorded yet.');
 }
@@ -887,9 +924,12 @@ $('#toggle-key').addEventListener('click', () => {
 });
 
 $('#disconnect').addEventListener('click', () => {
+  const usedCompanySso = state.authMethod === 'oidc';
   setApiKey('');
   setConnected(false);
-  showToast('Disconnected. API key cleared from this tab.');
+  showToast(usedCompanySso
+    ? 'NetWatch view disconnected. Company SSO is managed by your identity gateway.'
+    : 'Disconnected. API key cleared from this tab.');
 });
 
 $('#nav').addEventListener('click', (event) => {
@@ -1308,6 +1348,19 @@ async function init() {
       setApiKey('');
       setConnected(false);
       setFormStatus('connect-status', error.message, 'error');
+    }
+  }
+
+  if ((state.health?.auth_methods || []).includes('oidc')) {
+    try {
+      await connectWithCompanySso();
+      return;
+    } catch (_) {
+      setConnected(false);
+      setFormStatus(
+        'connect-status',
+        'Complete company SSO through the approved gateway, or use a local break-glass role key.',
+      );
     }
   }
   setConnected(false);

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import secrets
 import threading
 import time
 from collections import defaultdict, deque
@@ -16,8 +17,8 @@ import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse, Response
-from fastapi.security import APIKeyHeader
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -55,6 +56,15 @@ from config import (
     SCHEDULER_ENABLED,
     SCHEDULER_POLL_SECONDS,
 )
+from enterprise_auth import (
+    OIDCAuthenticationError,
+    OIDCAuthorizationError,
+    OIDCConfigurationError,
+    OIDCProviderUnavailableError,
+    oidc_configuration_status,
+    oidc_settings,
+    verify_oidc_token,
+)
 from export_utils import safe_csv_bytes
 from host_profiler import profile_host
 from intelligence_store import (
@@ -66,9 +76,13 @@ from intelligence_store import (
     save_intelligence_brief,
 )
 from inventory_store import (
+    AuditIntegrityError,
     add_scan_run,
     asset_inventory,
     asset_port_findings,
+    audit_integrity_enabled,
+    audit_integrity_is_ready,
+    database_is_ready,
     init_db,
     recent_asset_events,
     recent_audit_log,
@@ -79,6 +93,7 @@ from inventory_store import (
     update_asset_context,
     update_asset_ports,
     upsert_hosts,
+    verify_audit_integrity,
 )
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
@@ -144,18 +159,66 @@ app.add_middleware(
     allow_origins=list(API_ALLOWED_ORIGINS),
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH"],
-    allow_headers=["Content-Type", "X-NetWatch-Key"],
+    allow_headers=["Authorization", "Content-Type", "X-NetWatch-Key"],
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(API_ALLOWED_HOSTS))
 
 
+@app.exception_handler(AuditIntegrityError)
+async def audit_integrity_error_handler(request: Request, _: AuditIntegrityError) -> JSONResponse:
+    LOGGER.error(
+        "audit_integrity_blocked request_id=%s route=%s",
+        str(getattr(request.state, "request_id", ""))[:64],
+        getattr(request.scope.get("route"), "path", "unmatched"),
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Audit integrity verification failed; protected operations are paused."},
+    )
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    global _http_active_requests
+    global _http_request_duration_seconds
+    global _http_requests_total
+    global _http_server_errors_total
+
+    request.state.request_id = secrets.token_hex(16)
+    started = time.perf_counter()
+    status_code = 500
+    with _http_metrics_lock:
+        _http_active_requests += 1
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+    finally:
+        elapsed = max(0.0, time.perf_counter() - started)
+        with _http_metrics_lock:
+            _http_active_requests -= 1
+            _http_requests_total += 1
+            _http_request_duration_seconds += elapsed
+            if status_code >= 500:
+                _http_server_errors_total += 1
+        route = getattr(request.scope.get("route"), "path", "unmatched")
+        LOGGER.info(
+            "request_completed request_id=%s method=%s route=%s status=%s duration_ms=%.2f",
+            request.state.request_id,
+            request.method,
+            route,
+            status_code,
+            elapsed * 1_000,
+        )
+
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    response.headers["X-Request-ID"] = request.state.request_id
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self'; "
@@ -173,17 +236,28 @@ async def security_headers(request: Request, call_next):
 
 
 _api_key_header = APIKeyHeader(name="X-NetWatch-Key", auto_error=False)
+_bearer_header = HTTPBearer(auto_error=False)
+_MAX_API_RATE_LIMIT_BUCKETS = 50_000
+_MAX_INTELLIGENCE_RATE_LIMIT_BUCKETS = 10_000
 _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
 _intelligence_rate_lock = threading.Lock()
 _intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
 _intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
+_http_metrics_lock = threading.Lock()
+_http_requests_total = 0
+_http_server_errors_total = 0
+_http_active_requests = 0
+_http_request_duration_seconds = 0.0
 
 
 @dataclass(frozen=True)
 class AuthContext:
     role: str
+    actor_id: str
+    auth_method: str
+    request_id: str
 
     @property
     def capabilities(self) -> dict[str, bool]:
@@ -194,7 +268,16 @@ class AuthContext:
             "manage_alerts": self.role in {"admin", "operator"},
             "manage_operations": self.role == "admin",
             "backup": self.role == "admin",
+            "view_audit_identity": self.role == "admin",
             "use_intelligence": True,
+        }
+
+    @property
+    def audit_fields(self) -> dict[str, str]:
+        return {
+            "actor_id": self.actor_id,
+            "auth_method": self.auth_method,
+            "request_id": self.request_id,
         }
 
 
@@ -279,7 +362,7 @@ def _valid_api_key(value: str) -> bool:
     return len(value) >= MIN_API_KEY_LENGTH and value != DEFAULT_API_KEY_PLACEHOLDER
 
 
-def _configured_api_keys() -> tuple[tuple[str, str], ...]:
+def _role_key_configuration() -> tuple[tuple[tuple[str, str], ...], str]:
     configured: list[tuple[str, str]] = []
     for role, variable in (
         ("admin", "NETWATCH_API_KEY"),
@@ -289,21 +372,64 @@ def _configured_api_keys() -> tuple[tuple[str, str], ...]:
         key = os.getenv(variable, "").strip()
         if _valid_api_key(key):
             configured.append((role, key))
-    return tuple(configured)
+    values = [key for _, key in configured]
+    if len(values) != len(set(values)):
+        return (), "invalid"
+    return tuple(configured), "configured" if configured else "disabled"
 
 
-def _client_identity(request: Request) -> str:
-    host = request.client.host if request.client else "unknown"
-    return f"{host}:{request.url.path}"
+def _request_id(request: Request) -> str:
+    return str(getattr(request.state, "request_id", ""))[:64]
+
+
+def _route_template(request: Request) -> str:
+    return str(getattr(request.scope.get("route"), "path", request.url.path))[:200]
+
+
+def _rate_identity(request: Request, context: AuthContext) -> str:
+    return f"{context.auth_method}:{context.actor_id}:{_route_template(request)}"
+
+
+def _bounded_rate_bucket(
+    buckets: dict[str, deque[float]],
+    *,
+    identity: str,
+    cutoff: float,
+    maximum_buckets: int,
+) -> deque[float]:
+    events = buckets.get(identity)
+    if events is None:
+        if len(buckets) >= maximum_buckets:
+            stale: list[str] = []
+            for bucket_identity, bucket_events in buckets.items():
+                while bucket_events and bucket_events[0] < cutoff:
+                    bucket_events.popleft()
+                if not bucket_events:
+                    stale.append(bucket_identity)
+            for bucket_identity in stale:
+                del buckets[bucket_identity]
+        if len(buckets) >= maximum_buckets:
+            raise HTTPException(
+                status_code=429,
+                detail="The rate-limit identity capacity is temporarily full.",
+            )
+        events = deque()
+        buckets[identity] = events
+    while events and events[0] < cutoff:
+        events.popleft()
+    return events
 
 
 def _enforce_rate_limit(identity: str) -> None:
     now = time.monotonic()
     cutoff = now - API_RATE_LIMIT_WINDOW_SECONDS
     with _rate_lock:
-        events = _rate_events[identity]
-        while events and events[0] < cutoff:
-            events.popleft()
+        events = _bounded_rate_bucket(
+            _rate_events,
+            identity=identity,
+            cutoff=cutoff,
+            maximum_buckets=_MAX_API_RATE_LIMIT_BUCKETS,
+        )
         if len(events) >= API_RATE_LIMIT_REQUESTS:
             raise HTTPException(status_code=429, detail="Too many API requests. Try again later.")
         events.append(now)
@@ -337,9 +463,12 @@ def _enforce_intelligence_rate_limit(identity: str) -> None:
     now = time.monotonic()
     cutoff = now - AI_RATE_LIMIT_WINDOW_SECONDS
     with _intelligence_rate_lock:
-        events = _intelligence_rate_events[identity]
-        while events and events[0] < cutoff:
-            events.popleft()
+        events = _bounded_rate_bucket(
+            _intelligence_rate_events,
+            identity=identity,
+            cutoff=cutoff,
+            maximum_buckets=_MAX_INTELLIGENCE_RATE_LIMIT_BUCKETS,
+        )
         if len(events) >= AI_RATE_LIMIT_REQUESTS:
             raise HTTPException(
                 status_code=429,
@@ -351,12 +480,81 @@ def _enforce_intelligence_rate_limit(identity: str) -> None:
 def require_api_access(
     request: Request,
     supplied_key: str | None = Security(_api_key_header),
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_header),
 ) -> AuthContext:
-    configured = _configured_api_keys()
-    if not configured:
+    authorization_headers = request.headers.getlist("authorization")
+    role_key_headers = request.headers.getlist("x-netwatch-key")
+    if len(authorization_headers) > 1 or len(role_key_headers) > 1:
+        raise HTTPException(
+            status_code=401,
+            detail="Ambiguous authentication headers are not accepted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if authorization_headers and bearer is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid enterprise identity token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    _, oidc_status = oidc_configuration_status()
+    if oidc_status == "invalid":
         raise HTTPException(
             status_code=503,
-            detail="NetWatch API access is disabled until a valid role key is configured.",
+            detail="Enterprise identity is not configured safely.",
+        )
+    if bearer is not None:
+        try:
+            identity = verify_oidc_token(bearer.credentials)
+        except OIDCConfigurationError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Enterprise identity is not configured safely.",
+            ) from exc
+        except OIDCProviderUnavailableError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Enterprise identity is temporarily unavailable.",
+            ) from exc
+        except OIDCAuthenticationError as exc:
+            raise HTTPException(
+                status_code=401,
+                detail="Missing or invalid enterprise identity token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        except OIDCAuthorizationError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail="The enterprise identity has no assigned NetWatch role.",
+            ) from exc
+        context = AuthContext(
+            role=identity.role,
+            actor_id=f"oidc:{identity.subject}",
+            auth_method="oidc",
+            request_id=_request_id(request),
+        )
+        _enforce_rate_limit(_rate_identity(request, context))
+        return context
+
+    configured, role_keys_status = _role_key_configuration()
+    if role_keys_status == "invalid":
+        raise HTTPException(
+            status_code=503,
+            detail="NetWatch role keys are not configured with unique values.",
+        )
+    if not configured:
+        oidc_ready, _ = oidc_configuration_status()
+        if oidc_ready:
+            raise HTTPException(
+                status_code=401,
+                detail="A company SSO session or valid NetWatch role key is required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "NetWatch access is disabled until role keys or enterprise "
+                "identity are configured."
+            ),
         )
 
     candidate = supplied_key or ""
@@ -366,9 +564,19 @@ def require_api_access(
         None,
     )
     if matched_role is None:
-        raise HTTPException(status_code=401, detail="Missing or invalid NetWatch API key.")
-    _enforce_rate_limit(_client_identity(request))
-    return AuthContext(role=matched_role)
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid NetWatch API key.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    context = AuthContext(
+        role=matched_role,
+        actor_id=f"shared-key:{matched_role}",
+        auth_method="api_key",
+        request_id=_request_id(request),
+    )
+    _enforce_rate_limit(_rate_identity(request, context))
+    return context
 
 
 def require_operator_access(
@@ -384,6 +592,28 @@ def require_admin_access(
 ) -> AuthContext:
     if not context.capabilities["manage_assets"]:
         raise HTTPException(status_code=403, detail="Admin access is required.")
+    return context
+
+
+def _require_audit_integrity_ready() -> None:
+    if not audit_integrity_is_ready(use_cache=False):
+        raise HTTPException(
+            status_code=503,
+            detail="Audit integrity verification failed; protected operations are paused.",
+        )
+
+
+def require_audited_operator_access(
+    context: AuthContext = Depends(require_operator_access),
+) -> AuthContext:
+    _require_audit_integrity_ready()
+    return context
+
+
+def require_audited_admin_access(
+    context: AuthContext = Depends(require_admin_access),
+) -> AuthContext:
+    _require_audit_integrity_ready()
     return context
 
 
@@ -450,7 +680,15 @@ def _public_intelligence_brief(
     }
 
 
-def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[str, Any]:
+def _execute_network_scan(
+    target: str,
+    *,
+    actor_role: str,
+    action: str,
+    actor_id: str = "",
+    auth_method: str = "",
+    request_id: str = "",
+) -> dict[str, Any]:
     with _scan_slot():
         results = scan_network(target)
     changes = record_network_scan(target, results)
@@ -461,7 +699,16 @@ def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[
         f"{changes.summary}; {alerts_created} alert(s) created and "
         f"{alerts_refreshed} deduplicated alert(s) refreshed"
     )
-    record_audit_event(actor_role, action, target, "completed", details)
+    record_audit_event(
+        actor_role,
+        action,
+        target,
+        "completed",
+        details,
+        actor_id=actor_id,
+        auth_method=auth_method,
+        request_id=request_id,
+    )
     return {
         "target": target,
         "online_hosts": len(results),
@@ -473,31 +720,74 @@ def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[
     }
 
 
-def _run_scan_policy(policy: dict[str, Any], *, actor_role: str, action: str) -> dict[str, Any]:
+def _run_scan_policy(
+    policy: dict[str, Any],
+    *,
+    actor_role: str,
+    action: str,
+    actor_id: str = "",
+    auth_method: str = "",
+    request_id: str = "",
+) -> dict[str, Any]:
     policy_id = int(policy["id"])
     target = str(policy["cidr"])
     try:
-        result = _execute_network_scan(target, actor_role=actor_role, action=action)
+        result = _execute_network_scan(
+            target,
+            actor_role=actor_role,
+            action=action,
+            actor_id=actor_id,
+            auth_method=auth_method,
+            request_id=request_id,
+        )
     except HTTPException as exc:
         status = "deferred" if exc.status_code == 429 else "failed"
         complete_scan_policy(policy_id, status=status, summary=str(exc.detail))
-        record_audit_event(actor_role, action, target, status, str(exc.detail))
+        record_audit_event(
+            actor_role,
+            action,
+            target,
+            status,
+            str(exc.detail),
+            actor_id=actor_id,
+            auth_method=auth_method,
+            request_id=request_id,
+        )
         raise
     except Exception as exc:
         summary = f"Scanner failed with {type(exc).__name__}."
         complete_scan_policy(policy_id, status="failed", summary=summary)
-        record_audit_event(actor_role, action, target, "failed", summary)
+        record_audit_event(
+            actor_role,
+            action,
+            target,
+            "failed",
+            summary,
+            actor_id=actor_id,
+            auth_method=auth_method,
+            request_id=request_id,
+        )
         raise
     complete_scan_policy(policy_id, status="completed", summary=result["summary"])
     return {"policy_id": policy_id, **result}
 
 
 def run_due_scan_policies_once() -> int:
+    if not audit_integrity_is_ready(use_cache=False):
+        LOGGER.error("scheduler_paused reason=audit_integrity_not_ready")
+        return 0
     claimed = claim_due_scan_policies(limit=1)
     completed = 0
     for policy in claimed:
         try:
-            _run_scan_policy(policy, actor_role="scheduler", action="scheduled_network_scan")
+            _run_scan_policy(
+                policy,
+                actor_role="scheduler",
+                action="scheduled_network_scan",
+                actor_id="system:scheduler",
+                auth_method="system",
+                request_id=secrets.token_hex(16),
+            )
             completed += 1
         except Exception:
             LOGGER.exception("A scheduled NetWatch scan did not complete.")
@@ -513,17 +803,71 @@ def _scheduler_loop(stop_event: threading.Event) -> None:
         stop_event.wait(SCHEDULER_POLL_SECONDS)
 
 
+def _access_health() -> dict[str, Any]:
+    configured, role_keys_status = _role_key_configuration()
+    oidc_ready, oidc_status = oidc_configuration_status()
+    oidc_scanning_enabled = False
+    if oidc_ready:
+        settings = oidc_settings()
+        oidc_scanning_enabled = bool(settings.admin_groups or settings.operator_groups)
+    auth_methods = []
+    if configured:
+        auth_methods.append("api_key")
+    if oidc_ready:
+        auth_methods.append("oidc")
+    return {
+        "access_enabled": bool(configured) or oidc_ready,
+        "scanning_enabled": (
+            any(role in {"admin", "operator"} for role, _ in configured) or oidc_scanning_enabled
+        ),
+        "auth_methods": auth_methods,
+        "role_keys_status": role_keys_status,
+        "oidc_status": oidc_status,
+    }
+
+
+@app.get("/api/health/live")
+def liveness() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/api/health/ready")
+def readiness() -> Response:
+    access = _access_health()
+    database_ready = database_is_ready()
+    oidc_configuration_valid = access["oidc_status"] != "invalid"
+    audit_ready = audit_integrity_is_ready()
+    ready = bool(
+        database_ready
+        and access["access_enabled"]
+        and access["role_keys_status"] != "invalid"
+        and oidc_configuration_valid
+        and audit_ready
+    )
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={
+            "status": "ready" if ready else "not_ready",
+            "database": "ready" if database_ready else "unavailable",
+            "access": "ready" if access["access_enabled"] else "unconfigured",
+            "role_keys": access["role_keys_status"],
+            "oidc": access["oidc_status"],
+            "audit_integrity": "ready" if audit_ready else "invalid_or_disabled",
+        },
+    )
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    configured = _configured_api_keys()
+    access = _access_health()
     return {
         "app": APP_NAME,
         "version": APP_VERSION,
         "status": "ok",
-        "access_enabled": bool(configured),
-        "scanning_enabled": any(role in {"admin", "operator"} for role, _ in configured),
+        **access,
         "scheduler_enabled": SCHEDULER_ENABLED,
         "intelligence_enabled": _intelligence_configuration_is_usable(),
+        "audit_integrity_enabled": audit_integrity_enabled(),
     }
 
 
@@ -531,6 +875,13 @@ def health() -> dict[str, Any]:
 def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
     snapshot = operations_metrics()
     intelligence = intelligence_metrics()
+    with _http_metrics_lock:
+        http_snapshot = {
+            "requests": _http_requests_total,
+            "server_errors": _http_server_errors_total,
+            "active_requests": _http_active_requests,
+            "duration_seconds": _http_request_duration_seconds,
+        }
     values = {
         "netwatch_assets_total": snapshot["assets"],
         "netwatch_alerts_open_total": snapshot["open"],
@@ -546,6 +897,11 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
         "netwatch_intelligence_completed_total": intelligence["completed"],
         "netwatch_intelligence_failed_total": intelligence["failed"],
         "netwatch_intelligence_active_cache_entries": intelligence["active_cache"],
+        "netwatch_audit_integrity_enabled": int(audit_integrity_enabled()),
+        "netwatch_http_requests_total": http_snapshot["requests"],
+        "netwatch_http_server_errors_total": http_snapshot["server_errors"],
+        "netwatch_http_active_requests": http_snapshot["active_requests"],
+        "netwatch_http_request_duration_seconds_total": http_snapshot["duration_seconds"],
     }
     lines = [
         "# NetWatch authenticated operational metrics. No target labels are exported.",
@@ -559,7 +915,12 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
 
 @app.get("/api/session")
 def session(context: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
-    return {"role": context.role, "capabilities": context.capabilities}
+    return {
+        "role": context.role,
+        "capabilities": context.capabilities,
+        "auth_method": context.auth_method,
+        "actor_id": context.actor_id,
+    }
 
 
 @app.get("/api/profile", dependencies=[Depends(require_api_access)])
@@ -574,20 +935,25 @@ def profile(cidr: str = Query(default="192.168.1.0/24", max_length=43)) -> dict[
 @app.post("/api/scan/network")
 def scan_lan(
     payload: NetworkScanRequest,
-    context: AuthContext = Depends(require_operator_access),
+    context: AuthContext = Depends(require_audited_operator_access),
 ) -> dict[str, Any]:
     _require_authorization(payload.authorized)
     validation = validate_cidr(payload.cidr)
     if not validation.ok:
         raise HTTPException(status_code=400, detail=validation.error)
     target = validation.value or payload.cidr
-    return _execute_network_scan(target, actor_role=context.role, action="network_scan")
+    return _execute_network_scan(
+        target,
+        actor_role=context.role,
+        action="network_scan",
+        **context.audit_fields,
+    )
 
 
 @app.post("/api/scan/host")
 def check_host(
     payload: HostRequest,
-    context: AuthContext = Depends(require_operator_access),
+    context: AuthContext = Depends(require_audited_operator_access),
 ) -> dict[str, Any]:
     _require_authorization(payload.authorized)
     validation = validate_target_ip(payload.ip)
@@ -607,14 +973,21 @@ def check_host(
             source="host check",
             scan_run_id=scan_run_id,
         )
-    record_audit_event(context.role, "host_check", target, "completed", f"Status: {status}.")
+    record_audit_event(
+        context.role,
+        "host_check",
+        target,
+        "completed",
+        f"Status: {status}.",
+        **context.audit_fields,
+    )
     return result.__dict__
 
 
 @app.post("/api/audit/ports")
 def audit_ports(
     payload: HostRequest,
-    context: AuthContext = Depends(require_operator_access),
+    context: AuthContext = Depends(require_audited_operator_access),
 ) -> dict[str, Any]:
     _require_authorization(payload.authorized)
     validation = validate_target_ip(payload.ip)
@@ -627,7 +1000,14 @@ def audit_ports(
     msg = f"{exposure.open_ports} open port(s), level {exposure.level}, score {exposure.score}"
     scan_run_id = add_scan_run("ports", target, msg)
     update_asset_ports(target, ports, exposure.score, exposure.level, scan_run_id=scan_run_id)
-    record_audit_event(context.role, "port_audit", target, "completed", msg)
+    record_audit_event(
+        context.role,
+        "port_audit",
+        target,
+        "completed",
+        msg,
+        **context.audit_fields,
+    )
     return {
         "target": target,
         "ports": ports,
@@ -658,7 +1038,7 @@ def inventory_export(_: AuthContext = Depends(require_api_access)) -> Response:
 def save_asset_context(
     ip_address: str,
     payload: AssetContextRequest,
-    context: AuthContext = Depends(require_admin_access),
+    context: AuthContext = Depends(require_audited_admin_access),
 ) -> dict[str, Any]:
     validation = validate_target_ip(ip_address)
     if not validation.ok:
@@ -673,6 +1053,7 @@ def save_asset_context(
             criticality=payload.criticality,
             notes=payload.notes,
             actor_role=context.role,
+            **context.audit_fields,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Asset was not found in inventory.") from exc
@@ -703,7 +1084,7 @@ def list_scan_policies(_: AuthContext = Depends(require_api_access)) -> dict[str
 @app.post("/api/scan-policies")
 def save_scan_policy(
     payload: ScanPolicyCreateRequest,
-    context: AuthContext = Depends(require_admin_access),
+    context: AuthContext = Depends(require_audited_admin_access),
 ) -> dict[str, Any]:
     _require_authorization(payload.authorized)
     validation = validate_cidr(payload.cidr)
@@ -716,7 +1097,7 @@ def save_scan_policy(
             cidr=target,
             interval_minutes=payload.interval_minutes,
             enabled=payload.enabled,
-            authorized_by=context.role,
+            authorized_by=context.actor_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -726,6 +1107,7 @@ def save_scan_policy(
         target,
         "completed",
         f"Policy {policy['name']} saved; enabled={policy['enabled']}.",
+        **context.audit_fields,
     )
     return {"policy": policy, "scheduler_enabled": SCHEDULER_ENABLED}
 
@@ -734,7 +1116,7 @@ def save_scan_policy(
 def edit_scan_policy(
     policy_id: int,
     payload: ScanPolicyUpdateRequest,
-    context: AuthContext = Depends(require_admin_access),
+    context: AuthContext = Depends(require_audited_admin_access),
 ) -> dict[str, Any]:
     if payload.name is None and payload.interval_minutes is None and payload.enabled is None:
         raise HTTPException(status_code=400, detail="Provide at least one policy field to update.")
@@ -755,6 +1137,7 @@ def edit_scan_policy(
         policy["cidr"],
         "completed",
         f"Policy {policy['name']} updated; enabled={policy['enabled']}.",
+        **context.audit_fields,
     )
     return {"policy": policy, "scheduler_enabled": SCHEDULER_ENABLED}
 
@@ -763,7 +1146,7 @@ def edit_scan_policy(
 def run_scan_policy_now(
     policy_id: int,
     payload: PolicyRunRequest,
-    context: AuthContext = Depends(require_operator_access),
+    context: AuthContext = Depends(require_audited_operator_access),
 ) -> dict[str, Any]:
     _require_authorization(payload.authorized)
     try:
@@ -779,7 +1162,12 @@ def run_scan_policy_now(
             ),
         ) from exc
     try:
-        return _run_scan_policy(policy, actor_role=context.role, action="scan_policy_run")
+        return _run_scan_policy(
+            policy,
+            actor_role=context.role,
+            action="scan_policy_run",
+            **context.audit_fields,
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -804,7 +1192,7 @@ def list_maintenance_windows(
 @app.post("/api/maintenance-windows")
 def save_maintenance_window(
     payload: MaintenanceWindowCreateRequest,
-    context: AuthContext = Depends(require_admin_access),
+    context: AuthContext = Depends(require_audited_admin_access),
 ) -> dict[str, Any]:
     try:
         window = create_maintenance_window(
@@ -814,7 +1202,7 @@ def save_maintenance_window(
             reason=payload.reason,
             policy_id=payload.policy_id,
             enabled=payload.enabled,
-            created_by=context.role,
+            created_by=context.actor_id,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Scan policy was not found.") from exc
@@ -827,6 +1215,7 @@ def save_maintenance_window(
         target,
         "completed",
         f"Maintenance window {window['name']} saved; enabled={window['enabled']}.",
+        **context.audit_fields,
     )
     return {"window": window}
 
@@ -835,7 +1224,7 @@ def save_maintenance_window(
 def edit_maintenance_window(
     window_id: int,
     payload: MaintenanceWindowUpdateRequest,
-    context: AuthContext = Depends(require_admin_access),
+    context: AuthContext = Depends(require_audited_admin_access),
 ) -> dict[str, Any]:
     try:
         window = set_maintenance_window_enabled(window_id, enabled=payload.enabled)
@@ -848,6 +1237,7 @@ def edit_maintenance_window(
         target,
         "completed",
         f"Maintenance window {window['name']} enabled={window['enabled']}.",
+        **context.audit_fields,
     )
     return {"window": window}
 
@@ -883,12 +1273,12 @@ def alerts(
 def update_alert(
     alert_id: int,
     payload: AlertUpdateRequest,
-    context: AuthContext = Depends(require_operator_access),
+    context: AuthContext = Depends(require_audited_operator_access),
 ) -> dict[str, Any]:
     try:
         alert = update_operation_alert(
             alert_id,
-            actor_role=context.role,
+            actor_role=context.actor_id,
             status=payload.status,
             assigned_to=payload.assigned_to,
             resolution_note=payload.resolution_note,
@@ -907,12 +1297,13 @@ def update_alert(
             f"assignee={'set' if alert['assigned_to'] else 'unassigned'}; "
             f"resolution_evidence={'set' if alert['resolution_note'] else 'not set'}."
         ),
+        **context.audit_fields,
     )
     return {"alert": alert}
 
 
 @app.get("/api/backups/database")
-def database_backup(context: AuthContext = Depends(require_admin_access)) -> Response:
+def database_backup(context: AuthContext = Depends(require_audited_admin_access)) -> Response:
     content = database_backup_bytes()
     record_audit_event(
         context.role,
@@ -920,6 +1311,7 @@ def database_backup(context: AuthContext = Depends(require_admin_access)) -> Res
         "netwatch.db",
         "completed",
         "Consistent SQLite snapshot generated for authorized download.",
+        **context.audit_fields,
     )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return Response(
@@ -948,10 +1340,20 @@ def observations(limit: int = Query(default=100, ge=1, le=1_000)) -> dict[str, A
     return {"count": len(items), "items": items}
 
 
-@app.get("/api/audit-log", dependencies=[Depends(require_api_access)])
-def audit_log(limit: int = Query(default=100, ge=1, le=1_000)) -> dict[str, Any]:
-    items = recent_audit_log(limit=limit)
+@app.get("/api/audit-log")
+def audit_log(
+    limit: int = Query(default=100, ge=1, le=1_000),
+    _: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    items = recent_audit_log(limit=limit, include_identity=True)
     return {"count": len(items), "items": items}
+
+
+@app.get("/api/audit-log/integrity")
+def audit_log_integrity(
+    _: AuthContext = Depends(require_admin_access),
+) -> dict[str, object]:
+    return verify_audit_integrity()
 
 
 @app.get("/api/advisor", dependencies=[Depends(require_api_access)])
@@ -1022,8 +1424,8 @@ def intelligence_brief(
                 "The deterministic local Risk Advisor remains available."
             ),
         )
-    host = request.client.host if request.client else "unknown"
-    _enforce_intelligence_rate_limit(f"{context.role}:{host}")
+    _require_audit_integrity_ready()
+    _enforce_intelligence_rate_limit(f"{context.auth_method}:{context.actor_id}")
     safety_id = safety_identifier(
         safety_secret=safety_secret,
         subject_id=subject_id,
@@ -1066,6 +1468,7 @@ def intelligence_brief(
                 f"Structured defensive brief generated with {AI_MODEL}; "
                 f"input_tokens={result.input_tokens}; output_tokens={result.output_tokens}."
             ),
+            **context.audit_fields,
         )
         return _public_intelligence_brief(
             brief,
@@ -1089,6 +1492,7 @@ def intelligence_brief(
             "de-identified operations snapshot",
             "failed",
             f"Intelligence request failed safely; code={exc.code}.",
+            **context.audit_fields,
         )
         raise HTTPException(status_code=exc.http_status, detail=str(exc)) from exc
     except Exception:
@@ -1104,6 +1508,7 @@ def intelligence_brief(
             "de-identified operations snapshot",
             "failed",
             "Intelligence request failed safely; code=internal_error.",
+            **context.audit_fields,
         )
         LOGGER.error("An intelligence request failed safely; code=internal_error.")
         raise HTTPException(

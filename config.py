@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 APP_NAME = "NetWatch"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 
 MAX_HOSTS_PER_SCAN = 256
 MAX_WORKERS = 64
@@ -23,6 +23,8 @@ SCAN_POLICY_MAX_INTERVAL_MINUTES = 10_080
 DEFAULT_TIMEOUT = 0.6
 MIN_API_KEY_LENGTH = 32
 DEFAULT_API_KEY_PLACEHOLDER = "replace-with-a-long-random-secret"
+MIN_AUDIT_HMAC_KEY_LENGTH = 32
+AUDIT_HMAC_KEY_PLACEHOLDER = "replace-with-an-independent-audit-hmac-key"
 
 
 def _env_int(
@@ -55,7 +57,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
         return True
     if raw in {"0", "false", "no", "off"}:
         return False
-    return default
+    return False
 
 
 API_ALLOWED_ORIGINS = _env_csv(

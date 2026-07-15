@@ -277,7 +277,7 @@ def create_scan_policy(
                     cidr,
                     interval,
                     int(enabled),
-                    _clean(authorized_by, 40),
+                    _clean(authorized_by, 200),
                     next_run_at,
                     "scheduled" if enabled else "disabled",
                 ),
@@ -430,7 +430,7 @@ def create_maintenance_window(
                 _clean(reason, 500),
                 policy_id,
                 int(enabled),
-                _clean(created_by, 40),
+                _clean(created_by, 200),
             ),
         )
         window_id = cursor.lastrowid
@@ -944,7 +944,7 @@ def update_operation_alert(
         elif next_status == "acknowledged":
             if not acknowledged_at:
                 acknowledged_at = now
-                acknowledged_by = _clean(actor_role, 40)
+                acknowledged_by = _clean(actor_role, 200)
             resolved_at = ""
         elif next_status == "resolved" and not resolved_at:
             resolved_at = now

@@ -16,7 +16,7 @@ def test_env_csv_ignores_a_global_wildcard(monkeypatch):
     assert config._env_csv("NETWATCH_TEST_CSV", defaults) == defaults
 
 
-def test_env_bool_accepts_known_values_and_falls_back(monkeypatch):
+def test_env_bool_accepts_known_values_and_fails_closed(monkeypatch):
     monkeypatch.setenv("NETWATCH_TEST_BOOL", "yes")
     assert config._env_bool("NETWATCH_TEST_BOOL") is True
 
@@ -24,4 +24,4 @@ def test_env_bool_accepts_known_values_and_falls_back(monkeypatch):
     assert config._env_bool("NETWATCH_TEST_BOOL", True) is False
 
     monkeypatch.setenv("NETWATCH_TEST_BOOL", "unexpected")
-    assert config._env_bool("NETWATCH_TEST_BOOL", True) is True
+    assert config._env_bool("NETWATCH_TEST_BOOL", True) is False
