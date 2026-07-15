@@ -31,6 +31,7 @@ from config import (
     APP_NAME,
     APP_VERSION,
     DEFAULT_API_KEY_PLACEHOLDER,
+    MAINTENANCE_MAX_DURATION_DAYS,
     MAX_CONCURRENT_SCANS,
     MAX_INVENTORY_ROWS,
     MIN_API_KEY_LENGTH,
@@ -59,16 +60,21 @@ from inventory_store import (
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
 from operations_store import (
+    MaintenanceWindowActiveError,
     alert_counts,
     claim_due_scan_policies,
     complete_scan_policy,
     create_alerts_for_changes,
+    create_maintenance_window,
     create_scan_policy,
     database_backup_bytes,
+    maintenance_windows,
+    operations_metrics,
     recent_alerts,
     scan_policies,
-    set_alert_status,
+    set_maintenance_window_enabled,
     start_scan_policy,
+    update_operation_alert,
     update_scan_policy,
 )
 from port_scanner import scan_ports
@@ -219,8 +225,23 @@ class PolicyRunRequest(BaseModel):
     )
 
 
-class AlertStatusRequest(BaseModel):
-    status: Literal["open", "acknowledged"]
+class MaintenanceWindowCreateRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    starts_at: str = Field(min_length=20, max_length=40)
+    ends_at: str = Field(min_length=20, max_length=40)
+    reason: str = Field(default="", max_length=500)
+    policy_id: int | None = Field(default=None, ge=1)
+    enabled: bool = True
+
+
+class MaintenanceWindowUpdateRequest(BaseModel):
+    enabled: bool
+
+
+class AlertUpdateRequest(BaseModel):
+    status: Literal["open", "acknowledged", "resolved"] | None = None
+    assigned_to: str | None = Field(default=None, max_length=120)
+    resolution_note: str | None = Field(default=None, max_length=1_000)
 
 
 def _valid_api_key(value: str) -> bool:
@@ -319,8 +340,13 @@ def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[
     with _scan_slot():
         results = scan_network(target)
     changes = record_network_scan(target, results)
-    alert_count = create_alerts_for_changes(changes)
-    details = f"{changes.summary}; {alert_count} operational alert(s) created"
+    alert_summary = create_alerts_for_changes(changes)
+    alerts_created = alert_summary.created
+    alerts_refreshed = alert_summary.refreshed
+    details = (
+        f"{changes.summary}; {alerts_created} alert(s) created and "
+        f"{alerts_refreshed} deduplicated alert(s) refreshed"
+    )
     record_audit_event(actor_role, action, target, "completed", details)
     return {
         "target": target,
@@ -328,7 +354,8 @@ def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[
         "hosts": results,
         "summary": changes.summary,
         "changes": changes.as_dict(),
-        "alerts_created": alert_count,
+        "alerts_created": alerts_created,
+        "alerts_refreshed": alerts_refreshed,
     }
 
 
@@ -383,6 +410,31 @@ def health() -> dict[str, Any]:
         "scanning_enabled": any(role in {"admin", "operator"} for role, _ in configured),
         "scheduler_enabled": SCHEDULER_ENABLED,
     }
+
+
+@app.get("/api/metrics", response_class=PlainTextResponse)
+def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
+    snapshot = operations_metrics()
+    values = {
+        "netwatch_assets_total": snapshot["assets"],
+        "netwatch_alerts_open_total": snapshot["open"],
+        "netwatch_alerts_acknowledged_total": snapshot["acknowledged"],
+        "netwatch_alerts_resolved_total": snapshot["resolved"],
+        "netwatch_alerts_overdue_total": snapshot["overdue"],
+        "netwatch_alerts_critical_unresolved_total": snapshot["critical_unresolved"],
+        "netwatch_scan_policies_total": snapshot["policies"],
+        "netwatch_scan_policies_enabled_total": snapshot["enabled_policies"],
+        "netwatch_maintenance_windows_active_total": snapshot["active_maintenance"],
+        "netwatch_scheduler_enabled": int(SCHEDULER_ENABLED),
+    }
+    lines = [
+        "# NetWatch authenticated operational metrics. No target labels are exported.",
+        *(f"# TYPE {name} gauge\n{name} {value}" for name, value in values.items()),
+    ]
+    return PlainTextResponse(
+        "\n".join(lines) + "\n",
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @app.get("/api/session")
@@ -512,11 +564,19 @@ def save_asset_context(
 @app.get("/api/scan-policies")
 def list_scan_policies(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
     items = scan_policies()
+    active_windows = maintenance_windows(active_only=True)
+    global_maintenance = any(item["policy_id"] is None for item in active_windows)
+    maintained_policy_ids = {
+        int(item["policy_id"]) for item in active_windows if item["policy_id"] is not None
+    }
+    for item in items:
+        item["maintenance_active"] = global_maintenance or int(item["id"]) in maintained_policy_ids
     return {
         "count": len(items),
         "items": items,
         "scheduler_enabled": SCHEDULER_ENABLED,
         "minimum_interval_minutes": SCAN_POLICY_MIN_INTERVAL_MINUTES,
+        "active_maintenance_count": len(active_windows),
     }
 
 
@@ -590,6 +650,14 @@ def run_scan_policy_now(
         policy = start_scan_policy(policy_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Scan policy was not found.") from exc
+    except MaintenanceWindowActiveError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Scan policy is paused by maintenance window "
+                f"'{exc.window_name}'. Disable the window before running it."
+            ),
+        ) from exc
     try:
         return _run_scan_policy(policy, actor_role=context.role, action="scan_policy_run")
     except HTTPException:
@@ -598,17 +666,94 @@ def run_scan_policy_now(
         raise HTTPException(status_code=500, detail="The approved policy scan failed.") from exc
 
 
+@app.get("/api/maintenance-windows")
+def list_maintenance_windows(
+    active_only: bool = Query(default=False),
+    _: AuthContext = Depends(require_api_access),
+) -> dict[str, Any]:
+    items = maintenance_windows(active_only=active_only)
+    active_count = len(maintenance_windows(active_only=True))
+    return {
+        "count": len(items),
+        "active_count": active_count,
+        "maximum_duration_days": MAINTENANCE_MAX_DURATION_DAYS,
+        "items": items,
+    }
+
+
+@app.post("/api/maintenance-windows")
+def save_maintenance_window(
+    payload: MaintenanceWindowCreateRequest,
+    context: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    try:
+        window = create_maintenance_window(
+            name=payload.name,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            reason=payload.reason,
+            policy_id=payload.policy_id,
+            enabled=payload.enabled,
+            created_by=context.role,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Scan policy was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    target = window["policy_cidr"] or "all approved scan policies"
+    record_audit_event(
+        context.role,
+        "maintenance_window_created",
+        target,
+        "completed",
+        f"Maintenance window {window['name']} saved; enabled={window['enabled']}.",
+    )
+    return {"window": window}
+
+
+@app.patch("/api/maintenance-windows/{window_id}")
+def edit_maintenance_window(
+    window_id: int,
+    payload: MaintenanceWindowUpdateRequest,
+    context: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    try:
+        window = set_maintenance_window_enabled(window_id, enabled=payload.enabled)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Maintenance window was not found.") from exc
+    target = window["policy_cidr"] or "all approved scan policies"
+    record_audit_event(
+        context.role,
+        "maintenance_window_updated",
+        target,
+        "completed",
+        f"Maintenance window {window['name']} enabled={window['enabled']}.",
+    )
+    return {"window": window}
+
+
 @app.get("/api/alerts")
 def alerts(
-    status: Literal["open", "acknowledged"] | None = Query(default=None),
+    status: Literal["open", "acknowledged", "resolved"] | None = Query(default=None),
+    severity: Literal["Low", "Medium", "High", "Critical"] | None = Query(default=None),
+    overdue_only: bool = Query(default=False),
     limit: int = Query(default=200, ge=1, le=1_000),
     _: AuthContext = Depends(require_api_access),
 ) -> dict[str, Any]:
-    items = recent_alerts(status=status, limit=limit)
+    items = recent_alerts(
+        status=status,
+        severity=severity,
+        overdue_only=overdue_only,
+        limit=limit,
+    )
     counts = alert_counts()
     return {
         "count": len(items),
         "open_count": counts["open"],
+        "acknowledged_count": counts["acknowledged"],
+        "resolved_count": counts["resolved"],
+        "overdue_count": counts["overdue"],
+        "critical_unresolved_count": counts["critical_unresolved"],
         "total_count": counts["total"],
         "items": items,
     }
@@ -617,19 +762,31 @@ def alerts(
 @app.patch("/api/alerts/{alert_id}")
 def update_alert(
     alert_id: int,
-    payload: AlertStatusRequest,
+    payload: AlertUpdateRequest,
     context: AuthContext = Depends(require_operator_access),
 ) -> dict[str, Any]:
     try:
-        alert = set_alert_status(alert_id, status=payload.status, actor_role=context.role)
+        alert = update_operation_alert(
+            alert_id,
+            actor_role=context.role,
+            status=payload.status,
+            assigned_to=payload.assigned_to,
+            resolution_note=payload.resolution_note,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Operational alert was not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     record_audit_event(
         context.role,
         "alert_status_updated",
         alert["target"],
         "completed",
-        f"Alert {alert_id} changed to {payload.status}.",
+        (
+            f"Alert {alert_id} changed to {alert['status']}; "
+            f"assignee={'set' if alert['assigned_to'] else 'unassigned'}; "
+            f"resolution_evidence={'set' if alert['resolution_note'] else 'not set'}."
+        ),
     )
     return {"alert": alert}
 
@@ -698,7 +855,16 @@ def markdown_report() -> str:
     audit_df = pd.DataFrame(recent_audit_log(limit=100))
     alerts_df = pd.DataFrame(recent_alerts(limit=100))
     policies_df = pd.DataFrame(scan_policies())
-    return build_markdown_report(hosts_df, ports_df, changes_df, audit_df, alerts_df, policies_df)
+    maintenance_df = pd.DataFrame(maintenance_windows())
+    return build_markdown_report(
+        hosts_df,
+        ports_df,
+        changes_df,
+        audit_df,
+        alerts_df,
+        policies_df,
+        maintenance_df,
+    )
 
 
 @app.get(
@@ -713,7 +879,16 @@ def html_report() -> str:
     audit_df = pd.DataFrame(recent_audit_log(limit=100))
     alerts_df = pd.DataFrame(recent_alerts(limit=100))
     policies_df = pd.DataFrame(scan_policies())
-    return build_html_report(hosts_df, ports_df, changes_df, audit_df, alerts_df, policies_df)
+    maintenance_df = pd.DataFrame(maintenance_windows())
+    return build_html_report(
+        hosts_df,
+        ports_df,
+        changes_df,
+        audit_df,
+        alerts_df,
+        policies_df,
+        maintenance_df,
+    )
 
 
 if FRONTEND_DIR.exists():

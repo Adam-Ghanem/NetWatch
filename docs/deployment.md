@@ -1,4 +1,4 @@
-# NetWatch v1.3 Deployment Guide
+# NetWatch v1.4 Deployment Guide
 
 NetWatch is designed to run locally on a trusted laptop, workstation, or lab VM connected to an authorized network.
 
@@ -173,11 +173,11 @@ docker compose down -v
 
 The `-v` option permanently deletes the saved NetWatch database and logs.
 
-Back up the named data volume before upgrades or operational use. The v1.3 database migration creates the policy and alert tables in place while preserving existing inventory. A pre-upgrade backup is still the required safe operating procedure.
+Back up the named data volume before upgrades or operational use. The v1.4 database migration preserves existing inventory and alert records while adding the case workflow and maintenance table. A pre-upgrade backup is still the required safe operating procedure.
 
 Admins can also use **Operations → Download database backup** to create a consistent point-in-time SQLite snapshot. The download does not include `.env` role keys. Store it in an approved encrypted location and test restoration on a separate staging copy.
 
-Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve the current database as a rollback copy, validate the candidate with SQLite `PRAGMA integrity_check`, restore according to the deployment owner's volume procedure, then start NetWatch and verify `/api/health`, inventory, policies, and alerts. v1.3 provides consistent snapshot creation; it does not automate destructive restore operations or off-host retention.
+Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve the current database as a rollback copy, validate the candidate with SQLite `PRAGMA integrity_check`, restore according to the deployment owner's volume procedure, then start NetWatch and verify `/api/health`, inventory, policies, maintenance windows, and alert cases. v1.4 provides consistent snapshot creation; it does not automate destructive restore operations or off-host retention.
 
 ## Safe operating procedure
 
@@ -188,7 +188,9 @@ Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve 
 - Treat open services as evidence requiring validation, not automatic vulnerabilities.
 - Assign owners and criticality to important assets.
 - Review the operations audit log after important checks.
-- Review and acknowledge operational alerts with the system owner.
+- Assign, acknowledge, and resolve operational cases with evidence from the system owner.
+- Document planned work as a bounded maintenance window and confirm affected scans are paused.
+- Monitor `/api/metrics` only through an authenticated, access-controlled local collector.
 - Keep scheduled execution disabled until each policy has durable approval.
 - Disable a policy immediately when its approval or scope changes.
 - Download and protect a consistent snapshot before upgrades.
@@ -201,9 +203,9 @@ For a small team on one controlled workstation, configure a distinct key per ena
 
 | Role | Capabilities |
 |---|---|
-| Viewer | Dashboard, inventory, policies, alerts, audit log, reports, CSV export |
-| Operator | Viewer capabilities plus authorized checks, manual policy runs, and alert triage |
-| Admin | Operator capabilities plus asset context, policy management, and snapshot download |
+| Viewer | Dashboard, inventory, policies, cases, maintenance windows, audit log, metrics, reports, CSV export |
+| Operator | Viewer capabilities plus authorized checks, manual policy runs, and case triage |
+| Admin | Operator capabilities plus asset context, policy/maintenance management, and snapshot download |
 
 These are shared role secrets, not individual identities. Store them in an approved secret manager where possible, rotate them when access changes, and do not send them through source control or screenshots.
 

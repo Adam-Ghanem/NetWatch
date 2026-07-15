@@ -15,6 +15,9 @@ const state = {
     backup: false,
   },
   assets: [],
+  policies: [],
+  operationAlerts: [],
+  selectedAlertId: null,
 };
 
 const titles = {
@@ -95,6 +98,12 @@ function text(value) {
   return String(value);
 }
 
+function localTimestamp(value) {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? text(value) : parsed.toLocaleString();
+}
+
 function statusClass(value) {
   const normalized = String(value || '').toLowerCase();
   if (normalized.includes('filtered') || normalized.includes('not observed')) return 'filtered';
@@ -103,6 +112,9 @@ function statusClass(value) {
   if (normalized === 'enabled') return 'completed';
   if (normalized === 'disabled') return 'filtered';
   if (normalized.includes('acknowledged')) return 'completed';
+  if (normalized.includes('resolved')) return 'completed';
+  if (normalized.includes('maintenance') || normalized.includes('paused')) return 'medium';
+  if (normalized.includes('overdue')) return 'high';
   if (normalized.includes('deferred')) return 'medium';
   if (normalized.includes('open')) return 'open';
   if (normalized.includes('online')) return 'online';
@@ -264,8 +276,22 @@ function applyRoleAccess() {
   } else if (state.role) {
     setFormStatus('policy-status', 'Admin access is required to create and change policies.');
   }
+  $$('input, select, textarea, button', $('#maintenance-form')).forEach((control) => {
+    control.disabled = !canManageOperations;
+  });
+  if (canManageOperations) {
+    setFormStatus('maintenance-status', 'Document a bounded window for approved policy scope.');
+  } else if (state.role) {
+    setFormStatus('maintenance-status', 'Admin access is required to manage maintenance windows.');
+  }
+  const canManageAlerts = Boolean(state.capabilities.manage_alerts);
+  $$('input, textarea, button', $('#alert-triage-form')).forEach((control) => {
+    control.disabled = !canManageAlerts || !state.selectedAlertId;
+  });
+  $('#triage-alert-id').disabled = false;
   $('#policy-run-authorized').disabled = !canScan;
   $('#database-backup').disabled = !Boolean(state.capabilities.backup);
+  $('#metrics-download').disabled = !Boolean(state.capabilities.read);
 }
 
 async function connectWithKey(key) {
@@ -441,7 +467,7 @@ function renderPolicies(policies) {
   const table = document.createElement('table');
   const head = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['Policy', 'Approved CIDR', 'Interval', 'State', 'Last result', 'Next run', 'Actions'].forEach((label) => {
+  ['Policy', 'Approved CIDR', 'Interval', 'State', 'Maintenance', 'Last result', 'Next run', 'Actions'].forEach((label) => {
     const cell = document.createElement('th');
     cell.textContent = label;
     headRow.appendChild(cell);
@@ -455,13 +481,16 @@ function renderPolicies(policies) {
     appendTableCell(row, policy.cidr);
     appendTableCell(row, `${policy.interval_minutes} min`);
     appendTableCell(row, policy.enabled ? 'Enabled' : 'Disabled', true);
+    appendTableCell(row, policy.maintenance_active ? 'Paused' : 'Clear', true);
     appendTableCell(row, policy.last_status, true);
-    appendTableCell(row, policy.next_run_at || 'Manual only');
+    appendTableCell(row, policy.next_run_at ? localTimestamp(policy.next_run_at) : 'Manual only');
     const actions = appendTableCell(row, '');
     actions.replaceChildren();
     const rowActions = document.createElement('div');
     rowActions.className = 'table-actions';
-    const canRun = Boolean(state.capabilities.scan) && policy.last_status !== 'running';
+    const canRun = Boolean(state.capabilities.scan)
+      && policy.last_status !== 'running'
+      && !policy.maintenance_active;
     const canManage = Boolean(state.capabilities.manage_operations);
     const runButton = actionButton('Run now', 'run-policy', policy.id, canRun, true);
     const toggleButton = actionButton(
@@ -480,6 +509,84 @@ function renderPolicies(policies) {
   container.appendChild(table);
 }
 
+function populateMaintenancePolicies(policies) {
+  const select = $('#maintenance-policy');
+  const current = select.value;
+  select.replaceChildren();
+  const globalOption = document.createElement('option');
+  globalOption.value = '';
+  globalOption.textContent = 'All approved policies';
+  select.appendChild(globalOption);
+  policies.forEach((policy) => {
+    const option = document.createElement('option');
+    option.value = String(policy.id);
+    option.textContent = `${policy.name} · ${policy.cidr}`;
+    select.appendChild(option);
+  });
+  if ($$('option', select).some((option) => option.value === current)) select.value = current;
+}
+
+function renderMaintenanceWindows(windows) {
+  const container = $('#maintenance-results');
+  container.replaceChildren();
+  container.classList.remove('empty-state');
+  if (!Array.isArray(windows) || windows.length === 0) {
+    container.classList.add('empty-state');
+    container.textContent = 'No maintenance windows have been documented.';
+    return;
+  }
+
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Window', 'Scope', 'Starts', 'Ends', 'Reason', 'State', 'Action'].forEach((label) => {
+    const cell = document.createElement('th');
+    cell.textContent = label;
+    headRow.appendChild(cell);
+  });
+  head.appendChild(headRow);
+
+  const body = document.createElement('tbody');
+  windows.forEach((windowItem) => {
+    const row = document.createElement('tr');
+    appendTableCell(row, windowItem.name);
+    appendTableCell(row, windowItem.policy_name || 'All approved policies');
+    appendTableCell(row, localTimestamp(windowItem.starts_at));
+    appendTableCell(row, localTimestamp(windowItem.ends_at));
+    appendTableCell(row, windowItem.reason);
+    const stateLabel = windowItem.active ? 'Active maintenance' : (windowItem.enabled ? 'Scheduled' : 'Disabled');
+    appendTableCell(row, stateLabel, true);
+    const action = appendTableCell(row, '');
+    action.replaceChildren();
+    const button = actionButton(
+      windowItem.enabled ? 'Disable' : 'Enable',
+      'toggle-maintenance',
+      windowItem.id,
+      Boolean(state.capabilities.manage_operations),
+    );
+    button.dataset.nextEnabled = String(!windowItem.enabled);
+    action.appendChild(button);
+    body.appendChild(row);
+  });
+  table.append(head, body);
+  container.appendChild(table);
+}
+
+function selectAlertCase(alertId) {
+  const selected = state.operationAlerts.find((alert) => Number(alert.id) === Number(alertId));
+  state.selectedAlertId = selected ? Number(selected.id) : null;
+  $('#triage-alert-id').value = selected ? `#${selected.id} · ${selected.target}` : '';
+  $('#triage-assignee').value = selected?.assigned_to || '';
+  $('#triage-resolution').value = selected?.resolution_note || '';
+  setFormStatus(
+    'triage-status',
+    selected
+      ? `${selected.severity} case · ${selected.status} · ${selected.occurrence_count} occurrence(s).`
+      : 'Select an alert case to manage it.',
+  );
+  applyRoleAccess();
+}
+
 function renderAlerts(alerts) {
   const container = $('#alert-results');
   container.replaceChildren();
@@ -493,7 +600,7 @@ function renderAlerts(alerts) {
   const table = document.createElement('table');
   const head = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['Time', 'Severity', 'Alert', 'Target', 'Status', 'Evidence', 'Action'].forEach((label) => {
+  ['Last seen', 'Severity', 'Alert', 'Target', 'Occurrences', 'Status', 'SLA', 'Due', 'Assignee', 'Evidence', 'Action'].forEach((label) => {
     const cell = document.createElement('th');
     cell.textContent = label;
     headRow.appendChild(cell);
@@ -503,23 +610,24 @@ function renderAlerts(alerts) {
   const body = document.createElement('tbody');
   alerts.forEach((alert) => {
     const row = document.createElement('tr');
-    appendTableCell(row, alert.created_at);
+    appendTableCell(row, localTimestamp(alert.last_seen_at || alert.created_at));
     appendTableCell(row, alert.severity, true);
     appendTableCell(row, alert.title);
     appendTableCell(row, alert.target);
+    appendTableCell(row, alert.occurrence_count);
     appendTableCell(row, alert.status, true);
+    appendTableCell(row, alert.overdue ? 'Overdue' : (alert.status === 'resolved' ? 'Resolved' : 'Within SLA'), true);
+    appendTableCell(row, localTimestamp(alert.due_at));
+    appendTableCell(row, alert.assigned_to || 'Unassigned');
     appendTableCell(row, alert.details);
     const actions = appendTableCell(row, '');
     actions.replaceChildren();
-    const nextStatus = alert.status === 'open' ? 'acknowledged' : 'open';
-    const label = nextStatus === 'acknowledged' ? 'Acknowledge' : 'Reopen';
     const button = actionButton(
-      label,
-      'set-alert-status',
+      'Manage',
+      'select-alert',
       alert.id,
       Boolean(state.capabilities.manage_alerts),
     );
-    button.dataset.nextStatus = nextStatus;
     actions.appendChild(button);
     body.appendChild(row);
   });
@@ -533,12 +641,16 @@ async function loadOperations() {
   const alertPath = filter
     ? `/api/alerts?status=${encodeURIComponent(filter)}&limit=200`
     : '/api/alerts?limit=200';
-  const [policyPayload, alertPayload] = await Promise.all([
+  const [policyPayload, alertPayload, maintenancePayload] = await Promise.all([
     apiJson('/api/scan-policies'),
     apiJson(alertPath),
+    apiJson('/api/maintenance-windows'),
   ]);
   const policies = policyPayload.items || [];
   const alerts = alertPayload.items || [];
+  const windows = maintenancePayload.items || [];
+  state.policies = policies;
+  state.operationAlerts = alerts;
   const schedulerEnabled = Boolean(policyPayload.scheduler_enabled);
   const schedulerBadge = $('#scheduler-state');
   schedulerBadge.textContent = schedulerEnabled ? 'Scheduler enabled' : 'Scheduler disabled';
@@ -547,10 +659,16 @@ async function loadOperations() {
     { label: 'Approved policies', value: policies.length, note: 'Maximum 50' },
     { label: 'Enabled policies', value: policies.filter((item) => item.enabled).length, note: 'Private CIDRs only' },
     { label: 'Open alerts', value: alertPayload.open_count || 0, note: 'Needs triage' },
+    { label: 'Overdue cases', value: alertPayload.overdue_count || 0, note: 'Outside SLA' },
+    { label: 'Maintenance', value: maintenancePayload.active_count || 0, note: 'Active windows' },
     { label: 'Scheduler', value: schedulerEnabled ? 'On' : 'Off', note: 'Deployment setting' },
   ]);
+  $('#maintenance-active-count').textContent = `${maintenancePayload.active_count || 0} active`;
   renderPolicies(policies);
+  populateMaintenancePolicies(policies);
+  renderMaintenanceWindows(windows);
   renderAlerts(alerts);
+  if (state.selectedAlertId) selectAlertCase(state.selectedAlertId);
   applyRoleAccess();
 }
 
@@ -891,6 +1009,59 @@ $('#policy-results').addEventListener('click', async (event) => {
   }
 });
 
+$('#maintenance-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  setBusy(button, true, 'Saving…');
+  setFormStatus('maintenance-status', 'Validating and saving the maintenance window…');
+  try {
+    const startsAt = new Date($('#maintenance-start').value);
+    const endsAt = new Date($('#maintenance-end').value);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+      throw new Error('Choose valid maintenance start and end times.');
+    }
+    const policyValue = $('#maintenance-policy').value;
+    await apiJson('/api/maintenance-windows', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: $('#maintenance-name').value.trim(),
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        reason: $('#maintenance-reason').value.trim(),
+        policy_id: policyValue ? Number(policyValue) : null,
+        enabled: $('#maintenance-enabled').checked,
+      }),
+    });
+    setFormStatus('maintenance-status', 'Maintenance window saved and audited.', 'success');
+    await loadOperations();
+    showToast('Maintenance window saved.');
+  } catch (error) {
+    setFormStatus('maintenance-status', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+    applyRoleAccess();
+  }
+});
+
+$('#maintenance-results').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-action="toggle-maintenance"]');
+  if (!button) return;
+  setBusy(button, true, 'Updating…');
+  try {
+    const enabled = button.dataset.nextEnabled === 'true';
+    await apiJson(`/api/maintenance-windows/${button.dataset.itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    });
+    await loadOperations();
+    showToast(`Maintenance window ${enabled ? 'enabled' : 'disabled'}.`);
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
+
 $('#operations-refresh').addEventListener('click', async (event) => {
   setBusy(event.currentTarget, true, 'Refreshing…');
   try { await loadOperations(); showToast('Operations view refreshed.'); }
@@ -910,21 +1081,52 @@ $('#alert-filter').addEventListener('change', () => {
 });
 
 $('#alert-results').addEventListener('click', async (event) => {
-  const button = event.target.closest('[data-action="set-alert-status"]');
+  const button = event.target.closest('[data-action="select-alert"]');
   if (!button) return;
+  selectAlertCase(button.dataset.itemId);
+  showToast(`Alert case #${button.dataset.itemId} selected.`);
+});
+
+async function updateSelectedAlert(status, button) {
+  if (!state.selectedAlertId) {
+    showToast('Select an alert case first.', 'error');
+    return;
+  }
+  const resolutionNote = $('#triage-resolution').value.trim();
+  if (status === 'resolved' && resolutionNote.length < 3) {
+    showToast('Add resolution evidence before resolving the case.', 'error');
+    return;
+  }
   setBusy(button, true, 'Updating…');
   try {
-    await apiJson(`/api/alerts/${button.dataset.itemId}`, {
+    const payload = await apiJson(`/api/alerts/${state.selectedAlertId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: button.dataset.nextStatus }),
+      body: JSON.stringify({
+        status,
+        assigned_to: $('#triage-assignee').value.trim(),
+        resolution_note: resolutionNote,
+      }),
     });
     await loadOperations();
-    showToast(`Alert ${button.dataset.nextStatus}.`);
+    selectAlertCase(payload.alert.id);
+    showToast(`Alert case ${payload.alert.status}.`);
   } catch (error) {
     showToast(error.message, 'error');
   } finally {
     setBusy(button, false);
   }
+}
+
+$('#alert-acknowledge').addEventListener('click', (event) => {
+  updateSelectedAlert('acknowledged', event.currentTarget);
+});
+
+$('#alert-resolve').addEventListener('click', (event) => {
+  updateSelectedAlert('resolved', event.currentTarget);
+});
+
+$('#alert-reopen').addEventListener('click', (event) => {
+  updateSelectedAlert('open', event.currentTarget);
 });
 
 $('#database-backup').addEventListener('click', (event) => downloadApiFile(
@@ -932,6 +1134,13 @@ $('#database-backup').addEventListener('click', (event) => downloadApiFile(
   'netwatch-backup.sqlite3',
   event.currentTarget,
   'Database backup downloaded and audited.',
+));
+
+$('#metrics-download').addEventListener('click', (event) => downloadApiFile(
+  '/api/metrics',
+  'netwatch-metrics.prom',
+  event.currentTarget,
+  'Authenticated monitoring metrics exported.',
 ));
 
 $('#advisor-refresh').addEventListener('click', async (event) => {
@@ -946,8 +1155,20 @@ $$('[data-report]').forEach((button) => button.addEventListener('click', () => d
 function updateClock() {
   $('#clock').textContent = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date());
 }
+
+function setMaintenanceDefaults() {
+  const asLocalInput = (date) => {
+    const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return adjusted.toISOString().slice(0, 16);
+  };
+  const start = new Date(Date.now() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  $('#maintenance-start').value = asLocalInput(start);
+  $('#maintenance-end').value = asLocalInput(end);
+}
 setInterval(updateClock, 1000);
 updateClock();
+setMaintenanceDefaults();
 
 async function init() {
   try {

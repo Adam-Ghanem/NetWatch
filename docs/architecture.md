@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.3 is a local-first defensive network visibility application. The professional dashboard, role-protected API, and optional bounded scheduler are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.4 is a local-first defensive network visibility application. The professional dashboard, role-protected API, optional bounded scheduler, maintenance controls, case workflow, and authenticated metrics are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -28,7 +28,9 @@ FastAPI application (`backend/main.py`)
           +--> Company operations
           |      - approved scan policies
           |      - opt-in scheduler
-          |      - alert triage
+          |      - maintenance windows
+          |      - deduplicated alert cases and local SLA state
+          |      - authenticated label-free metrics
           |      - consistent database snapshots
           |      - `operations_store.py`
           |
@@ -60,7 +62,9 @@ It provides:
 - Scan-to-scan asset change history
 - Operations audit log and inventory CSV export
 - Approved scan policies, scheduler state, and manual policy execution
-- Criticality-aware operational alerts with acknowledgement
+- Deduplicated operational cases with occurrence count, assignment, SLA, acknowledgement, resolution, and reopening
+- Global and policy-specific maintenance windows
+- Authenticated Prometheus text-format operational counters without target labels
 - Admin-only SQLite snapshot download
 - Local Risk Advisor
 - Markdown and HTML report downloads
@@ -88,7 +92,7 @@ It is not the default deployment path.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
 - `inventory_store.py`: SQLite inventory, company context, scan snapshots, transition detection, audit records, and scan-run persistence.
-- `operations_store.py`: approved scan policies, atomic due-policy claims, alert lifecycle, retention, and SQLite snapshot creation.
+- `operations_store.py`: approved scan policies, maintenance-aware atomic due-policy claims, alert-case lifecycle, SLA/retention counters, monitoring snapshots, and SQLite snapshot creation.
 - `report_builder.py`: Markdown and standalone HTML reports.
 
 ## Storage
@@ -105,11 +109,11 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 4 with company asset context, operational audit records, policies, and alerts
-- Bounded change-event, observation, audit, alert, and policy retention
+- Schema version 5 with company asset context, operational audit records, policies, maintenance windows, and alert cases
+- Bounded change-event, observation, audit, alert, policy, and maintenance-window retention
 - Named Docker volumes in the default Compose deployment
 
-The seven operational tables have separate responsibilities:
+The eight operational tables have separate responsibilities:
 
 - `scan_runs` records each check and its summary.
 - `assets` stores current inventory state, last confirmed sighting, owner, department, location, criticality, and notes.
@@ -117,7 +121,8 @@ The seven operational tables have separate responsibilities:
 - `asset_events` records meaningful transitions: new asset, returned asset, and not observed.
 - `audit_log` records actor role, action, target, outcome, and a bounded operational summary.
 - `scan_policies` records immutable approved private CIDRs, bounded intervals, enablement, and last/next execution state.
-- `operation_alerts` records transition-derived alerts, severity, status, and acknowledgement evidence.
+- `operation_alerts` records transition-derived cases, severity, repeated occurrence evidence, SLA due time, assignee, acknowledgement, and resolution evidence.
+- `maintenance_windows` records global or policy-specific UTC execution pauses and their change reason.
 
 A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery.
 
@@ -138,6 +143,9 @@ NetWatch is intended for approved local environments and applies these controls:
 - Bounded simultaneous scans
 - Scheduler disabled by default and limited to persisted Admin-approved CIDRs
 - Atomic due-policy claims and one policy execution per scheduler cycle
+- Active maintenance windows are checked by scheduler claims and manual policy runs
+- Repeated unresolved findings are deduplicated; a resolution note is required for closure
+- Authenticated metrics expose bounded counters only, without private target labels
 - Scheduled and manual policy scans share the normal target validation and scan semaphore
 - Restricted CORS origins
 - Content Security Policy and defensive HTTP headers

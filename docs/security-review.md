@@ -1,8 +1,8 @@
-# NetWatch v1.3 Security Review
+# NetWatch v1.4 Security Review
 
 ## Scope
 
-This review covers the default local deployment of NetWatch v1.3: one FastAPI process serving the responsive dashboard, role-protected API, and optional bounded scheduler at `127.0.0.1:8000`.
+This review covers the default local deployment of NetWatch v1.4: one FastAPI process serving the responsive dashboard, role-protected API, optional bounded scheduler, case workflow, maintenance controls, and authenticated metrics at `127.0.0.1:8000`.
 
 ## Threat model
 
@@ -18,6 +18,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - A stale or over-broad scheduled policy continuing after authorization changes
 - Concurrent scheduler instances running the same approved policy
 - Database snapshots exposing internal inventory if mishandled
+- Duplicate findings overwhelming triage or being closed without evidence
+- Scheduled work continuing during a documented maintenance window
+- Monitoring labels exposing private targets or producing unbounded cardinality
 
 ## Implemented controls
 
@@ -56,6 +59,8 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Policy CIDRs are immutable after approval; enable/disable state and interval remain auditable controls.
 - The scheduler is disabled by default, atomically claims one due policy per cycle, and shares the normal scan semaphore.
 - Manual policy execution requires fresh authorization confirmation.
+- Active global or policy-specific maintenance windows pause applicable scheduler claims and manual policy runs.
+- Maintenance timestamps require a timezone, duration is limited to 31 days, and records are bounded to 100.
 
 ### Storage and output
 
@@ -63,8 +68,10 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Timestamps are stored in UTC.
 - Asset events, normalized observations, and operations audit records have bounded retention.
 - Audit records contain role, action, target, outcome, and short details but never raw API keys.
-- Existing databases migrate company-context, policy, alert, and audit records in place at schema version 4.
-- Transition-derived operational alerts have bounded retention and record acknowledgement role/time.
+- Existing databases migrate company-context, policy, alert, and audit records in place at schema version 5.
+- Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
+- A resolution note is required before a case can be closed; later recurrence creates a new open case.
+- Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
 - Not-observed severity uses business criticality but still avoids claiming confirmed downtime.
 - Admin snapshots use SQLite's online backup API; no destructive restore API is exposed.
 - Missing ICMP replies preserve the last confirmed sighting and use `Not observed` rather than a definitive offline claim.
@@ -97,6 +104,8 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - The in-process scheduler is not safe for multi-worker or multi-instance coordination.
 - Shared role keys identify a role, not the individual who approved a policy or acknowledged an alert.
 - A downloaded snapshot is not an automated encrypted off-host backup or a tested disaster-recovery plan.
+- Local SLA due times are workflow guidance, not an organization-wide incident-management or paging service.
+- Maintenance checks depend on the single local process and shared SQLite clock evidence.
 
 ## Shared-deployment requirements
 
@@ -117,4 +126,4 @@ Do not expose the default service to other networks without adding:
 
 ## Review conclusion
 
-The default NetWatch v1.3 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, multi-instance, or Internet-accessible deployment.
+The default NetWatch v1.4 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, multi-instance, or Internet-accessible deployment.

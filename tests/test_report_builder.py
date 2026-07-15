@@ -157,3 +157,48 @@ def test_reports_include_alerts_and_approved_scan_policies():
     assert "Operational alerts" in html
     assert "Approved scan policies" in html
     assert "Operations &lt;team&gt;" in html
+
+
+def test_reports_include_case_sla_and_maintenance_evidence():
+    alerts = pd.DataFrame(
+        [
+            {
+                "last_seen_at": "2026-07-15T10:00:00+00:00",
+                "severity": "Critical",
+                "title": "Core asset not observed",
+                "target": "10.0.0.5",
+                "occurrence_count": 3,
+                "status": "acknowledged",
+                "assigned_to": "Network Operations",
+                "due_at": "2026-07-15T14:00:00+00:00",
+                "sla_state": "within_sla",
+                "details": "Validate availability.",
+                "resolution_note": "",
+            }
+        ]
+    )
+    maintenance = pd.DataFrame(
+        [
+            {
+                "name": "Firewall change",
+                "policy_name": "HQ baseline",
+                "starts_at": "2026-07-15T10:00:00+00:00",
+                "ends_at": "2026-07-15T12:00:00+00:00",
+                "reason": "CHG-1042 <approved>",
+                "enabled": True,
+                "active": True,
+                "created_by": "admin",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(
+        pd.DataFrame(), pd.DataFrame(), None, None, alerts, None, maintenance
+    )
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, None, maintenance)
+
+    assert "Active maintenance windows: **1**" in markdown
+    assert "Network Operations" in markdown
+    assert "Maintenance windows" in markdown
+    assert "Maintenance windows" in html
+    assert "CHG-1042 &lt;approved&gt;" in html
