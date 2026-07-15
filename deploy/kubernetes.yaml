@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: netwatch-config
+data:
+  NETWATCH_ALLOWED_HOSTS: "netwatch,netwatch.example.com"
+  NETWATCH_ALLOWED_ORIGINS: "https://netwatch.example.com"
+  NETWATCH_API_DOCS: "false"
+  NETWATCH_OIDC_ENABLED: "true"
+  NETWATCH_OIDC_ISSUER: "https://identity.example.com/tenant"
+  NETWATCH_OIDC_AUDIENCE: "netwatch-production"
+  NETWATCH_OIDC_JWKS_URL: "https://identity.example.com/tenant/keys"
+  NETWATCH_OIDC_GROUPS_CLAIM: "groups"
+  NETWATCH_OIDC_ADMIN_GROUPS: "netwatch-admins"
+  NETWATCH_OIDC_OPERATOR_GROUPS: "netwatch-operators"
+  NETWATCH_OIDC_VIEWER_GROUPS: "netwatch-viewers"
+  NETWATCH_OIDC_ALGORITHMS: "RS256"
+  NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS: "3600"
+  NETWATCH_SCHEDULER_ENABLED: "false"
+  NETWATCH_MAX_CONCURRENT_SCANS: "1"
+  NETWATCH_RATE_LIMIT_REQUESTS: "60"
+  NETWATCH_RATE_LIMIT_WINDOW_SECONDS: "60"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: netwatch-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netwatch
+  labels:
+    app.kubernetes.io/name: netwatch
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netwatch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netwatch
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: netwatch
+          image: your-registry.example/netwatch:1.6.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: netwatch-config
+          env:
+            - name: NETWATCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_API_KEY
+                  optional: true
+            - name: NETWATCH_OPERATOR_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_OPERATOR_KEY
+                  optional: true
+            - name: NETWATCH_VIEWER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_VIEWER_KEY
+                  optional: true
+            - name: NETWATCH_AUDIT_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_AUDIT_HMAC_KEY
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: NETWATCH_AI_SAFETY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_AI_SAFETY_SECRET
+                  optional: true
+            - name: NETWATCH_AI_SUBJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: netwatch-secrets
+                  key: NETWATCH_AI_SUBJECT_ID
+                  optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_RAW
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /api/health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: netwatch-data
+        - name: logs
+          emptyDir:
+            sizeLimit: 512Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netwatch
+  labels:
+    app.kubernetes.io/name: netwatch
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: netwatch
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

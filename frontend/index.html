@@ -15,10 +15,10 @@
   <div id="connect-overlay" class="overlay">
     <form id="connect-form" class="connect-card">
       <img src="/assets/netwatch-logo.svg" alt="NetWatch" width="180" height="128" />
-      <p class="eyebrow">Secure local access</p>
+      <p class="eyebrow">Secure company access</p>
       <h1>Connect to NetWatch</h1>
-      <p class="muted">Enter the API key configured in your local <code>.env</code> file. The key stays only in this browser tab.</p>
-      <label for="api-key">API key</label>
+      <p class="muted">A configured company SSO session is detected automatically. Local and break-glass deployments can use an Admin, Operator, or Viewer key that stays only in this browser tab.</p>
+      <label for="api-key">Local role key</label>
       <div class="secret-row">
         <input id="api-key" name="api-key" type="password" autocomplete="off" placeholder="Paste NETWATCH_API_KEY" required />
         <button id="toggle-key" class="button ghost compact" type="button">Show</button>
@@ -26,8 +26,8 @@
       <button class="button primary full" type="submit">Connect securely</button>
       <p id="connect-status" class="form-status"></p>
       <div class="connect-help">
-        <strong>First launch?</strong>
-        <span>Run <code>python scripts/start.py</code> or copy <code>.env.example</code> to <code>.env</code>.</span>
+        <strong>Enterprise deployment?</strong>
+        <span>Authenticate through the approved company identity gateway. Administrators can configure OIDC group mapping without exposing provider keys to users.</span>
       </div>
     </form>
   </div>
@@ -49,6 +49,8 @@
         <button class="nav-item" data-view="ports"><span>⇄</span> Port audit</button>
         <button class="nav-item" data-view="inventory"><span>▦</span> Inventory</button>
         <button class="nav-item" data-view="advisor"><span>✦</span> Risk advisor</button>
+        <button class="nav-item" data-view="audit"><span>≡</span> Audit log</button>
+        <button class="nav-item" data-view="operations"><span>◷</span> Operations</button>
         <button class="nav-item" data-view="reports"><span>⇩</span> Reports</button>
       </nav>
 
@@ -68,6 +70,7 @@
           <h2 id="page-title">Overview</h2>
         </div>
         <div class="top-actions">
+          <span id="session-role" class="role-badge">Disconnected</span>
           <button id="refresh" class="button ghost" type="button">Refresh</button>
           <span id="clock" class="clock"></span>
         </div>
@@ -76,11 +79,11 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1</span>
+            <span class="pill">New · NetWatch v1.6 Enterprise</span>
             <h3>Turn local network data into confident decisions.</h3>
-            <p>Discover approved hosts, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
+            <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
-              <button class="button primary" data-go="network" type="button">Start a network scan</button>
+              <button class="button primary" data-go="network" data-scan-control type="button">Start a network scan</button>
               <button class="button ghost" data-go="inventory" type="button">View inventory</button>
             </div>
           </div>
@@ -90,7 +93,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Authenticated</span><span>Evidence-backed</span><span>No external telemetry</span>
+          <span>OIDC-ready</span><span>Integrity-signed audit</span><span>SLA triage</span><span>De-identified AI</span>
         </div>
 
         <div class="metric-grid">
@@ -110,6 +113,11 @@
             <div id="overview-advisor" class="summary-card skeleton-block"></div>
           </article>
         </div>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div><button class="link-button" data-go="inventory">View inventory →</button></div>
+          <div id="overview-changes" class="table-wrap"></div>
+        </article>
       </section>
 
       <section id="view-network" class="view">
@@ -125,6 +133,7 @@
           </form>
           <article class="panel result-panel">
             <div class="panel-head"><div><p class="eyebrow">Discovery results</p><h3 id="network-result-title">No scan yet</h3></div><span id="network-count" class="count-badge">0 hosts</span></div>
+            <div id="network-changes" class="mini-metrics"></div>
             <div id="network-results" class="table-wrap empty-state">Run an authorized scan to populate this table.</div>
           </article>
         </div>
@@ -170,12 +179,144 @@
 
       <section id="view-inventory" class="view">
         <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div><button id="inventory-refresh" class="button ghost">Refresh inventory</button></div>
+          <div class="panel-head">
+            <div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div>
+            <div class="button-row"><button id="inventory-export" class="button primary" type="button">Export CSV</button><button id="inventory-refresh" class="button ghost" type="button">Refresh inventory</button></div>
+          </div>
           <div id="inventory-results" class="table-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Company context</p><h3>Ownership and business priority</h3></div><span class="count-badge">Admin</span></div>
+          <form id="asset-context-form" class="company-form-grid">
+            <div class="field-span-2">
+              <label for="asset-ip">Inventory asset</label>
+              <input id="asset-ip" list="asset-options" placeholder="Select or enter a saved IPv4 address" required />
+              <datalist id="asset-options"></datalist>
+            </div>
+            <div><label for="asset-owner">Owner</label><input id="asset-owner" maxlength="120" placeholder="Team or accountable person" /></div>
+            <div><label for="asset-department">Department</label><input id="asset-department" maxlength="120" placeholder="Finance, Operations, IT…" /></div>
+            <div><label for="asset-location">Location</label><input id="asset-location" maxlength="120" placeholder="Office, floor, site, rack…" /></div>
+            <div><label for="asset-criticality">Criticality</label><select id="asset-criticality"><option>Low</option><option selected>Medium</option><option>High</option><option>Critical</option></select></div>
+            <div class="field-span-2"><label for="asset-notes">Notes</label><textarea id="asset-notes" maxlength="1000" rows="4" placeholder="Operational context only; avoid secrets and credentials."></textarea></div>
+            <div class="field-span-2 form-actions"><button id="context-save" class="button primary" type="submit">Save asset context</button><p id="context-status" class="form-status">Admin access is required to edit asset context.</p></div>
+          </form>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Change detection</p><h3>Recent asset changes</h3></div></div>
+          <div id="changes-results" class="table-wrap"></div>
         </article>
         <article class="panel">
           <div class="panel-head"><div><p class="eyebrow">Audit trail</p><h3>Recent history</h3></div></div>
           <div id="history-results" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="view-audit" class="view">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Accountability</p><h3>Operations audit log</h3></div><div class="button-row"><span id="audit-integrity" class="risk-badge neutral">Checking integrity</span><button id="audit-refresh" class="button ghost" type="button">Refresh log</button></div></div>
+          <p class="muted">Admin-only individual identity, request correlation, and HMAC chain verification. API keys and bearer tokens are never stored in this log.</p>
+          <div id="audit-results" class="table-wrap"></div>
+        </article>
+      </section>
+
+      <section id="view-operations" class="view">
+        <article class="panel accent-panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Controlled automation</p><h3>Company operations</h3></div>
+            <span id="scheduler-state" class="risk-badge neutral">Checking scheduler</span>
+          </div>
+          <p class="muted">Operate approved private CIDRs with maintenance-aware scheduling, deduplicated alert cases, SLA evidence, authenticated monitoring metrics, and consistent SQLite snapshots.</p>
+          <div id="operations-metrics" class="mini-metrics"></div>
+        </article>
+
+        <div class="content-grid form-layout operations-layout">
+          <form id="policy-form" class="panel form-panel">
+            <p class="eyebrow">Admin control</p><h3>Add an approved scan policy</h3>
+            <p class="muted">The CIDR becomes immutable approval evidence. Disable the policy when authorization or scope changes.</p>
+            <label for="policy-name">Policy name</label>
+            <input id="policy-name" maxlength="120" placeholder="Casablanca office baseline" required />
+            <label for="policy-cidr">Approved private CIDR</label>
+            <input id="policy-cidr" value="192.168.1.0/24" required />
+            <label for="policy-interval">Interval in minutes</label>
+            <input id="policy-interval" type="number" min="15" max="10080" value="60" required />
+            <label class="check-row"><input id="policy-enabled" type="checkbox" /><span>Enable this policy after it is saved.</span></label>
+            <label class="check-row"><input id="policy-authorized" type="checkbox" required /><span>I confirm durable authorization for this private range and schedule.</span></label>
+            <button class="button primary" type="submit">Save approved policy</button>
+            <p id="policy-status" class="form-status">Admin access is required to create and change policies.</p>
+          </form>
+
+          <article class="panel result-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Approved scope</p><h3>Scan policies</h3></div>
+              <button id="operations-refresh" class="button ghost" type="button">Refresh</button>
+            </div>
+            <label class="check-row policy-run-confirm"><input id="policy-run-authorized" type="checkbox" /><span>Confirm current authorization before using a Run now action.</span></label>
+            <div id="policy-results" class="table-wrap"></div>
+          </article>
+        </div>
+
+        <div class="content-grid form-layout operations-layout">
+          <form id="maintenance-form" class="panel form-panel">
+            <p class="eyebrow">Change control</p><h3>Schedule maintenance</h3>
+            <p class="muted">Pause one policy or every approved policy during a bounded, documented maintenance window.</p>
+            <label for="maintenance-name">Window name</label>
+            <input id="maintenance-name" maxlength="120" placeholder="HQ firewall change" required />
+            <label for="maintenance-policy">Scope</label>
+            <select id="maintenance-policy"><option value="">All approved policies</option></select>
+            <label for="maintenance-start">Starts</label>
+            <input id="maintenance-start" type="datetime-local" required />
+            <label for="maintenance-end">Ends</label>
+            <input id="maintenance-end" type="datetime-local" required />
+            <label for="maintenance-reason">Change reference / reason</label>
+            <textarea id="maintenance-reason" maxlength="500" placeholder="CHG-1042 · Planned network maintenance"></textarea>
+            <label class="check-row"><input id="maintenance-enabled" type="checkbox" checked /><span>Enable this window after it is saved.</span></label>
+            <button class="button primary" type="submit">Save maintenance window</button>
+            <p id="maintenance-status" class="form-status">Admin access is required to manage maintenance windows.</p>
+          </form>
+
+          <article class="panel result-panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Schedule protection</p><h3>Maintenance windows</h3></div>
+              <span id="maintenance-active-count" class="risk-badge neutral">0 active</span>
+            </div>
+            <p class="muted">Active global windows pause all scheduled and manual policy runs. Policy-specific windows pause only their approved scope.</p>
+            <div id="maintenance-results" class="table-wrap"></div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Operational triage</p><h3>Alert inbox</h3></div>
+            <div class="button-row">
+              <select id="alert-filter" aria-label="Alert status filter"><option value="open">Open alerts</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option><option value="">All alerts</option></select>
+              <button id="alerts-refresh" class="button ghost" type="button">Refresh alerts</button>
+            </div>
+          </div>
+          <p class="muted">Repeated unresolved findings are deduplicated into one case. “Not observed” remains evidence to validate, not proof that a device is offline.</p>
+          <form id="alert-triage-form" class="triage-grid">
+            <div><label for="triage-alert-id">Selected case</label><input id="triage-alert-id" readonly placeholder="Choose Manage on an alert" /></div>
+            <div><label for="triage-assignee">Assignee / team</label><input id="triage-assignee" maxlength="120" placeholder="Network Operations" /></div>
+            <div class="field-span-2"><label for="triage-resolution">Resolution evidence</label><textarea id="triage-resolution" maxlength="1000" placeholder="Validated with the asset owner; expected maintenance completed."></textarea></div>
+            <div class="field-span-2 form-actions">
+              <button id="alert-acknowledge" class="button ghost" type="button">Save & acknowledge</button>
+              <button id="alert-resolve" class="button primary" type="button">Resolve with evidence</button>
+              <button id="alert-reopen" class="button ghost" type="button">Reopen</button>
+              <p id="triage-status" class="form-status">Select an alert case to manage it.</p>
+            </div>
+          </form>
+          <div id="alert-results" class="table-wrap"></div>
+        </article>
+
+        <article class="panel backup-panel">
+          <div>
+            <p class="eyebrow">Admin recovery control</p>
+            <h3>Consistent database snapshot</h3>
+            <p class="muted">Download a point-in-time SQLite backup without copying the live WAL files. Keep the file in an approved encrypted location.</p>
+          </div>
+          <div class="button-row">
+            <button id="metrics-download" class="button ghost" type="button">Export monitoring metrics</button>
+            <button id="database-backup" class="button primary" type="button">Download database backup</button>
+          </div>
         </article>
       </section>
 
@@ -195,12 +336,45 @@
             <button id="advisor-refresh" class="button ghost full">Rebuild advisor</button>
           </article>
         </div>
+        <article class="panel intelligence-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Server-side decision support</p>
+              <h3>NetWatch Intelligence</h3>
+            </div>
+            <span id="intelligence-state" class="risk-badge neutral">Checking</span>
+          </div>
+          <p class="muted intelligence-privacy">Only aggregated, de-identified evidence is sent for analysis. IP addresses, CIDRs, hostnames, owners, departments, locations, notes, raw event details, role keys, and provider keys are excluded.</p>
+          <div id="intelligence-meta" class="mini-metrics"></div>
+          <p id="intelligence-summary" class="advisor-copy">Generate a structured defensive brief when you need a second review of the saved operational evidence.</p>
+          <div class="intelligence-grid">
+            <div>
+              <h4>Evidence observations</h4>
+              <ol id="intelligence-observations" class="action-list"></ol>
+            </div>
+            <div>
+              <h4>Limitations</h4>
+              <ol id="intelligence-limitations" class="action-list"></ol>
+            </div>
+          </div>
+          <div>
+            <h4>Recommended actions</h4>
+            <div id="intelligence-actions" class="intelligence-actions empty-state">No intelligence brief has been generated in this session.</div>
+          </div>
+          <div class="intelligence-controls">
+            <div class="button-row">
+              <button id="intelligence-generate" class="button primary" type="button">Generate secure brief</button>
+              <button id="intelligence-refresh" class="button ghost" type="button">Admin refresh</button>
+            </div>
+            <p id="intelligence-status" class="form-status">Human validation is required before acting on any recommendation.</p>
+          </div>
+        </article>
       </section>
 
       <section id="view-reports" class="view">
         <div class="report-grid">
-          <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable scan summary for GitHub, notes, or handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
-          <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with inventory, findings, and recommendations.</p></div><button data-report="html" class="button primary">Download .html</button></article>
+          <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable inventory, changes, findings, and operations log for handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
+          <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with business context, findings, recommendations, and audit evidence.</p></div><button data-report="html" class="button primary">Download .html</button></article>
         </div>
         <article class="panel safety-note"><p class="eyebrow">Interpretation</p><h3>Use results as evidence, not absolute truth.</h3><p>Firewalls, blocked ICMP, NAT, transient services, and local policy can affect what NetWatch observes. Validate important findings with the system owner.</p></article>
       </section>

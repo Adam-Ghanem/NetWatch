@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def premium_css() -> str:
-    return r'''
+    return r"""
 <style>
 :root{--bg:#020817;--panel:#071327;--card:#0b1b33;--line:rgba(148,163,184,.16);--text:#e6f3ff;--muted:#8aa0b8;--cyan:#22d3ee;--blue:#3b82f6;--green:#4ade80;--purple:#a78bfa}
 .stApp{background:radial-gradient(circle at 72% 12%,rgba(34,211,238,.16),transparent 24%),radial-gradient(circle at 20% 90%,rgba(59,130,246,.12),transparent 26%),linear-gradient(180deg,#020817,#061225 58%,#030914)!important;color:var(--text)!important}.block-container{max-width:1400px!important;padding:1.5rem 2.3rem 3rem!important}
@@ -14,16 +14,16 @@ div[data-testid="stSidebarContent"]{background:#050d1c!important;border-right:1p
 .metric-card,.panel{border:1px solid var(--line)!important;background:linear-gradient(180deg,rgba(11,27,51,.88),rgba(7,19,39,.88))!important;color:var(--text)!important;border-radius:22px!important;box-shadow:0 18px 60px rgba(0,0,0,.26)!important}.metric-value{font-size:3rem!important;color:#fff!important}.metric-label,.metric-note,.muted{color:var(--muted)!important}.section-title{color:var(--text)!important;letter-spacing:.12em!important}.stButton>button,.stDownloadButton>button{border:1px solid rgba(34,211,238,.42)!important;background:linear-gradient(90deg,var(--cyan),var(--green))!important;color:#03101c!important;border-radius:999px!important;font-weight:900!important}div[data-testid="stDataFrame"]{border:1px solid var(--line)!important;border-radius:18px!important;overflow:hidden!important}
 @media(max-width:950px){.hero-top{grid-template-columns:1fr}.hero-line{font-size:clamp(3rem,14vw,5rem)}.block-container{padding-left:1rem!important;padding-right:1rem!important}}
 </style>
-'''
+"""
 
 
 def premium_hero(version: str) -> str:
-    return f'''
+    return f"""
     <div class="hero-shell"><div class="hero-top"><div class="hero-main"><div class="kicker">Open source local network monitoring</div><div class="hero-title-wrap"><span class="hero-line">Monitor your</span><span class="hero-line">local network.</span></div><div class="hero-copy">A clean defensive dashboard for host discovery, service checks, inventory, risk notes, and exportable reports.</div><div><span class="pill dark">v{version}</span><span class="pill">Private IP Only</span><span class="pill">Local Reports</span><span class="pill">Risk Advisor</span></div></div><div class="hero-side"><div class="console"><div class="console-title">Network status</div><div class="console-big">ONLINE</div><div class="console-line"><span>Scope</span><strong>Private LAN</strong></div><div class="console-line"><span>Storage</span><strong>Local</strong></div><div class="console-line"><span>Reports</span><strong>Ready</strong></div><div class="node-map"><div class="wire a"></div><div class="wire b"></div><div class="wire c"></div><div class="node n1"></div><div class="node n2"></div><div class="node n3"></div><div class="node n4"></div></div></div></div></div><div class="marquee"><span>DISCOVER / MONITOR / INSPECT / REPORT / LOCAL ONLY / NETWATCH / DISCOVER / MONITOR / INSPECT / REPORT / LOCAL ONLY / NETWATCH / </span></div></div>
-    '''
+    """
 
 
 def premium_sidebar() -> str:
-    return '''
+    return """
     <div class="brand-card"><div class="brand-eyebrow">NetWatch</div><div class="brand-title">Network Monitor</div><div class="brand-sub">Open-source style local visibility</div></div>
-    '''
+    """

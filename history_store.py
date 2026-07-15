@@ -23,13 +23,15 @@ def add_history(scan_type: str, target: str, summary: str, status: str = "comple
     _ensure_file()
     with HISTORY_FILE.open("a", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=FIELDNAMES)
-        writer.writerow({
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "scan_type": scan_type,
-            "target": target,
-            "summary": summary,
-            "status": status,
-        })
+        writer.writerow(
+            {
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "scan_type": scan_type,
+                "target": target,
+                "summary": summary,
+                "status": status,
+            }
+        )
 
 
 def load_history(limit: int = 30) -> list[dict[str, str]]:

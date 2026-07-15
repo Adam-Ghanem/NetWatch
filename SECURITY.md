@@ -8,19 +8,24 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1 includes:
+NetWatch v1.6 includes:
 
-- API key required for every non-health API endpoint
-- Protected operations disabled until `NETWATCH_API_KEY` is configured
+- Verified OIDC bearer identity or valid Admin, Operator, or Viewer key required for every non-health API endpoint
+- Strict issuer, audience, asymmetric algorithm, signing key, expiry, subject, authorized-party, and exact group-to-role validation
+- Invalid bearer tokens never fall back to a simultaneously supplied local key
+- Malformed or ambiguous authorization headers are rejected, and local role-key values must be unique
+- Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
+- Protected operations disabled until at least one non-placeholder role key of 32+ characters is configured
 - Constant-time API-key comparison
 - Server-side authorization confirmation for scan requests
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
-- Request rate limiting
+- Per-identity, route-template request rate limiting with bounded in-memory identity buckets
 - Bounded simultaneous scans
 - Bounded common-port worker count
 - Restricted CORS origins
+- Restricted HTTP Host headers
 - Content Security Policy
 - Frame embedding blocked
 - MIME sniffing disabled
@@ -33,18 +38,31 @@ NetWatch v1 includes:
 - Docker service published on localhost only by default
 - Linux capabilities dropped except the minimum raw-network capability required for ping
 - FastAPI interactive documentation disabled by default
-- Local Risk Advisor with no external service calls
+- Deterministic local Risk Advisor with no external service calls
+- Optional server-side intelligence that excludes private identifiers and free-text evidence before provider calls
+- Strict structured provider output with `store: false`, no model tools, no arbitrary prompts, and human review required
+- Separate provider rate/concurrency limits, daily request budget, bounded timeout/output/cache, and safe local fallback
+- Admin-only individual actor and request correlation in bounded audit records that never store raw role keys or bearer tokens
+- Separate-key HMAC audit chain with a keyed head checkpoint, a five-second maximum public readiness cache, fresh privileged-operation fail-closed verification, and explicit legacy-row labeling
+- Public liveness/readiness separation, generated response request IDs, and low-cardinality HTTP metrics/log correlation
+- Admin-approved private CIDR scan policies with bounded count and intervals
+- Opt-in single-process scheduler that shares the normal scan concurrency limit
+- Deduplicated criticality-aware alert cases with bounded retention, occurrence evidence, assignment, local SLA due times, acknowledgement, and evidence-backed resolution
+- Bounded timezone-aware maintenance windows that pause applicable scheduled and manual policy execution
+- Authenticated monitoring counters without target, IP, hostname, or other high-cardinality labels
+- Admin-only consistent SQLite snapshot downloads and no destructive restore endpoint
 
 ## Secrets
 
-The `.env` file contains the local API key and is ignored by Git.
+The `.env` file can contain local role keys, the separate audit HMAC key, optional `OPENAI_API_KEY`, and automatically generated AI safety identity; it is ignored by Git and excluded from Docker build context.
 
 Do not:
 
 - Commit `.env`
-- Paste the API key into issues, screenshots, reports, or chat messages
-- Reuse a sensitive account password as the NetWatch API key
-- Publish the API key in frontend source code
+- Paste role or provider keys into issues, screenshots, reports, or chat messages
+- Reuse a sensitive account password as a NetWatch role key
+- Publish role keys in frontend source code
+- Put `NETWATCH_AUDIT_HMAC_KEY`, `OPENAI_API_KEY`, `NETWATCH_AI_SAFETY_SECRET`, or `NETWATCH_AI_SUBJECT_ID` in JavaScript, API responses, Dockerfiles, reports, logs, or tracked production configuration
 
 Generate a new key with:
 
@@ -52,7 +70,11 @@ Generate a new key with:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Restart NetWatch after changing the key.
+Use a different random value for each enabled role and restart NetWatch after changing keys. `scripts/start.py` also creates a separate random AI safety secret and opaque subject automatically; it never prints either value.
+
+End users call the protected NetWatch intelligence endpoint and never receive the provider key or safety identity. For shared production deployment, inject the provider key and AI safety secret from managed secret storage and configure project-level spend/rate limits. Rotate a secret immediately if it is ever committed, logged, displayed, or copied outside the approved secret store.
+
+Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost defaults unless a reviewed deployment requires additional names or origins.
 
 ## Local data
 
@@ -64,11 +86,11 @@ Default SQLite path:
 data/netwatch.db
 ```
 
-Docker Compose stores data in named volumes. Keep database files, volume exports, screenshots, and reports inside the authorized environment.
+Docker Compose stores data in named volumes. Keep database files, volume exports, downloaded snapshots, screenshots, and reports inside the authorized environment.
 
 ## Deployment limits
 
-The default deployment is designed for one trusted local operator and binds to:
+The default deployment is designed for a trusted local pilot or small internal team and binds to:
 
 ```text
 127.0.0.1:8000
@@ -77,13 +99,14 @@ The default deployment is designed for one trusted local operator and binds to:
 Before shared, remote, or public deployment, add and review:
 
 - TLS
-- Organization authentication
-- Role-based authorization
+- An approved OIDC-aware gateway that forwards signed bearer tokens
+- Least-privilege dedicated IdP groups and controlled break-glass access
 - Network access controls
 - Managed secret storage
-- Centralized audit logs
-- Monitoring and alerting
-- Backups and database migrations
+- Centralized append-only export of the locally integrity-protected audit stream
+- External scheduler/worker coordination for multi-instance deployments
+- Centralized monitoring and alert delivery
+- Automated encrypted off-host backups, restore drills, and database migrations
 - Retention and deletion policies
 - Reverse-proxy security configuration
 

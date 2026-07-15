@@ -7,9 +7,8 @@ from dataclasses import dataclass
 
 from config import HIGH_RISK_PORTS, MAX_HOSTS_PER_SCAN, MEDIUM_RISK_PORTS
 
-
-ALLOWED_IPV4_NETWORKS = tuple(
-    ipaddress.ip_network(cidr)
+ALLOWED_IPV4_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
+    ipaddress.IPv4Network(cidr)
     for cidr in (
         "10.0.0.0/8",
         "172.16.0.0/12",
@@ -69,7 +68,9 @@ def validate_cidr(cidr: str) -> ValidationResult:
         return ValidationResult(False, error="Invalid IPv4 CIDR. Example: 192.168.1.0/24")
 
     if not isinstance(network, ipaddress.IPv4Network):
-        return ValidationResult(False, error="IPv6 network scanning is not supported in this version.")
+        return ValidationResult(
+            False, error="IPv6 network scanning is not supported in this version."
+        )
 
     if not _is_allowed_ipv4_network(network):
         return ValidationResult(False, error="Only approved local IPv4 networks are allowed.")
