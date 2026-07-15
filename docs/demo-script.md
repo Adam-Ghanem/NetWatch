@@ -1,4 +1,4 @@
-# NetWatch v1.4 Demo Script
+# NetWatch v1.5 Demo Script
 
 ## 1. Introduction
 
@@ -95,11 +95,19 @@ Run a disabled sample policy manually. Create a short maintenance window and sho
 
 Open **Risk advisor** and explain:
 
-- It is deterministic and local
+- The Risk Advisor is deterministic and local
 - It uses saved NetWatch evidence
 - It does not send scan data to an external service
 - Confidence depends on available data
 - Exposed High and Critical assets are prioritized using saved business context
+
+Then show **NetWatch Intelligence** separately:
+
+- The browser never receives or asks for the provider key
+- IP addresses, CIDRs, hostnames, owners, departments, locations, notes, and raw event details are excluded before the request
+- The provider returns a strict defensive brief and cannot run scans, call tools, or change NetWatch data
+- Cache, separate rate/concurrency limits, atomic daily budget, provider redirect refusal, and safe fallback protect the service
+- Every recommendation requires human validation against the original local evidence
 
 ## 12. Reports
 
@@ -116,4 +124,4 @@ Explain that reports can contain sensitive internal network information and must
 
 ## 14. Close
 
-"NetWatch v1.4 is designed for a trusted local pilot or small internal team. Its shared role keys, local SLA settings, in-process scheduler, and snapshot download are not enterprise identity, distributed job coordination, an external incident platform, or automated disaster recovery; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, centralized tamper-resistant logs, monitoring, encrypted off-host backups with restore drills, and a deployment-specific security review."
+"NetWatch v1.5 is designed for a trusted local pilot or small internal team. Its shared role keys, local SLA settings, in-process scheduler, application AI budget, and snapshot download are not enterprise identity, distributed job coordination, provider billing control, an external incident platform, or automated disaster recovery; a remote or multi-user deployment still requires SSO/OIDC, TLS, managed secrets, provider spend controls, centralized tamper-resistant logs, monitoring, encrypted off-host backups with restore drills, and a deployment-specific security and privacy review."

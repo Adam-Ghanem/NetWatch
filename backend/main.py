@@ -22,7 +22,22 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from advisory_engine import advice_to_markdown, build_advice
+from ai_advisor import (
+    AIProviderError,
+    build_deidentified_snapshot,
+    request_intelligence_brief,
+    safety_configuration_is_usable,
+    safety_identifier,
+    snapshot_hash,
+)
 from config import (
+    AI_CACHE_TTL_SECONDS,
+    AI_DAILY_REQUEST_LIMIT,
+    AI_ENABLED,
+    AI_MAX_CONCURRENT_REQUESTS,
+    AI_MODEL,
+    AI_RATE_LIMIT_REQUESTS,
+    AI_RATE_LIMIT_WINDOW_SECONDS,
     API_ALLOWED_HOSTS,
     API_ALLOWED_ORIGINS,
     API_DOCS_ENABLED,
@@ -42,6 +57,14 @@ from config import (
 )
 from export_utils import safe_csv_bytes
 from host_profiler import profile_host
+from intelligence_store import (
+    cached_intelligence_brief,
+    daily_provider_request_count,
+    intelligence_metrics,
+    record_intelligence_failure,
+    reserve_intelligence_request,
+    save_intelligence_brief,
+)
 from inventory_store import (
     add_scan_run,
     asset_inventory,
@@ -153,6 +176,9 @@ _api_key_header = APIKeyHeader(name="X-NetWatch-Key", auto_error=False)
 _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
+_intelligence_rate_lock = threading.Lock()
+_intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
+_intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
 
 
 @dataclass(frozen=True)
@@ -168,6 +194,7 @@ class AuthContext:
             "manage_alerts": self.role in {"admin", "operator"},
             "manage_operations": self.role == "admin",
             "backup": self.role == "admin",
+            "use_intelligence": True,
         }
 
 
@@ -244,6 +271,10 @@ class AlertUpdateRequest(BaseModel):
     resolution_note: str | None = Field(default=None, max_length=1_000)
 
 
+class IntelligenceBriefRequest(BaseModel):
+    refresh: bool = False
+
+
 def _valid_api_key(value: str) -> bool:
     return len(value) >= MIN_API_KEY_LENGTH and value != DEFAULT_API_KEY_PLACEHOLDER
 
@@ -275,6 +306,45 @@ def _enforce_rate_limit(identity: str) -> None:
             events.popleft()
         if len(events) >= API_RATE_LIMIT_REQUESTS:
             raise HTTPException(status_code=429, detail="Too many API requests. Try again later.")
+        events.append(now)
+
+
+def _configured_openai_key() -> str:
+    return os.getenv("OPENAI_API_KEY", "").strip()
+
+
+def _configured_ai_safety_secret() -> str:
+    return os.getenv("NETWATCH_AI_SAFETY_SECRET", "").strip()
+
+
+def _configured_ai_subject_id() -> str:
+    return os.getenv("NETWATCH_AI_SUBJECT_ID", "").strip()
+
+
+def _intelligence_configuration_is_usable(provider_key: str | None = None) -> bool:
+    key = _configured_openai_key() if provider_key is None else provider_key
+    return bool(
+        AI_ENABLED
+        and safety_configuration_is_usable(
+            api_key=key,
+            safety_secret=_configured_ai_safety_secret(),
+            subject_id=_configured_ai_subject_id(),
+        )
+    )
+
+
+def _enforce_intelligence_rate_limit(identity: str) -> None:
+    now = time.monotonic()
+    cutoff = now - AI_RATE_LIMIT_WINDOW_SECONDS
+    with _intelligence_rate_lock:
+        events = _intelligence_rate_events[identity]
+        while events and events[0] < cutoff:
+            events.popleft()
+        if len(events) >= AI_RATE_LIMIT_REQUESTS:
+            raise HTTPException(
+                status_code=429,
+                detail="Intelligence request limit reached. Try again later.",
+            )
         events.append(now)
 
 
@@ -334,6 +404,50 @@ def _scan_slot() -> Iterator[None]:
         yield
     finally:
         _scan_slots.release()
+
+
+@contextmanager
+def _intelligence_slot() -> Iterator[None]:
+    acquired = _intelligence_slots.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(
+            status_code=429,
+            detail="The intelligence service is already processing its safe concurrency limit.",
+        )
+    try:
+        yield
+    finally:
+        _intelligence_slots.release()
+
+
+def _intelligence_snapshot() -> dict[str, Any]:
+    inventory_rows = asset_inventory()
+    return build_deidentified_snapshot(
+        inventory_rows=inventory_rows,
+        port_rows=asset_port_findings(),
+        alert_rows=recent_alerts(limit=200),
+        change_rows=recent_asset_events(limit=200),
+        operation_metrics=operations_metrics(),
+    )
+
+
+def _public_intelligence_brief(
+    response: dict[str, Any],
+    *,
+    model: str,
+    generated_at: str,
+    expires_at: str,
+    cached: bool,
+) -> dict[str, Any]:
+    return {
+        "brief": response,
+        "model": model,
+        "generated_at": generated_at,
+        "expires_at": expires_at,
+        "cached": cached,
+        "data_scope": "Aggregated and de-identified operational evidence only.",
+        "human_review_required": True,
+    }
 
 
 def _execute_network_scan(target: str, *, actor_role: str, action: str) -> dict[str, Any]:
@@ -409,12 +523,14 @@ def health() -> dict[str, Any]:
         "access_enabled": bool(configured),
         "scanning_enabled": any(role in {"admin", "operator"} for role, _ in configured),
         "scheduler_enabled": SCHEDULER_ENABLED,
+        "intelligence_enabled": _intelligence_configuration_is_usable(),
     }
 
 
 @app.get("/api/metrics", response_class=PlainTextResponse)
 def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
     snapshot = operations_metrics()
+    intelligence = intelligence_metrics()
     values = {
         "netwatch_assets_total": snapshot["assets"],
         "netwatch_alerts_open_total": snapshot["open"],
@@ -426,6 +542,10 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
         "netwatch_scan_policies_enabled_total": snapshot["enabled_policies"],
         "netwatch_maintenance_windows_active_total": snapshot["active_maintenance"],
         "netwatch_scheduler_enabled": int(SCHEDULER_ENABLED),
+        "netwatch_intelligence_provider_requests_total": intelligence["provider_requests"],
+        "netwatch_intelligence_completed_total": intelligence["completed"],
+        "netwatch_intelligence_failed_total": intelligence["failed"],
+        "netwatch_intelligence_active_cache_entries": intelligence["active_cache"],
     }
     lines = [
         "# NetWatch authenticated operational metrics. No target labels are exported.",
@@ -841,6 +961,155 @@ def advisor() -> dict[str, Any]:
     change_rows = recent_asset_events(limit=25)
     advice = build_advice(inventory_rows, port_rows, inventory_rows, change_rows)
     return {**advice.__dict__, "markdown": advice_to_markdown(advice)}
+
+
+@app.get("/api/intelligence/status")
+def intelligence_status(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
+    provider_requests = daily_provider_request_count()
+    available = _intelligence_configuration_is_usable()
+    return {
+        "available": available,
+        "model": AI_MODEL if available else "",
+        "daily_request_limit": AI_DAILY_REQUEST_LIMIT,
+        "daily_requests_used": provider_requests,
+        "daily_requests_remaining": max(0, AI_DAILY_REQUEST_LIMIT - provider_requests),
+        "cache_ttl_seconds": AI_CACHE_TTL_SECONDS,
+        "data_scope": "Aggregated and de-identified operational evidence only.",
+        "local_advisor_available": True,
+    }
+
+
+@app.post("/api/intelligence/brief")
+def intelligence_brief(
+    payload: IntelligenceBriefRequest,
+    request: Request,
+    context: AuthContext = Depends(require_api_access),
+) -> dict[str, Any]:
+    if payload.refresh and context.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access is required to bypass the intelligence cache.",
+        )
+
+    snapshot = _intelligence_snapshot()
+    digest = snapshot_hash(snapshot)
+    if not payload.refresh:
+        cached = cached_intelligence_brief(digest)
+        if cached is not None:
+            return _public_intelligence_brief(
+                cached["response"],
+                model=str(cached["model"]),
+                generated_at=str(cached["created_at"]),
+                expires_at=str(cached["expires_at"]),
+                cached=True,
+            )
+
+    provider_key = _configured_openai_key()
+    safety_secret = _configured_ai_safety_secret()
+    subject_id = _configured_ai_subject_id()
+    if (
+        not safety_configuration_is_usable(
+            api_key=provider_key,
+            safety_secret=safety_secret,
+            subject_id=subject_id,
+        )
+        or not AI_ENABLED
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "NetWatch Intelligence is not configured. "
+                "The deterministic local Risk Advisor remains available."
+            ),
+        )
+    host = request.client.host if request.client else "unknown"
+    _enforce_intelligence_rate_limit(f"{context.role}:{host}")
+    safety_id = safety_identifier(
+        safety_secret=safety_secret,
+        subject_id=subject_id,
+    )
+    try:
+        with _intelligence_slot():
+            if not reserve_intelligence_request(daily_limit=AI_DAILY_REQUEST_LIMIT):
+                raise HTTPException(
+                    status_code=429,
+                    detail="The daily intelligence request budget has been reached.",
+                )
+            result = request_intelligence_brief(
+                snapshot,
+                api_key=provider_key,
+                safety_id=safety_id,
+                model=AI_MODEL,
+            )
+        brief = result.brief.model_dump(mode="json")
+        now = datetime.now(timezone.utc)
+        generated_at = now.isoformat(timespec="seconds")
+        expires_at = datetime.fromtimestamp(
+            now.timestamp() + AI_CACHE_TTL_SECONDS,
+            tz=timezone.utc,
+        ).isoformat(timespec="seconds")
+        save_intelligence_brief(
+            snapshot_hash=digest,
+            model=AI_MODEL,
+            actor_role=context.role,
+            response=brief,
+            provider_request_id=result.provider_request_id,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
+        record_audit_event(
+            context.role,
+            "intelligence_brief_generated",
+            "de-identified operations snapshot",
+            "completed",
+            (
+                f"Structured defensive brief generated with {AI_MODEL}; "
+                f"input_tokens={result.input_tokens}; output_tokens={result.output_tokens}."
+            ),
+        )
+        return _public_intelligence_brief(
+            brief,
+            model=AI_MODEL,
+            generated_at=generated_at,
+            expires_at=expires_at,
+            cached=False,
+        )
+    except HTTPException:
+        raise
+    except AIProviderError as exc:
+        record_intelligence_failure(
+            snapshot_hash=digest,
+            model=AI_MODEL,
+            actor_role=context.role,
+            error_code=exc.code,
+        )
+        record_audit_event(
+            context.role,
+            "intelligence_brief_generated",
+            "de-identified operations snapshot",
+            "failed",
+            f"Intelligence request failed safely; code={exc.code}.",
+        )
+        raise HTTPException(status_code=exc.http_status, detail=str(exc)) from exc
+    except Exception:
+        record_intelligence_failure(
+            snapshot_hash=digest,
+            model=AI_MODEL,
+            actor_role=context.role,
+            error_code="internal_error",
+        )
+        record_audit_event(
+            context.role,
+            "intelligence_brief_generated",
+            "de-identified operations snapshot",
+            "failed",
+            "Intelligence request failed safely; code=internal_error.",
+        )
+        LOGGER.error("An intelligence request failed safely; code=internal_error.")
+        raise HTTPException(
+            status_code=503,
+            detail="The intelligence service is temporarily unavailable.",
+        ) from None
 
 
 @app.get(

@@ -9,11 +9,15 @@ from fastapi.testclient import TestClient
 import backend.main as api
 import inventory_store
 import operations_store
+from ai_advisor import AIProviderResult, IntelligenceBrief, safety_identifier
 from inventory_store import NetworkChangeSummary
 
 TEST_API_KEY = "test-secret-with-at-least-32-characters"
 OPERATOR_API_KEY = "operator-secret-with-at-least-32-characters"
 VIEWER_API_KEY = "viewer-secret-with-at-least-32-characters"
+AI_PROVIDER_KEY = "test-openai-project-key-with-enough-characters"
+AI_SAFETY_SECRET = "test-independent-safety-secret-with-enough-characters"
+AI_SUBJECT_ID = "deployment_subject_12345"
 API_HEADERS = {"X-NetWatch-Key": TEST_API_KEY}
 
 
@@ -21,7 +25,10 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
     monkeypatch.delenv("NETWATCH_OPERATOR_KEY", raising=False)
     monkeypatch.delenv("NETWATCH_VIEWER_KEY", raising=False)
     monkeypatch.setenv("NETWATCH_API_KEY", TEST_API_KEY)
+    monkeypatch.setenv("NETWATCH_AI_SAFETY_SECRET", AI_SAFETY_SECRET)
+    monkeypatch.setenv("NETWATCH_AI_SUBJECT_ID", AI_SUBJECT_ID)
     api._rate_events.clear()
+    api._intelligence_rate_events.clear()
     monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
     monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
     return TestClient(api.app, base_url="http://127.0.0.1")
@@ -32,10 +39,11 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
         response = client.get("/")
     assert response.status_code == 200
     assert "Connect to NetWatch" in response.text
-    assert "NetWatch v1.4" in response.text
+    assert "NetWatch v1.5" in response.text
     assert "Company context" in response.text
     assert "Operations audit log" in response.text
     assert "Company operations" in response.text
+    assert "NetWatch Intelligence" in response.text
     assert response.headers["x-frame-options"] == "DENY"
     assert "default-src 'self'" in response.headers["content-security-policy"]
 
@@ -47,6 +55,8 @@ def test_frontend_assets_are_served(monkeypatch, tmp_path):
     assert "NetWatchApi" in response.text
     assert "/api/session" in response.text
     assert "innerHTML" not in response.text
+    assert "URLSearchParams(window.location.search)" not in response.text
+    assert "candidate.origin !== window.location.origin" in response.text
     assert response.headers["x-content-type-options"] == "nosniff"
 
 
@@ -55,7 +65,7 @@ def test_health_is_public(monkeypatch, tmp_path):
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.4.0"
+    assert response.json()["version"] == "1.5.0"
     assert response.json()["access_enabled"] is True
     assert response.headers["cache-control"] == "no-store"
 
@@ -232,6 +242,7 @@ def test_session_reports_admin_capabilities(monkeypatch, tmp_path):
             "manage_alerts": True,
             "manage_operations": True,
             "backup": True,
+            "use_intelligence": True,
         },
     }
 
@@ -629,5 +640,195 @@ def test_authenticated_metrics_are_bounded_and_do_not_export_targets(monkeypatch
     assert response.status_code == 200
     assert "netwatch_assets_total 1" in response.text
     assert "netwatch_scheduler_enabled" in response.text
+    assert "netwatch_intelligence_provider_requests_total" in response.text
     assert "192.168.70.10" not in response.text
     assert response.headers["cache-control"] == "no-store"
+
+
+def _provider_brief() -> IntelligenceBrief:
+    return IntelligenceBrief(
+        risk_level="Medium",
+        executive_summary="The saved evidence supports a bounded defensive review.",
+        key_observations=["One asset is represented in the de-identified snapshot."],
+        recommended_actions=[
+            {
+                "priority": "Next",
+                "title": "Validate saved exposure",
+                "rationale": "Observed services require owner confirmation.",
+                "validation": "Record the approved service purpose and expected controls.",
+            }
+        ],
+        limitations=["The evidence is observational and requires human validation."],
+    )
+
+
+def test_intelligence_status_and_brief_require_netwatch_auth(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    with _client(monkeypatch, tmp_path) as client:
+        status = client.get("/api/intelligence/status")
+        brief = client.post("/api/intelligence/brief", json={"refresh": False})
+
+    assert status.status_code == 401
+    assert brief.status_code == 401
+
+
+def test_intelligence_is_optional_and_local_advisor_remains_available(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with _client(monkeypatch, tmp_path) as client:
+        status = client.get("/api/intelligence/status", headers=API_HEADERS)
+        brief = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+        local = client.get("/api/advisor", headers=API_HEADERS)
+
+    assert status.status_code == 200
+    assert status.json()["available"] is False
+    assert status.json()["local_advisor_available"] is True
+    assert brief.status_code == 503
+    assert local.status_code == 200
+
+
+def test_users_receive_cached_intelligence_without_provider_keys(monkeypatch, tmp_path):
+    provider_key = AI_PROVIDER_KEY
+    monkeypatch.setenv("OPENAI_API_KEY", provider_key)
+    calls: list[dict] = []
+
+    def fake_provider(snapshot, **kwargs):
+        calls.append({"snapshot": snapshot, **kwargs})
+        return AIProviderResult(
+            brief=_provider_brief(),
+            provider_request_id="resp_test_123",
+            input_tokens=120,
+            output_tokens=60,
+        )
+
+    monkeypatch.setattr(api, "request_intelligence_brief", fake_provider)
+    with _client(monkeypatch, tmp_path) as client:
+        inventory_store.upsert_hosts([{"IP Address": "192.168.88.10", "Status": "Online"}])
+        inventory_store.update_asset_context(
+            "192.168.88.10",
+            owner="Sensitive Owner",
+            department="Finance",
+            location="Private HQ",
+            criticality="High",
+            notes="Private operational note",
+            actor_role="admin",
+        )
+        generated = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+        monkeypatch.setenv("NETWATCH_VIEWER_KEY", VIEWER_API_KEY)
+        viewer_headers = {"X-NetWatch-Key": VIEWER_API_KEY}
+        cached = client.post(
+            "/api/intelligence/brief",
+            headers=viewer_headers,
+            json={"refresh": False},
+        )
+        status = client.get("/api/intelligence/status", headers=viewer_headers)
+        audit = client.get("/api/audit-log", headers=API_HEADERS)
+
+    assert generated.status_code == 200
+    assert generated.json()["cached"] is False
+    assert cached.status_code == 200
+    assert cached.json()["cached"] is True
+    assert len(calls) == 1
+    sent = str(calls[0]["snapshot"])
+    assert "192.168.88.10" not in sent
+    assert "Sensitive Owner" not in sent
+    assert "Finance" not in sent
+    assert "Private operational note" not in sent
+    assert calls[0]["api_key"] == provider_key
+    assert calls[0]["safety_id"] == safety_identifier(
+        safety_secret=AI_SAFETY_SECRET,
+        subject_id=AI_SUBJECT_ID,
+    )
+    assert provider_key not in generated.text
+    assert provider_key not in cached.text
+    assert status.json()["daily_requests_used"] == 1
+    assert audit.json()["items"][0]["action"] == "intelligence_brief_generated"
+
+
+def test_only_admin_can_force_an_intelligence_refresh(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    monkeypatch.setenv("NETWATCH_OPERATOR_KEY", OPERATOR_API_KEY)
+    provider_called = False
+
+    def fake_provider(*_, **__):
+        nonlocal provider_called
+        provider_called = True
+        return AIProviderResult(
+            brief=_provider_brief(),
+            provider_request_id="resp_test_456",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+    monkeypatch.setattr(api, "request_intelligence_brief", fake_provider)
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_OPERATOR_KEY", OPERATOR_API_KEY)
+        response = client.post(
+            "/api/intelligence/brief",
+            headers={"X-NetWatch-Key": OPERATOR_API_KEY},
+            json={"refresh": True},
+        )
+
+    assert response.status_code == 403
+    assert provider_called is False
+
+
+def test_intelligence_fails_closed_without_an_independent_safety_identity(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_AI_SAFETY_SECRET", AI_PROVIDER_KEY)
+        equal_secret = client.get("/api/intelligence/status", headers=API_HEADERS)
+        monkeypatch.delenv("NETWATCH_AI_SAFETY_SECRET", raising=False)
+        missing_secret = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+
+    assert equal_secret.status_code == 200
+    assert equal_secret.json()["available"] is False
+    assert missing_secret.status_code == 503
+    assert AI_PROVIDER_KEY not in missing_secret.text
+
+
+def test_daily_budget_rejects_before_a_second_provider_call(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    monkeypatch.setattr(api, "AI_DAILY_REQUEST_LIMIT", 1)
+    provider_calls = 0
+
+    def fake_provider(*_, **__):
+        nonlocal provider_calls
+        provider_calls += 1
+        return AIProviderResult(
+            brief=_provider_brief(),
+            provider_request_id="resp_budget_test",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+    monkeypatch.setattr(api, "request_intelligence_brief", fake_provider)
+    with _client(monkeypatch, tmp_path) as client:
+        first = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": True},
+        )
+        second = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": True},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert provider_calls == 1

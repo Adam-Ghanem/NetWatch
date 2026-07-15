@@ -79,7 +79,7 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1.4</span>
+            <span class="pill">New · NetWatch v1.5</span>
             <h3>Turn local network data into confident decisions.</h3>
             <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
@@ -93,7 +93,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Maintenance-aware</span><span>SLA triage</span><span>No external telemetry</span>
+          <span>Local-first</span><span>Maintenance-aware</span><span>SLA triage</span><span>De-identified AI</span>
         </div>
 
         <div class="metric-grid">
@@ -336,6 +336,39 @@
             <button id="advisor-refresh" class="button ghost full">Rebuild advisor</button>
           </article>
         </div>
+        <article class="panel intelligence-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Server-side decision support</p>
+              <h3>NetWatch Intelligence</h3>
+            </div>
+            <span id="intelligence-state" class="risk-badge neutral">Checking</span>
+          </div>
+          <p class="muted intelligence-privacy">Only aggregated, de-identified evidence is sent for analysis. IP addresses, CIDRs, hostnames, owners, departments, locations, notes, raw event details, role keys, and provider keys are excluded.</p>
+          <div id="intelligence-meta" class="mini-metrics"></div>
+          <p id="intelligence-summary" class="advisor-copy">Generate a structured defensive brief when you need a second review of the saved operational evidence.</p>
+          <div class="intelligence-grid">
+            <div>
+              <h4>Evidence observations</h4>
+              <ol id="intelligence-observations" class="action-list"></ol>
+            </div>
+            <div>
+              <h4>Limitations</h4>
+              <ol id="intelligence-limitations" class="action-list"></ol>
+            </div>
+          </div>
+          <div>
+            <h4>Recommended actions</h4>
+            <div id="intelligence-actions" class="intelligence-actions empty-state">No intelligence brief has been generated in this session.</div>
+          </div>
+          <div class="intelligence-controls">
+            <div class="button-row">
+              <button id="intelligence-generate" class="button primary" type="button">Generate secure brief</button>
+              <button id="intelligence-refresh" class="button ghost" type="button">Admin refresh</button>
+            </div>
+            <p id="intelligence-status" class="form-status">Human validation is required before acting on any recommendation.</p>
+          </div>
+        </article>
       </section>
 
       <section id="view-reports" class="view">

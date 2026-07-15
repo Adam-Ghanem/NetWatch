@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, and generate evidence-backed reports.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.4
+## NetWatch v1.5
 
 The default product is a responsive light corporate dashboard served together with the protected FastAPI API at one local address:
 
@@ -51,7 +51,9 @@ http://127.0.0.1:8000
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
 
-v1.4 adds a maintenance-aware incident workflow for a trusted internal deployment. Repeated unresolved findings are consolidated into one alert case with occurrence count, assignee, severity-based due time, acknowledgement, and resolution evidence. Admins can schedule bounded global or policy-specific maintenance windows that pause automatic and manual policy execution, while authenticated label-free metrics support local monitoring. It remains suitable for a local pilot or small internal team when deployed according to the security guidance. Shared role keys and the in-process scheduler are not replacements for SSO, centralized identity, TLS, an external job platform, automated off-host backups, or a deployment review.
+v1.5 adds optional NetWatch Intelligence on top of the deterministic local Risk Advisor. Authenticated users can request a structured defensive brief without entering a provider key: the browser calls NetWatch, and only the backend can access `OPENAI_API_KEY`. Before a request leaves NetWatch, the application reduces saved evidence to bounded aggregates and excludes IP addresses, CIDRs, hostnames, owners, departments, locations, notes, and raw event details. Responses are schema-validated, cached, rate limited, concurrency limited, protected by an atomic UTC daily budget, and recorded without prompts or secrets. A dedicated server-only safety secret derives an opaque deployment identifier without roles or client addresses, and provider redirects are refused. The model cannot choose targets, call tools, or start scans. The local advisor remains available when the provider is disabled or unavailable.
+
+This remains a trusted local pilot or small-team architecture. Shared role keys, an in-process scheduler, an application-level AI budget, and a local `.env` are not replacements for SSO, centralized identity, TLS, a managed secret store, an external job platform, provider project spend controls, automated off-host backups, or a deployment review.
 
 ## Highlights
 
@@ -74,6 +76,9 @@ v1.4 adds a maintenance-aware incident workflow for a trusted internal deploymen
 - Authenticated Prometheus text-format operational counters without target labels
 - Admin-only consistent SQLite backup download
 - Exposure priority score and deterministic local Risk Advisor
+- Optional server-side NetWatch Intelligence with structured defensive output
+- De-identified AI snapshots that exclude private identifiers and free-text evidence
+- AI cache, separate rate/concurrency limits, atomic daily request budget, redirect refusal, safe failure handling, and local fallback
 - Markdown and standalone HTML report downloads
 - Formula-safe inventory CSV export
 - Public, oversized, and unsupported targets blocked
@@ -103,9 +108,10 @@ The launcher automatically:
 
 1. Creates a local `.env` file.
 2. Generates a strong random Admin key.
-3. Builds the NetWatch container.
-4. Starts it on `127.0.0.1:8000`.
-5. Prints the dashboard URL and API key.
+3. Generates an independent AI safety secret and opaque deployment subject without printing them.
+4. Builds the NetWatch container.
+5. Starts it on `127.0.0.1:8000`.
+6. Prints the dashboard URL and Admin key.
 
 Open the displayed URL and enter the displayed key. The browser stores the key only in session storage, so closing the tab clears it.
 
@@ -113,20 +119,20 @@ The launcher leaves the optional Operator and Viewer keys blank. Configure them 
 
 ## Manual Docker deployment
 
-Create the environment file and generate a secret:
+Create the environment file and let the launcher replace all local placeholders with independent random values. Only the Admin key is printed:
 
 ```bash
 cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+python -c "from scripts.start import ensure_configuration; print(ensure_configuration())"
 ```
 
-Put the generated value in `.env`:
+For optional Intelligence, the deployment owner then supplies only the provider credential in the server-side `.env`; dashboard users never enter it:
 
 ```text
-NETWATCH_API_KEY=your-generated-secret
 NETWATCH_OPERATOR_KEY=
 NETWATCH_VIEWER_KEY=
 NETWATCH_SCHEDULER_ENABLED=false
+OPENAI_API_KEY=your-provider-project-key
 ```
 
 Start NetWatch:
@@ -206,6 +212,12 @@ Scheduled execution is disabled by default. Enable it explicitly with `NETWATCH_
 
 Builds a deterministic local summary from saved evidence. It does not send scan data outside the local machine.
 
+### NetWatch Intelligence
+
+Provides an optional second review through the server-side OpenAI Responses API. End users never enter or receive the provider key. NetWatch sends only a bounded, de-identified JSON snapshot, requests strict structured output with storage disabled, and requires human validation before action. It does not accept arbitrary prompts, expose model tools, choose targets, run scans, change cases, or execute recommendations.
+
+Repeated requests for the same evidence use a local cache. Separate request-rate and concurrency controls plus an atomic day-keyed provider-call counter protect availability and cost even under concurrent cache misses. Provider redirects are rejected so the bearer credential is never forwarded to another location. Platform project spend limits remain a deployment-owner control outside NetWatch.
+
 ### Reports
 
 Downloads:
@@ -231,6 +243,8 @@ Validation  Scanners   Operations
               |
               v
        SQLite + reports
+              |
+              +--> Optional de-identification gate --> OpenAI Responses API
 ```
 
 The FastAPI process serves both the dashboard and the `/api/*` endpoints. This same-origin design avoids unnecessary cross-origin complexity and gives the project one clear production-style entry point.
@@ -254,6 +268,12 @@ NetWatch applies defense in depth:
 - Maintenance windows are timezone-aware, limited to 31 days, bounded to 100 records, and enforced before policy execution
 - Unresolved alert repeats are deduplicated; closure requires resolution evidence
 - Authenticated metrics expose only bounded numeric counters and never target labels
+- `OPENAI_API_KEY` is read only by the backend and excluded from Git, Docker images, browser code, logs, reports, API responses, and stored intelligence records
+- The launcher creates a distinct `NETWATCH_AI_SAFETY_SECRET` and opaque `NETWATCH_AI_SUBJECT_ID`; neither is sent to the provider, browser, logs, or SQLite
+- Intelligence input contains bounded aggregates rather than IPs, CIDRs, hostnames, ownership fields, locations, notes, or raw event details
+- Intelligence calls use strict structured output, `store: false`, a key-separated opaque safety identifier, no model tools, redirect refusal, separate rate/concurrency limits, an atomic daily budget independent of cache retention, and bounded cache retention
+- Dashboard API requests are restricted to the page's own origin; URL query parameters cannot redirect role credentials to another API
+- Provider failure cannot disable the deterministic local advisor or core monitoring workflows
 - Restricted CORS origins
 - Content Security Policy
 - `X-Frame-Options: DENY`
@@ -362,6 +382,22 @@ curl http://127.0.0.1:8000/api/metrics \
   -o netwatch-metrics.prom
 ```
 
+Check optional intelligence availability:
+
+```bash
+curl http://127.0.0.1:8000/api/intelligence/status \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Generate or reuse a de-identified intelligence brief:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/intelligence/brief \
+  -H "Content-Type: application/json" \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY" \
+  -d '{"refresh":false}'
+```
+
 Download a consistent database snapshot (Admin only):
 
 ```bash
@@ -434,6 +470,18 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
 | `NETWATCH_SCHEDULER_ENABLED` | `false` | Enables execution of due approved policies in the single API process |
 | `NETWATCH_SCHEDULER_POLL_SECONDS` | `30` | Scheduler polling interval, bounded from 5 to 300 seconds |
+| `OPENAI_API_KEY` | empty | Optional server-side provider secret; never send it to the browser or commit it |
+| `NETWATCH_AI_SAFETY_SECRET` | generated by launcher | Independent server-only pseudonymization secret; must differ from `OPENAI_API_KEY` |
+| `NETWATCH_AI_SUBJECT_ID` | generated by launcher | Opaque random deployment subject; never use a role, username, hostname, or address |
+| `NETWATCH_AI_ENABLED` | `true` | Allows intelligence only when the provider key and independent safety identity are usable |
+| `NETWATCH_AI_MODEL` | `gpt-5.6-luna` | Server-selected model for bounded high-volume briefs |
+| `NETWATCH_AI_TIMEOUT_SECONDS` | `25` | Upstream timeout, bounded from 5 to 60 seconds |
+| `NETWATCH_AI_MAX_OUTPUT_TOKENS` | `1200` | Structured response budget, bounded from 256 to 4000 tokens |
+| `NETWATCH_AI_MAX_CONCURRENT_REQUESTS` | `2` | Simultaneous provider request limit |
+| `NETWATCH_AI_RATE_LIMIT_REQUESTS` | `5` | Provider calls allowed per client/window |
+| `NETWATCH_AI_RATE_LIMIT_WINDOW_SECONDS` | `600` | Separate provider-call rate window |
+| `NETWATCH_AI_DAILY_REQUEST_LIMIT` | `50` | Application-level provider-call budget per UTC day |
+| `NETWATCH_AI_CACHE_TTL_SECONDS` | `900` | Successful brief cache lifetime |
 | `NETWATCH_DATA_DIR` | `data` | SQLite data directory |
 
 ## Data storage
@@ -454,8 +502,9 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 - `scan_policies`: Admin-approved private CIDRs, intervals, enablement, and last/next run state
 - `operation_alerts`: deduplicated alert cases with severity, occurrence count, SLA, assignment, acknowledgement, and resolution evidence
 - `maintenance_windows`: bounded global or policy-specific execution pauses with UTC schedule and change reason
+- `intelligence_events`: bounded provider-call metadata, safe error codes, token counts, and de-identified structured brief cache; prompts, snapshots, keys, and raw network evidence are not stored
 
-Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50 scan policies, and 100 maintenance windows so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50 scan policies, 100 maintenance windows, and 1,000 intelligence events so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 

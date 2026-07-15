@@ -8,7 +8,7 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1.4 includes:
+NetWatch v1.5 includes:
 
 - Valid Admin, Operator, or Viewer key required for every non-health API endpoint
 - Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
@@ -35,7 +35,10 @@ NetWatch v1.4 includes:
 - Docker service published on localhost only by default
 - Linux capabilities dropped except the minimum raw-network capability required for ping
 - FastAPI interactive documentation disabled by default
-- Local Risk Advisor with no external service calls
+- Deterministic local Risk Advisor with no external service calls
+- Optional server-side intelligence that excludes private identifiers and free-text evidence before provider calls
+- Strict structured provider output with `store: false`, no model tools, no arbitrary prompts, and human review required
+- Separate provider rate/concurrency limits, daily request budget, bounded timeout/output/cache, and safe local fallback
 - Bounded operations audit records that never store raw role keys
 - Admin-approved private CIDR scan policies with bounded count and intervals
 - Opt-in single-process scheduler that shares the normal scan concurrency limit
@@ -46,14 +49,15 @@ NetWatch v1.4 includes:
 
 ## Secrets
 
-The `.env` file contains the local role keys and is ignored by Git.
+The `.env` file can contain the local role keys, optional `OPENAI_API_KEY`, and automatically generated AI safety identity; it is ignored by Git and excluded from Docker build context.
 
 Do not:
 
 - Commit `.env`
-- Paste role keys into issues, screenshots, reports, or chat messages
+- Paste role or provider keys into issues, screenshots, reports, or chat messages
 - Reuse a sensitive account password as a NetWatch role key
 - Publish role keys in frontend source code
+- Put `OPENAI_API_KEY`, `NETWATCH_AI_SAFETY_SECRET`, or `NETWATCH_AI_SUBJECT_ID` in JavaScript, API responses, Dockerfiles, reports, logs, or tracked production configuration
 
 Generate a new key with:
 
@@ -61,7 +65,9 @@ Generate a new key with:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Use a different random value for each enabled role and restart NetWatch after changing keys.
+Use a different random value for each enabled role and restart NetWatch after changing keys. `scripts/start.py` also creates a separate random AI safety secret and opaque subject automatically; it never prints either value.
+
+End users call the protected NetWatch intelligence endpoint and never receive the provider key or safety identity. For shared production deployment, inject the provider key and AI safety secret from managed secret storage and configure project-level spend/rate limits. Rotate a secret immediately if it is ever committed, logged, displayed, or copied outside the approved secret store.
 
 Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost defaults unless a reviewed deployment requires additional names or origins.
 

@@ -1,8 +1,8 @@
-# NetWatch v1.4 Security Review
+# NetWatch v1.5 Security Review
 
 ## Scope
 
-This review covers the default local deployment of NetWatch v1.4: one FastAPI process serving the responsive dashboard, role-protected API, optional bounded scheduler, case workflow, maintenance controls, and authenticated metrics at `127.0.0.1:8000`.
+This review covers the default local deployment of NetWatch v1.5: one FastAPI process serving the responsive dashboard, role-protected API, optional bounded scheduler, case workflow, maintenance controls, authenticated metrics, deterministic local advisor, and optional server-side intelligence gateway at `127.0.0.1:8000`.
 
 ## Threat model
 
@@ -21,6 +21,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Duplicate findings overwhelming triage or being closed without evidence
 - Scheduled work continuing during a documented maintenance window
 - Monitoring labels exposing private targets or producing unbounded cardinality
+- A public repository, browser bundle, container image, log, report, or database exposing a provider key
+- Private network identifiers or free-text business context leaving NetWatch in a provider request
+- Prompt injection through saved evidence, malformed model output, provider outage, or repeated calls causing unsafe actions, downtime, or cost abuse
 
 ## Implemented controls
 
@@ -68,7 +71,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Timestamps are stored in UTC.
 - Asset events, normalized observations, and operations audit records have bounded retention.
 - Audit records contain role, action, target, outcome, and short details but never raw API keys.
-- Existing databases migrate company-context, policy, alert, and audit records in place at schema version 5.
+- Existing databases migrate company-context, policy, alert, audit, and intelligence records in place at schema version 6.
 - Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
 - A resolution note is required before a case can be closed; later recurrence creates a new open case.
 - Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
@@ -80,6 +83,22 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - HTML report values are escaped.
 - Markdown table delimiters and line breaks are escaped.
 - The dashboard renders dynamic values with text nodes instead of HTML insertion.
+
+### Optional intelligence boundary
+
+- `OPENAI_API_KEY` is read only by the backend from runtime environment and is excluded from Git and Docker build context.
+- End users authenticate to NetWatch and never enter, receive, or call the provider with the provider key.
+- An independent server-only safety secret derives a stable opaque deployment subject; roles, usernames, hostnames, and client addresses never feed the provider-visible identifier.
+- The de-identification gate sends aggregate counts, known service metadata, operational state, and local case references only.
+- IP addresses, CIDRs, hostnames, owners, departments, locations, notes, and raw event details are excluded.
+- Snapshot values are treated as untrusted evidence under a fixed defensive instruction; arbitrary prompts and model tools are not supported.
+- Requests use strict structured output, response storage disabled, a key-separated opaque safety identifier, bounded timeout/output, a fixed official HTTPS endpoint, and a no-redirect transport.
+- Responses are schema-validated before display or storage and cannot directly start scans, modify cases, or execute actions.
+- Separate rate and concurrency limits, an atomic UTC day-keyed call budget independent of event/cache retention, and an expiring SQLite cache reduce abuse and cost.
+- The dashboard fixes API calls to its own origin and ignores query-string destination overrides before attaching a NetWatch role key.
+- SQLite stores bounded status/model/token/cache metadata and structured output, but not the prompt, snapshot, key, safety identifier, or raw network evidence.
+- Provider errors are mapped to safe messages; raw upstream bodies are not logged or returned.
+- The deterministic local Risk Advisor and all core monitoring workflows remain available without the provider.
 
 ### Container controls
 
@@ -106,6 +125,10 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - A downloaded snapshot is not an automated encrypted off-host backup or a tested disaster-recovery plan.
 - Local SLA due times are workflow guidance, not an organization-wide incident-management or paging service.
 - Maintenance checks depend on the single local process and shared SQLite clock evidence.
+- The application daily AI limit is local process/database policy, not a provider billing guarantee; project spend and rate limits must also be configured.
+- Shared role keys and client-address pseudonyms do not provide reliable individual user identity behind proxies or shared workstations.
+- Model recommendations can be incomplete or wrong and require human validation against original local evidence.
+- Calling an external provider creates a deployment-specific data-processing and privacy decision even though the default snapshot is de-identified.
 
 ## Shared-deployment requirements
 
@@ -115,6 +138,7 @@ Do not expose the default service to other networks without adding:
 - SSO/OIDC organization authentication and individual identities
 - Fine-grained authorization beyond shared role keys
 - Managed secrets
+- Provider project spend/rate limits and approved data-processing controls
 - Network restrictions
 - Centralized audit logging
 - External scheduler/worker coordination with leader election
@@ -122,8 +146,8 @@ Do not expose the default service to other networks without adding:
 - Automated encrypted off-host backup, tested restore, and migration procedures
 - Retention/deletion policy
 - Dependency and container vulnerability management
-- A deployment-specific penetration test and privacy review
+- A deployment-specific penetration test, AI evaluation, and privacy review
 
 ## Review conclusion
 
-The default NetWatch v1.4 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. It is not approved as-is for public, multi-tenant, multi-instance, or Internet-accessible deployment.
+The default NetWatch v1.5 configuration is appropriate for a trusted local pilot or small internal team when used only on authorized networks and operated according to the deployment guide. Optional intelligence is advisory and de-identified by design, but enabling it still requires provider billing, privacy, and retention review. NetWatch is not approved as-is for public, multi-tenant, multi-instance, or Internet-accessible deployment.
