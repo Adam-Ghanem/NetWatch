@@ -15,10 +15,10 @@
   <div id="connect-overlay" class="overlay">
     <form id="connect-form" class="connect-card">
       <img src="/assets/netwatch-logo.svg" alt="NetWatch" width="180" height="128" />
-      <p class="eyebrow">Secure local access</p>
+      <p class="eyebrow">Secure company access</p>
       <h1>Connect to NetWatch</h1>
-      <p class="muted">Enter an Admin, Operator, or Viewer key configured in your local <code>.env</code> file. The key stays only in this browser tab.</p>
-      <label for="api-key">API key</label>
+      <p class="muted">A configured company SSO session is detected automatically. Local and break-glass deployments can use an Admin, Operator, or Viewer key that stays only in this browser tab.</p>
+      <label for="api-key">Local role key</label>
       <div class="secret-row">
         <input id="api-key" name="api-key" type="password" autocomplete="off" placeholder="Paste NETWATCH_API_KEY" required />
         <button id="toggle-key" class="button ghost compact" type="button">Show</button>
@@ -26,8 +26,8 @@
       <button class="button primary full" type="submit">Connect securely</button>
       <p id="connect-status" class="form-status"></p>
       <div class="connect-help">
-        <strong>First launch?</strong>
-        <span>Run <code>python scripts/start.py</code> or copy <code>.env.example</code> to <code>.env</code>.</span>
+        <strong>Enterprise deployment?</strong>
+        <span>Authenticate through the approved company identity gateway. Administrators can configure OIDC group mapping without exposing provider keys to users.</span>
       </div>
     </form>
   </div>
@@ -79,7 +79,7 @@
       <section id="view-overview" class="view active">
         <div class="hero-panel">
           <div>
-            <span class="pill">New · NetWatch v1.5</span>
+            <span class="pill">New · NetWatch v1.6 Enterprise</span>
             <h3>Turn local network data into confident decisions.</h3>
             <p>Discover approved hosts, track changes between scans, review exposed services, maintain a local asset inventory, and export clear evidence-backed reports—all from one secure workspace.</p>
             <div class="hero-actions">
@@ -93,7 +93,7 @@
         </div>
 
         <div class="trust-strip">
-          <span>Local-first</span><span>Maintenance-aware</span><span>SLA triage</span><span>De-identified AI</span>
+          <span>OIDC-ready</span><span>Integrity-signed audit</span><span>SLA triage</span><span>De-identified AI</span>
         </div>
 
         <div class="metric-grid">
@@ -213,8 +213,8 @@
 
       <section id="view-audit" class="view">
         <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Accountability</p><h3>Operations audit log</h3></div><button id="audit-refresh" class="button ghost" type="button">Refresh log</button></div>
-          <p class="muted">Records scan and asset-context operations with role, target, outcome, and time. API keys are never stored in this log.</p>
+          <div class="panel-head"><div><p class="eyebrow">Accountability</p><h3>Operations audit log</h3></div><div class="button-row"><span id="audit-integrity" class="risk-badge neutral">Checking integrity</span><button id="audit-refresh" class="button ghost" type="button">Refresh log</button></div></div>
+          <p class="muted">Admin-only individual identity, request correlation, and HMAC chain verification. API keys and bearer tokens are never stored in this log.</p>
           <div id="audit-results" class="table-wrap"></div>
         </article>
       </section>

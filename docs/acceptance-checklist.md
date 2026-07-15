@@ -1,11 +1,11 @@
-# NetWatch v1.5 Acceptance Checklist
+# NetWatch v1.6 Acceptance Checklist
 
 Use this checklist before merging, presenting, or handing over NetWatch.
 
 ## Repository and release
 
-- [ ] README shows NetWatch v1.5 and the correct startup command.
-- [ ] Changelog contains the v1.5.0 release.
+- [ ] README shows NetWatch v1.6 and the correct startup command.
+- [ ] Changelog contains the v1.6.0 release.
 - [ ] Architecture, deployment, and security documentation match the current code.
 - [ ] `.env`, database files, logs, and reports are ignored by Git.
 - [ ] No real API key or internal network evidence is committed.
@@ -15,6 +15,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Docker Desktop or Docker Engine is available.
 - [ ] `python scripts/start.py` completes successfully.
 - [ ] `.env` is created with a generated API key.
+- [ ] `.env` contains a distinct generated audit HMAC key that is never printed.
 - [ ] `.env` uses private permissions on supported Unix systems.
 - [ ] `docker compose ps` shows the `netwatch` service as running/healthy.
 - [ ] The dashboard opens at `http://127.0.0.1:8000`.
@@ -57,7 +58,21 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.5 database migrates to schema version 6 without losing saved assets or alerts.
+- [ ] An existing pre-v1.6 database migrates to schema version 7 without losing saved assets, alerts, or audit rows.
+- [ ] Legacy audit rows remain labeled and new rows verify through the HMAC chain.
+
+## Enterprise identity and audit
+
+- [ ] Correct issuer, audience, signature, expiry, issue time, subject, and mapped group authenticate successfully.
+- [ ] Wrong issuer/audience, expired tokens, unsupported algorithms, missing key IDs, and attacker-controlled key-reference headers are rejected.
+- [ ] A supplied invalid bearer token never falls back to a simultaneously supplied shared key.
+- [ ] Unmapped company users receive HTTP 403.
+- [ ] Company-session users do not enter a shared NetWatch key or provider key in the dashboard.
+- [ ] Viewer and Operator cannot access individual audit identities or the integrity endpoint.
+- [ ] Admin sees individual actor, authentication method, request correlation, and audit integrity status.
+- [ ] Modifying any retained protected audit field makes integrity verification fail.
+- [ ] `/api/health/live` remains process-only and `/api/health/ready` detects database/access/OIDC configuration readiness.
+- [ ] Every response has a generated `X-Request-ID`; request logs contain no token, key, query, request body, or private path value.
 
 ## NetWatch Intelligence
 

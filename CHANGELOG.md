@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.0
+
+- Added optional company OIDC/JWT identity with strict HTTPS issuer/JWKS configuration, signature, audience, issuer, expiry, subject, authorized-party, algorithm, and key-header validation.
+- Added exact, non-overlapping OIDC group-to-Admin/Operator/Viewer mapping while preserving unique local role keys as an optional break-glass path.
+- Added automatic same-origin company-session detection in the dashboard so users behind an approved identity gateway do not enter shared or provider keys.
+- Added individual actor IDs, authentication method, and generated request IDs to protected operations.
+- Added a separate-key HMAC chain and keyed head checkpoint for new audit events, full retained-chain readiness, tampering/tail-deletion detection, privileged-operation fail-closed behavior, legacy-row labeling, and an Admin-only integrity endpoint/dashboard status.
+- Restricted individual audit identities to Admin access and kept reports on redacted audit records.
+- Added low-cardinality HTTP request, error, active-request, and duration metrics plus safe route-template correlation logs.
+- Added separate public liveness and readiness endpoints, database/auth readiness checks, stronger browser isolation headers, and response request IDs.
+- Added an enterprise deployment guide and a non-root, read-only-root Kubernetes single-instance template with secret references, resource controls, probes, and persistent storage.
+- Added OIDC, fail-closed bearer precedence, audit integrity, readiness, identity privacy, schema migration, launcher key-separation, and UI regression tests; upgraded SQLite schema to version 7.
+
 ## v1.5.0
 
 - Added optional server-side NetWatch Intelligence using the OpenAI Responses API with strict structured output and response storage disabled.

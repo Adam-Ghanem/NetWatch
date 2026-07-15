@@ -23,6 +23,8 @@
   --radius-lg: 32px;
 }
 
+[hidden] { display: none !important; }
+
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--page); scroll-behavior: smooth; }
 body {
