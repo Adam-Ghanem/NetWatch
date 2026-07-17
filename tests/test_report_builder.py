@@ -20,8 +20,20 @@ def test_summarize_ports_counts_open_and_risk():
 
 
 def test_build_markdown_report_contains_summary():
-    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}])
-    ports = pd.DataFrame([{"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"}])
+    hosts = pd.DataFrame(
+        [{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}]
+    )
+    ports = pd.DataFrame(
+        [
+            {
+                "Port": 22,
+                "Service": "SSH",
+                "Status": "Open",
+                "Risk": "Medium",
+                "Recommendation": "Use keys",
+            }
+        ]
+    )
 
     report = build_markdown_report(hosts, ports)
 
@@ -32,11 +44,161 @@ def test_build_markdown_report_contains_summary():
 
 
 def test_build_html_report_contains_sections():
-    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}])
-    ports = pd.DataFrame([{"Port": 22, "Service": "SSH", "Status": "Open", "Risk": "Medium", "Recommendation": "Use keys"}])
+    hosts = pd.DataFrame(
+        [{"IP Address": "192.168.1.10", "Status": "Online", "Details": "Host is online"}]
+    )
+    ports = pd.DataFrame(
+        [
+            {
+                "Port": 22,
+                "Service": "SSH",
+                "Status": "Open",
+                "Risk": "Medium",
+                "Recommendation": "Use keys",
+            }
+        ]
+    )
 
     report = build_html_report(hosts, ports)
 
     assert "<html" in report
     assert "NetWatch Report" in report
     assert "Top recommendations" in report
+
+
+def test_markdown_report_escapes_table_delimiters_and_line_breaks():
+    hosts = pd.DataFrame([{"IP Address": "192.168.1.10", "Details": "router|gateway\nlocal"}])
+
+    report = build_markdown_report(hosts, pd.DataFrame())
+
+    assert "router\\|gateway local" in report
+    assert "router|gateway\nlocal" not in report
+
+
+def test_reports_include_recent_asset_changes_and_escape_html():
+    changes = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-13T10:00:00+00:00",
+                "ip_address": "192.168.1.20",
+                "event_label": "New asset",
+                "details": "router <approved>",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), changes)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), changes)
+
+    assert "Recent asset changes: **1**" in markdown
+    assert "192.168.1.20" in markdown
+    assert "Recent asset changes" in html
+    assert "router &lt;approved&gt;" in html
+    assert "router <approved>" not in html
+
+
+def test_reports_include_operations_audit_log_and_escape_values():
+    audit = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-14T10:00:00+00:00",
+                "actor_role": "operator",
+                "action": "network_scan",
+                "target": "192.168.1.0/24",
+                "outcome": "completed",
+                "details": "12 hosts <reviewed>",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), None, audit)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, audit)
+
+    assert "Recent operational events: **1**" in markdown
+    assert "Operations audit log" in markdown
+    assert "network_scan" in markdown
+    assert "Operations audit log" in html
+    assert "12 hosts &lt;reviewed&gt;" in html
+
+
+def test_reports_include_alerts_and_approved_scan_policies():
+    alerts = pd.DataFrame(
+        [
+            {
+                "created_at": "2026-07-14T10:00:00+00:00",
+                "severity": "High",
+                "title": "Asset not observed",
+                "target": "192.168.1.20",
+                "status": "open",
+                "details": "Validate with Operations <team>",
+            }
+        ]
+    )
+    policies = pd.DataFrame(
+        [
+            {
+                "name": "HQ baseline",
+                "cidr": "192.168.1.0/24",
+                "interval_minutes": 60,
+                "enabled": True,
+                "last_run_at": "",
+                "next_run_at": "2026-07-14T11:00:00+00:00",
+                "last_status": "scheduled",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, policies)
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, policies)
+
+    assert "Open operational alerts: **1**" in markdown
+    assert "Approved scan policies: **1**" in markdown
+    assert "HQ baseline" in markdown
+    assert "Operational alerts" in html
+    assert "Approved scan policies" in html
+    assert "Operations &lt;team&gt;" in html
+
+
+def test_reports_include_case_sla_and_maintenance_evidence():
+    alerts = pd.DataFrame(
+        [
+            {
+                "last_seen_at": "2026-07-15T10:00:00+00:00",
+                "severity": "Critical",
+                "title": "Core asset not observed",
+                "target": "10.0.0.5",
+                "occurrence_count": 3,
+                "status": "acknowledged",
+                "assigned_to": "Network Operations",
+                "due_at": "2026-07-15T14:00:00+00:00",
+                "sla_state": "within_sla",
+                "details": "Validate availability.",
+                "resolution_note": "",
+            }
+        ]
+    )
+    maintenance = pd.DataFrame(
+        [
+            {
+                "name": "Firewall change",
+                "policy_name": "HQ baseline",
+                "starts_at": "2026-07-15T10:00:00+00:00",
+                "ends_at": "2026-07-15T12:00:00+00:00",
+                "reason": "CHG-1042 <approved>",
+                "enabled": True,
+                "active": True,
+                "created_by": "admin",
+            }
+        ]
+    )
+
+    markdown = build_markdown_report(
+        pd.DataFrame(), pd.DataFrame(), None, None, alerts, None, maintenance
+    )
+    html = build_html_report(pd.DataFrame(), pd.DataFrame(), None, None, alerts, None, maintenance)
+
+    assert "Active maintenance windows: **1**" in markdown
+    assert "Network Operations" in markdown
+    assert "Maintenance windows" in markdown
+    assert "Maintenance windows" in html
+    assert "CHG-1042 &lt;approved&gt;" in html

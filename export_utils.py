@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import pandas as pd
 
-FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+FORMULA_PREFIXES = ("=", "+", "-", "@")
+CONTROL_PREFIXES = ("\t", "\r", "\n")
 
 
 def _clean_cell(value: object) -> object:
     if not isinstance(value, str):
         return value
-    if value.startswith(FORMULA_PREFIXES):
+    candidate = value.lstrip()
+    if value.startswith(CONTROL_PREFIXES) or candidate.startswith(FORMULA_PREFIXES):
         return "'" + value
     return value
 

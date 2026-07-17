@@ -43,7 +43,7 @@ def network_profile(cidr: str, sample_size: int = 8) -> NetworkProfile:
             message=validation.error or "Invalid CIDR",
         )
 
-    network = ipaddress.ip_network(validation.value, strict=False)
+    network = ipaddress.ip_network(validation.value or cidr, strict=False)
     hosts = [str(host) for _, host in zip(range(sample_size), network.hosts())]
     host_count = usable_host_count(network)
     allowed = host_count <= MAX_HOSTS_PER_SCAN
@@ -58,7 +58,11 @@ def network_profile(cidr: str, sample_size: int = 8) -> NetworkProfile:
         usable_hosts=host_count,
         first_hosts=hosts,
         scan_allowed=allowed,
-        message="Ready for local scan" if allowed else f"Too large for scan limit ({MAX_HOSTS_PER_SCAN})",
+        message=(
+            "Ready for local scan"
+            if allowed
+            else f"Too large for scan limit ({MAX_HOSTS_PER_SCAN})"
+        ),
     )
 
 

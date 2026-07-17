@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -31,9 +31,22 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
+      - name: Check formatting and imports
+        run: |
+          black --check .
+          isort --check-only .
+
+      - name: Lint and type-check
+        run: |
+          flake8 .
+          mypy .
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
       - name: Run tests with coverage
         env:
-          NETWATCH_API_KEY: ci-test-key
+          NETWATCH_API_KEY: ci-test-key-with-at-least-32-characters
           NETWATCH_DATA_DIR: /tmp/netwatch-python-ci-data
         run: pytest -q --cov=. --cov-report=xml --cov-report=term-missing
 

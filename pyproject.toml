@@ -1,6 +1,6 @@
 [project]
 name = "netwatch"
-version = "1.0.0"
+version = "1.6.0"
 description = "Local-first network visibility and defensive review platform"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -17,6 +17,7 @@ exclude = '''
 /(
     \.git
   | \.venv
+  | venv
   | build
   | dist
   | data
@@ -26,16 +27,17 @@ exclude = '''
 [tool.isort]
 profile = "black"
 line_length = 100
-skip = [".git", ".venv", "build", "dist", "data"]
+skip = [".git", ".venv", "venv", "build", "dist", "data"]
 
 [tool.mypy]
 python_version = "3.10"
 check_untyped_defs = true
+follow_imports = "skip"
 ignore_missing_imports = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-exclude = "^(data|build|dist)/"
+exclude = "^(data|build|dist|venv|\\.venv)/"
 
 [tool.coverage.run]
 branch = true
