@@ -9,6 +9,12 @@ import pandas as pd
 from risk_engine import summarize_exposure, top_recommendations
 
 
+def _markdown_cell(value: object) -> str:
+    return (
+        str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    )
+
+
 def summarize_ports(port_rows: Iterable[dict]) -> dict[str, int]:
     summary = summarize_exposure(port_rows)
     return {
@@ -24,20 +30,124 @@ def _dataframe_to_markdown(df: pd.DataFrame) -> str:
     if df.empty:
         return "No data."
 
-    columns = [str(column) for column in df.columns]
+    columns = [_markdown_cell(column) for column in df.columns]
     header = "| " + " | ".join(columns) + " |"
     divider = "| " + " | ".join(["---"] * len(columns)) + " |"
     rows = []
     for _, row in df.iterrows():
-        values = [str(row[column]).replace("\n", " ") for column in df.columns]
+        values = [_markdown_cell(row[column]) for column in df.columns]
         rows.append("| " + " | ".join(values) + " |")
     return "\n".join([header, divider, *rows])
 
 
-def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
-    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    exposure = summarize_exposure(ports_df.to_dict("records")) if not ports_df.empty else summarize_exposure([])
+def _event_view(changes_df: pd.DataFrame | None) -> pd.DataFrame:
+    if changes_df is None or changes_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in ("created_at", "ip_address", "event_label", "details")
+        if column in changes_df.columns
+    ]
+    return changes_df[columns] if columns else pd.DataFrame()
 
+
+def _audit_view(audit_df: pd.DataFrame | None) -> pd.DataFrame:
+    if audit_df is None or audit_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in ("created_at", "actor_role", "action", "target", "outcome", "details")
+        if column in audit_df.columns
+    ]
+    return audit_df[columns] if columns else pd.DataFrame()
+
+
+def _alert_view(alerts_df: pd.DataFrame | None) -> pd.DataFrame:
+    if alerts_df is None or alerts_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in (
+            "last_seen_at",
+            "severity",
+            "title",
+            "target",
+            "occurrence_count",
+            "status",
+            "assigned_to",
+            "due_at",
+            "sla_state",
+            "details",
+            "resolution_note",
+        )
+        if column in alerts_df.columns
+    ]
+    return alerts_df[columns] if columns else pd.DataFrame()
+
+
+def _policy_view(policies_df: pd.DataFrame | None) -> pd.DataFrame:
+    if policies_df is None or policies_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in (
+            "name",
+            "cidr",
+            "interval_minutes",
+            "enabled",
+            "last_run_at",
+            "next_run_at",
+            "last_status",
+        )
+        if column in policies_df.columns
+    ]
+    return policies_df[columns] if columns else pd.DataFrame()
+
+
+def _maintenance_view(maintenance_df: pd.DataFrame | None) -> pd.DataFrame:
+    if maintenance_df is None or maintenance_df.empty:
+        return pd.DataFrame()
+    columns = [
+        column
+        for column in (
+            "name",
+            "policy_name",
+            "starts_at",
+            "ends_at",
+            "reason",
+            "enabled",
+            "active",
+            "created_by",
+        )
+        if column in maintenance_df.columns
+    ]
+    return maintenance_df[columns] if columns else pd.DataFrame()
+
+
+def build_markdown_report(
+    hosts_df: pd.DataFrame,
+    ports_df: pd.DataFrame,
+    changes_df: pd.DataFrame | None = None,
+    audit_df: pd.DataFrame | None = None,
+    alerts_df: pd.DataFrame | None = None,
+    policies_df: pd.DataFrame | None = None,
+    maintenance_df: pd.DataFrame | None = None,
+) -> str:
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    exposure = (
+        summarize_exposure(ports_df.to_dict("records"))
+        if not ports_df.empty
+        else summarize_exposure([])
+    )
+
+    events = _event_view(changes_df)
+    audit_events = _audit_view(audit_df)
+    alerts = _alert_view(alerts_df)
+    policies = _policy_view(policies_df)
+    maintenance = _maintenance_view(maintenance_df)
+    open_alerts = (
+        int((alerts["status"] == "open").sum()) if "status" in alerts.columns else len(alerts)
+    )
     lines = [
         "# NetWatch Local Network Report",
         "",
@@ -45,7 +155,12 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
         "",
         "## Summary",
         "",
-        f"- Online hosts found: **{len(hosts_df) if not hosts_df.empty else 0}**",
+        f"- Saved assets: **{len(hosts_df) if not hosts_df.empty else 0}**",
+        f"- Recent asset changes: **{len(events)}**",
+        f"- Recent operational events: **{len(audit_events)}**",
+        f"- Open operational alerts: **{open_alerts}**",
+        f"- Approved scan policies: **{len(policies)}**",
+        f"- Active maintenance windows: **{int(maintenance['active'].sum()) if 'active' in maintenance.columns else 0}**",
         f"- Ports checked: **{exposure.checked}**",
         f"- Open ports: **{exposure.open_ports}**",
         f"- High risk findings: **{exposure.high}**",
@@ -56,17 +171,39 @@ def build_markdown_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str
     ]
 
     if not hosts_df.empty:
-        lines.extend(["## Online hosts", "", _dataframe_to_markdown(hosts_df), ""])
+        lines.extend(["## Asset inventory", "", _dataframe_to_markdown(hosts_df), ""])
     if not ports_df.empty:
-        open_ports = ports_df[ports_df["Status"] == "Open"]
+        open_ports = (
+            ports_df[ports_df["Status"] == "Open"]
+            if "Status" in ports_df.columns
+            else pd.DataFrame()
+        )
         lines.extend(["## Port assessment", "", _dataframe_to_markdown(ports_df), ""])
         if not open_ports.empty:
-            lines.extend([
-                "## Recommended checks",
-                "",
-                _dataframe_to_markdown(open_ports[["Port", "Service", "Risk", "Recommendation"]]),
-                "",
-            ])
+            recommendation_columns = [
+                column
+                for column in ("Port", "Service", "Risk", "Recommendation")
+                if column in open_ports.columns
+            ]
+            if recommendation_columns:
+                lines.extend(
+                    [
+                        "## Recommended checks",
+                        "",
+                        _dataframe_to_markdown(open_ports[recommendation_columns]),
+                        "",
+                    ]
+                )
+    if not events.empty:
+        lines.extend(["## Recent asset changes", "", _dataframe_to_markdown(events), ""])
+    if not audit_events.empty:
+        lines.extend(["## Operations audit log", "", _dataframe_to_markdown(audit_events), ""])
+    if not alerts.empty:
+        lines.extend(["## Operational alerts", "", _dataframe_to_markdown(alerts), ""])
+    if not policies.empty:
+        lines.extend(["## Approved scan policies", "", _dataframe_to_markdown(policies), ""])
+    if not maintenance.empty:
+        lines.extend(["## Maintenance windows", "", _dataframe_to_markdown(maintenance), ""])
     lines.extend(["## Note", "", "Report generated from local NetWatch results."])
     return "\n".join(lines)
 
@@ -82,10 +219,31 @@ def _html_table(df: pd.DataFrame) -> str:
     return f"<table><thead><tr>{headers}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
 
 
-def build_html_report(hosts_df: pd.DataFrame, ports_df: pd.DataFrame) -> str:
+def build_html_report(
+    hosts_df: pd.DataFrame,
+    ports_df: pd.DataFrame,
+    changes_df: pd.DataFrame | None = None,
+    audit_df: pd.DataFrame | None = None,
+    alerts_df: pd.DataFrame | None = None,
+    policies_df: pd.DataFrame | None = None,
+    maintenance_df: pd.DataFrame | None = None,
+) -> str:
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    exposure = summarize_exposure(ports_df.to_dict("records")) if not ports_df.empty else summarize_exposure([])
-    recommendations = pd.DataFrame(top_recommendations(ports_df.to_dict("records"))) if not ports_df.empty else pd.DataFrame()
+    exposure = (
+        summarize_exposure(ports_df.to_dict("records"))
+        if not ports_df.empty
+        else summarize_exposure([])
+    )
+    recommendations = (
+        pd.DataFrame(top_recommendations(ports_df.to_dict("records")))
+        if not ports_df.empty
+        else pd.DataFrame()
+    )
+    events = _event_view(changes_df)
+    audit_events = _audit_view(audit_df)
+    alerts = _alert_view(alerts_df)
+    policies = _policy_view(policies_df)
+    maintenance = _maintenance_view(maintenance_df)
 
     return f"""<!doctype html>
 <html lang="en">
@@ -113,9 +271,14 @@ th {{ color:#7dd3fc; background:#111827; }}
 <div class="card"><div class="label">Score</div><div class="value">{exposure.score}</div></div>
 <div class="card"><div class="label">Level</div><div class="value">{escape(exposure.level)}</div></div>
 </section>
-<h2>Online hosts</h2>{_html_table(hosts_df)}
+<h2>Asset inventory</h2>{_html_table(hosts_df)}
 <h2>Port assessment</h2>{_html_table(ports_df)}
 <h2>Top recommendations</h2>{_html_table(recommendations)}
+<h2>Recent asset changes</h2>{_html_table(events)}
+<h2>Operations audit log</h2>{_html_table(audit_events)}
+<h2>Operational alerts</h2>{_html_table(alerts)}
+<h2>Approved scan policies</h2>{_html_table(policies)}
+<h2>Maintenance windows</h2>{_html_table(maintenance)}
 </main>
 </body>
 </html>"""

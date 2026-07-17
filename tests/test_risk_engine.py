@@ -35,3 +35,16 @@ def test_top_recommendations_prioritizes_high_risk():
     top = top_recommendations(rows, limit=1)
 
     assert top[0]["Port"] == 3389
+
+
+def test_high_risk_findings_raise_the_minimum_exposure_level():
+    one_high = summarize_exposure([{"Status": "Open", "Risk": "High"}])
+    two_high = summarize_exposure(
+        [
+            {"Status": "Open", "Risk": "High"},
+            {"Status": "Open", "Risk": "High"},
+        ]
+    )
+
+    assert one_high.level == "Medium"
+    assert two_high.level == "High"

@@ -60,7 +60,9 @@ def reverse_hostname(ip: str) -> str:
 def profile_host(ip: str) -> HostProfile:
     validation = validate_target_ip(ip)
     if not validation.ok:
-        return HostProfile(ip, "-", False, None, None, "Blocked", validation.error or "Invalid target")
+        return HostProfile(
+            ip, "-", False, None, None, "Blocked", validation.error or "Invalid target"
+        )
 
     target = validation.value or ip.strip()
     result = ping_host_raw(target)

@@ -15,11 +15,15 @@ def scan_network(cidr: str, max_workers: int = MAX_WORKERS) -> List[dict]:
     if not validation.ok:
         raise ValueError(validation.error or "Invalid CIDR")
 
-    network = ipaddress.ip_network(validation.value, strict=False)
+    network = ipaddress.ip_network(validation.value or cidr, strict=False)
     hosts = [str(ip) for ip in network.hosts()]
     results: List[dict] = []
+    if not hosts:
+        return results
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    worker_count = max(1, min(int(max_workers), MAX_WORKERS, len(hosts)))
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
         future_map = {executor.submit(ping_host, ip): ip for ip in hosts}
         for future in as_completed(future_map):
             ip = future_map[future]

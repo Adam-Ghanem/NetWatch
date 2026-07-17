@@ -39,6 +39,11 @@ def summarize_exposure(rows: Iterable[dict]) -> RiskSummary:
     medium = sum(1 for row in open_items if row.get("Risk") == "Medium")
     low = sum(1 for row in open_items if row.get("Risk") == "Low")
     score = sum(RISK_WEIGHT.get(str(row.get("Risk", "None")), 0) for row in open_items)
+    level = exposure_level(score)
+    if high >= 2:
+        level = "High"
+    elif high == 1 and level == "Low":
+        level = "Medium"
 
     return RiskSummary(
         checked=len(items),
@@ -47,7 +52,7 @@ def summarize_exposure(rows: Iterable[dict]) -> RiskSummary:
         medium=medium,
         low=low,
         score=score,
-        level=exposure_level(score),
+        level=level,
     )
 
 
