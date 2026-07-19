@@ -62,6 +62,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Responsive liquid-glass SOC command center with focused scan actions and live, data-backed risk and activity visuals
 - Keyboard-accessible, role-aware command center (`Ctrl`/`Cmd` + `K`) with protected-data freshness status
 - Official NetWatch shield-and-network identity across navigation, secure access, favicon, and product previews
+- Confidence-rated local device identity from reverse DNS, NetBIOS, ARP-neighbor, and observed TTL evidence
 - Automatic company SSO session detection plus session-only local role-key fallback
 - Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization
@@ -167,6 +168,8 @@ Shows saved assets, open services, assets requiring review, recent checks, recen
 
 Checks an approved local IPv4 CIDR with a maximum of 256 hosts. Each completed scan saves a normalized snapshot and compares it with earlier observations. NetWatch highlights newly observed devices, devices seen again after an absence, and known devices that did not reply this time.
 
+For each responding host, NetWatch also reports a best-effort device name, device type, operating-system hint, confidence level, and the evidence used. Identification is derived locally from reverse DNS, bounded NetBIOS discovery, the local ARP-neighbor table, and observed TTL; it is an operational hint, not proof of device identity or OS version.
+
 ICMP filtering may hide active devices, so NetWatch uses **Not observed** instead of claiming that a missing device is offline. A zero-host result does not prove that the network is empty.
 
 ### Host check
@@ -177,7 +180,9 @@ Profiles one approved IPv4 host and displays:
 - Round-trip latency
 - TTL
 - Reverse-DNS hostname
+- Best-effort device name and type
 - Cautious operating-system hint
+- Identity confidence and supporting local evidence
 - Observation notes
 
 ### Port audit
