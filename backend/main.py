@@ -97,6 +97,11 @@ from inventory_store import (
 )
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
+from notifications import (
+    notification_channel_status,
+    notifications_enabled,
+    send_alert_notification,
+)
 from operations_store import (
     MaintenanceWindowActiveError,
     alert_counts,
@@ -107,6 +112,7 @@ from operations_store import (
     create_scan_policy,
     database_backup_bytes,
     maintenance_windows,
+    notify_overdue_alert_transitions,
     operations_metrics,
     recent_alerts,
     scan_policies,
@@ -130,6 +136,8 @@ async def lifespan(_: FastAPI):
     init_db()
     scheduler_stop = threading.Event()
     scheduler_thread: threading.Thread | None = None
+    notification_stop = threading.Event()
+    notification_thread: threading.Thread | None = None
     if SCHEDULER_ENABLED:
         scheduler_thread = threading.Thread(
             target=_scheduler_loop,
@@ -138,12 +146,23 @@ async def lifespan(_: FastAPI):
             daemon=True,
         )
         scheduler_thread.start()
+    if notifications_enabled():
+        notification_thread = threading.Thread(
+            target=_notification_loop,
+            args=(notification_stop,),
+            name="netwatch-notifications",
+            daemon=True,
+        )
+        notification_thread.start()
     try:
         yield
     finally:
         scheduler_stop.set()
+        notification_stop.set()
         if scheduler_thread is not None:
             scheduler_thread.join(timeout=2.0)
+        if notification_thread is not None:
+            notification_thread.join(timeout=2.0)
 
 
 app = FastAPI(
@@ -803,6 +822,15 @@ def _scheduler_loop(stop_event: threading.Event) -> None:
         stop_event.wait(SCHEDULER_POLL_SECONDS)
 
 
+def _notification_loop(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            notify_overdue_alert_transitions()
+        except Exception:
+            LOGGER.error("notification_sla_check_failed_safely")
+        stop_event.wait(30)
+
+
 def _access_health() -> dict[str, Any]:
     configured, role_keys_status = _role_key_configuration()
     oidc_ready, oidc_status = oidc_configuration_status()
@@ -1300,6 +1328,32 @@ def update_alert(
         **context.audit_fields,
     )
     return {"alert": alert}
+
+
+@app.get("/api/notifications/status")
+def notifications_status(
+    _: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    return {"channels": notification_channel_status()}
+
+
+@app.post("/api/notifications/test")
+def test_notifications(
+    _: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    result = send_alert_notification(
+        {
+            "id": 0,
+            "severity": "Critical",
+            "status": "open",
+            "category": "notification_test",
+            "occurrence_count": 1,
+            "overdue": False,
+            "_notification_event": "notification_test",
+            "_notification_key": f"test-{secrets.token_hex(16)}",
+        }
+    )
+    return result.as_public_dict()
 
 
 @app.get("/api/backups/database")
