@@ -197,7 +197,7 @@
         <div class="content-grid form-layout">
           <form id="network-form" class="panel form-panel">
             <p class="eyebrow">Host discovery</p><h3>Scan a local CIDR</h3>
-            <p class="muted">NetWatch checks a maximum of 256 approved IPv4 hosts. ICMP filtering may hide active devices.</p>
+            <p class="muted">NetWatch checks a maximum of 256 approved IPv4 hosts and uses local DNS, NetBIOS, ARP, and TTL evidence to estimate each device name, type, and operating system. Results remain best-effort.</p>
             <label for="network-cidr">Local CIDR</label>
             <input id="network-cidr" value="192.168.1.0/24" required />
             <label class="check-row"><input id="network-authorized" type="checkbox" required /><span>I confirm I own or have explicit permission to assess this network.</span></label>
@@ -216,7 +216,7 @@
         <div class="content-grid form-layout">
           <form id="host-form" class="panel form-panel">
             <p class="eyebrow">Focused check</p><h3>Profile one host</h3>
-            <p class="muted">Check reachability, latency, TTL, reverse DNS, and a cautious operating-system hint.</p>
+            <p class="muted">Check reachability, latency, DNS/NetBIOS names, local MAC evidence, device type, and a confidence-rated operating-system hint.</p>
             <label for="host-ip">Local IPv4 address</label>
             <input id="host-ip" value="192.168.1.1" required />
             <label class="check-row"><input id="host-authorized" type="checkbox" required /><span>I confirm I am authorized to check this device.</span></label>
@@ -253,7 +253,7 @@
       <section id="view-inventory" class="view">
         <article class="panel">
           <div class="panel-head">
-            <div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div>
+            <div><p class="eyebrow">Persistent local data</p><h3>Asset identity and inventory</h3></div>
             <div class="button-row"><button id="inventory-export" class="button primary" type="button">Export CSV</button><button id="inventory-refresh" class="button ghost" type="button">Refresh inventory</button></div>
           </div>
           <div id="inventory-results" class="table-wrap"></div>
