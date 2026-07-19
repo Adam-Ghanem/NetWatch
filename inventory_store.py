@@ -127,6 +127,15 @@ def init_db() -> None:
                 last_seen TEXT NOT NULL,
                 status TEXT NOT NULL,
                 details TEXT NOT NULL DEFAULT '',
+                hostname TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                device_type TEXT NOT NULL DEFAULT '',
+                operating_system TEXT NOT NULL DEFAULT '',
+                identity_confidence TEXT NOT NULL DEFAULT '',
+                identity_evidence TEXT NOT NULL DEFAULT '',
+                mac_address TEXT NOT NULL DEFAULT '',
+                observed_ttl INTEGER,
+                identity_updated_at TEXT NOT NULL DEFAULT '',
                 open_ports TEXT NOT NULL DEFAULT '[]',
                 exposure_score INTEGER NOT NULL DEFAULT 0,
                 exposure_level TEXT NOT NULL DEFAULT 'Clean',
@@ -139,6 +148,7 @@ def init_db() -> None:
             )
             """)
         _ensure_asset_context_columns(conn)
+        _ensure_asset_identity_columns(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_created_at ON scan_runs(created_at)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_runs_type ON scan_runs(scan_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_last_seen ON assets(last_seen)")
@@ -150,10 +160,15 @@ def init_db() -> None:
                 observed INTEGER NOT NULL CHECK (observed IN (0, 1)),
                 status TEXT NOT NULL,
                 details TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                device_type TEXT NOT NULL DEFAULT '',
+                operating_system TEXT NOT NULL DEFAULT '',
+                identity_confidence TEXT NOT NULL DEFAULT '',
                 UNIQUE(scan_run_id, ip_address),
                 FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
             )
             """)
+        _ensure_observation_identity_columns(conn)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS asset_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -206,7 +221,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
         create_operations_schema(conn)
         create_intelligence_schema(conn)
-        conn.execute("PRAGMA user_version = 7")
+        conn.execute("PRAGMA user_version = 8")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
@@ -222,6 +237,39 @@ def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
     for name, definition in columns.items():
         if name not in existing:
             conn.execute(f"ALTER TABLE assets ADD COLUMN {name} {definition}")
+
+
+def _ensure_asset_identity_columns(conn: sqlite3.Connection) -> None:
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
+    columns = {
+        "hostname": "TEXT NOT NULL DEFAULT ''",
+        "device_name": "TEXT NOT NULL DEFAULT ''",
+        "device_type": "TEXT NOT NULL DEFAULT ''",
+        "operating_system": "TEXT NOT NULL DEFAULT ''",
+        "identity_confidence": "TEXT NOT NULL DEFAULT ''",
+        "identity_evidence": "TEXT NOT NULL DEFAULT ''",
+        "mac_address": "TEXT NOT NULL DEFAULT ''",
+        "observed_ttl": "INTEGER",
+        "identity_updated_at": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE assets ADD COLUMN {name} {definition}")
+
+
+def _ensure_observation_identity_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"] for row in conn.execute("PRAGMA table_info(network_observations)").fetchall()
+    }
+    columns = {
+        "device_name": "TEXT NOT NULL DEFAULT ''",
+        "device_type": "TEXT NOT NULL DEFAULT ''",
+        "operating_system": "TEXT NOT NULL DEFAULT ''",
+        "identity_confidence": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE network_observations ADD COLUMN {name} {definition}")
 
 
 def _ensure_audit_integrity_columns(conn: sqlite3.Connection) -> None:
@@ -263,6 +311,46 @@ def _normalize_ipv4(value: object) -> str | None:
     except ValueError:
         return None
     return str(address) if isinstance(address, ipaddress.IPv4Address) else None
+
+
+def _identity_values(row: dict) -> dict[str, object]:
+    def text_value(display_key: str, storage_key: str, limit: int) -> str:
+        value = str(row.get(display_key, row.get(storage_key, "")) or "").strip()
+        return "" if value == "-" else " ".join(value.split())[:limit]
+
+    raw_ttl = row.get("TTL", row.get("observed_ttl"))
+    try:
+        ttl = int(str(raw_ttl)) if raw_ttl not in {None, "", "-"} else None
+    except (TypeError, ValueError):
+        ttl = None
+    if ttl is not None and not 1 <= ttl <= 255:
+        ttl = None
+
+    values: dict[str, object] = {
+        "hostname": text_value("Hostname", "hostname", 253),
+        "device_name": text_value("Device Name", "device_name", 120),
+        "device_type": text_value("Device Type", "device_type", 120),
+        "operating_system": text_value("Operating System", "operating_system", 160),
+        "identity_confidence": text_value("Identity Confidence", "identity_confidence", 20),
+        "identity_evidence": text_value("Identity Evidence", "identity_evidence", 500),
+        "mac_address": text_value("MAC Address", "mac_address", 17).upper(),
+        "observed_ttl": ttl,
+    }
+    values["identity_updated_at"] = (
+        _utc_now()
+        if any(
+            values[key]
+            for key in (
+                "hostname",
+                "device_name",
+                "device_type",
+                "operating_system",
+                "identity_evidence",
+            )
+        )
+        else ""
+    )
+    return values
 
 
 def _insert_asset_event(
@@ -588,21 +676,67 @@ def _upsert_observed_asset(
     details: str,
     source: str,
     scan_run_id: int | None = None,
+    identity: dict[str, object] | None = None,
 ) -> str | None:
     previous = conn.execute(
         "SELECT status FROM assets WHERE ip_address = ?", (ip_address,)
     ).fetchone()
     now = _utc_now()
+    identity = identity or {}
     conn.execute(
         """
-        INSERT INTO assets (ip_address, first_seen, last_seen, status, details)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO assets (
+            ip_address, first_seen, last_seen, status, details,
+            hostname, device_name, device_type, operating_system,
+            identity_confidence, identity_evidence, mac_address,
+            observed_ttl, identity_updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(ip_address) DO UPDATE SET
             last_seen=excluded.last_seen,
             status=excluded.status,
-            details=excluded.details
+            details=excluded.details,
+            hostname=CASE
+                WHEN excluded.hostname != '' THEN excluded.hostname ELSE assets.hostname END,
+            device_name=CASE
+                WHEN excluded.device_name != ''
+                THEN excluded.device_name ELSE assets.device_name END,
+            device_type=CASE
+                WHEN excluded.device_type != ''
+                THEN excluded.device_type ELSE assets.device_type END,
+            operating_system=CASE
+                WHEN excluded.operating_system != ''
+                THEN excluded.operating_system ELSE assets.operating_system END,
+            identity_confidence=CASE
+                WHEN excluded.identity_confidence != ''
+                THEN excluded.identity_confidence ELSE assets.identity_confidence END,
+            identity_evidence=CASE
+                WHEN excluded.identity_evidence != ''
+                THEN excluded.identity_evidence ELSE assets.identity_evidence END,
+            mac_address=CASE
+                WHEN excluded.mac_address != ''
+                THEN excluded.mac_address ELSE assets.mac_address END,
+            observed_ttl=COALESCE(excluded.observed_ttl, assets.observed_ttl),
+            identity_updated_at=CASE
+                WHEN excluded.identity_updated_at != ''
+                THEN excluded.identity_updated_at ELSE assets.identity_updated_at END
         """,
-        (ip_address, now, now, status[:40], details[:1_000]),
+        (
+            ip_address,
+            now,
+            now,
+            status[:40],
+            details[:1_000],
+            identity.get("hostname", ""),
+            identity.get("device_name", ""),
+            identity.get("device_type", ""),
+            identity.get("operating_system", ""),
+            identity.get("identity_confidence", ""),
+            identity.get("identity_evidence", ""),
+            identity.get("mac_address", ""),
+            identity.get("observed_ttl"),
+            identity.get("identity_updated_at", ""),
+        ),
     )
     if previous is None:
         _insert_asset_event(
@@ -646,7 +780,15 @@ def upsert_hosts(
             seen.add(ip)
             status = str(row.get("Status", "Online"))
             details = str(row.get("Details", ""))
-            _upsert_observed_asset(conn, ip, status, details, source, scan_run_id)
+            _upsert_observed_asset(
+                conn,
+                ip,
+                status,
+                details,
+                source,
+                scan_run_id,
+                _identity_values(row),
+            )
         _prune_change_history(conn)
 
 
@@ -680,6 +822,7 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
 
         for ip in observed:
             row = normalized_rows[ip]
+            identity = _identity_values(row)
             transition = _upsert_observed_asset(
                 conn,
                 ip,
@@ -687,6 +830,7 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
                 str(row.get("Details", "")),
                 "network scan",
                 scan_run_id,
+                identity,
             )
             if transition == "new_asset":
                 new_assets.append(ip)
@@ -695,14 +839,19 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
             conn.execute(
                 """
                 INSERT INTO network_observations (
-                    scan_run_id, ip_address, observed, status, details
-                ) VALUES (?, ?, 1, ?, ?)
+                    scan_run_id, ip_address, observed, status, details,
+                    device_name, device_type, operating_system, identity_confidence
+                ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     scan_run_id,
                     ip,
                     str(row.get("Status", "Online"))[:40],
                     str(row.get("Details", ""))[:1_000],
+                    identity["device_name"],
+                    identity["device_type"],
+                    identity["operating_system"],
+                    identity["identity_confidence"],
                 ),
             )
 
@@ -892,6 +1041,9 @@ def update_asset_context(
             """
             SELECT
                 ip_address, first_seen, last_seen, status, details,
+                hostname, device_name, device_type, operating_system,
+                identity_confidence, identity_evidence, mac_address,
+                observed_ttl, identity_updated_at,
                 exposure_score, exposure_level, open_ports,
                 owner, department, location, criticality, notes, context_updated_at
             FROM assets
@@ -955,7 +1107,11 @@ def recent_network_observations(limit: int = 100) -> list[dict]:
                 observations.ip_address,
                 observations.observed,
                 observations.status,
-                observations.details
+                observations.details,
+                observations.device_name,
+                observations.device_type,
+                observations.operating_system,
+                observations.identity_confidence
             FROM network_observations AS observations
             JOIN scan_runs AS runs ON runs.id = observations.scan_run_id
             ORDER BY observations.id DESC
@@ -1037,6 +1193,16 @@ def _decode_ports(raw: str | None) -> list[dict]:
 def _asset_record(row: sqlite3.Row) -> dict:
     item = dict(row)
     ports = _decode_ports(item.pop("open_ports", "[]"))
+    item["hostname"] = item.get("hostname") or "-"
+    item["device_name"] = item.get("device_name") or "Unresolved"
+    item["device_type"] = item.get("device_type") or "Unclassified device"
+    item["operating_system"] = item.get("operating_system") or "Unknown"
+    item["identity_confidence"] = item.get("identity_confidence") or "Low"
+    item["identity_evidence"] = (
+        item.get("identity_evidence") or "No naming or OS fingerprint evidence recorded."
+    )
+    item["mac_address"] = item.get("mac_address") or "-"
+    item["observed_ttl"] = item["observed_ttl"] if item.get("observed_ttl") is not None else "-"
     item["open_port_count"] = len(ports)
     item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
     return item
@@ -1073,6 +1239,9 @@ def asset_inventory(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
             """
             SELECT
                 ip_address, first_seen, last_seen, status, details,
+                hostname, device_name, device_type, operating_system,
+                identity_confidence, identity_evidence, mac_address,
+                observed_ttl, identity_updated_at,
                 exposure_score, exposure_level, open_ports,
                 owner, department, location, criticality, notes, context_updated_at
             FROM assets

@@ -266,7 +266,21 @@ def show_host_check() -> None:
         scan_run_id = add_scan_run("host_profile", target, msg, status=status)
         if profile.online:
             upsert_hosts(
-                [{"IP Address": profile.ip_address, "Status": "Online", "Details": profile.notes}],
+                [
+                    {
+                        "IP Address": profile.ip_address,
+                        "Status": "Online",
+                        "Details": profile.notes,
+                        "Device Name": profile.device_name,
+                        "Hostname": profile.hostname,
+                        "Device Type": profile.device_type,
+                        "Operating System": profile.os_hint,
+                        "Identity Confidence": profile.identity_confidence,
+                        "Identity Evidence": profile.identity_evidence,
+                        "MAC Address": profile.mac_address,
+                        "TTL": profile.ttl if profile.ttl is not None else "-",
+                    }
+                ],
                 source="host check",
                 scan_run_id=scan_run_id,
             )
@@ -278,15 +292,11 @@ def show_host_check() -> None:
         with c1:
             metric_card("Status", status, profile.notes)
         with c2:
-            metric_card(
-                "Latency",
-                profile.latency_ms if profile.latency_ms is not None else "-",
-                "milliseconds",
-            )
+            metric_card("Device", profile.device_name, profile.device_type)
         with c3:
-            metric_card("TTL", profile.ttl if profile.ttl is not None else "-", profile.os_hint)
+            metric_card("Operating system", profile.os_hint, profile.identity_confidence)
         with c4:
-            metric_card("Hostname", profile.hostname, "reverse DNS")
+            metric_card("Hostname", profile.hostname, profile.mac_address)
         st.dataframe(pd.DataFrame([profile.__dict__]), use_container_width=True, hide_index=True)
 
 
