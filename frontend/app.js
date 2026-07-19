@@ -551,6 +551,10 @@ async function loadInventory() {
   ]);
   state.assets = inventoryPayload.assets || [];
   renderTable($('#inventory-results'), state.assets, [
+    { key: 'device_name', label: 'Device name' },
+    { key: 'device_type', label: 'Device type' },
+    { key: 'operating_system', label: 'Operating system' },
+    { key: 'identity_confidence', label: 'ID confidence', chip: true },
     { key: 'ip_address', label: 'IP address' },
     { key: 'owner', label: 'Owner' },
     { key: 'department', label: 'Department' },
@@ -1265,9 +1269,13 @@ $('#network-form').addEventListener('submit', async (event) => {
       { label: 'Not observed', value: (changes.not_observed_assets || []).length, note: 'Verify manually' },
     ]);
     renderTable($('#network-results'), payload.hosts || [], [
+      { key: 'Device Name', label: 'Device name' },
+      { key: 'Device Type', label: 'Device type' },
+      { key: 'Operating System', label: 'Operating system' },
+      { key: 'Identity Confidence', label: 'Confidence', chip: true },
       { key: 'IP Address', label: 'IP address' },
       { key: 'Status', label: 'Status', chip: true },
-      { key: 'Details', label: 'Detection details' },
+      { key: 'Identity Evidence', label: 'Identity evidence' },
     ], 'No hosts replied. Active hosts may be blocking ICMP.');
     setFormStatus('network-status', payload.summary, 'success');
     showToast(payload.summary);
@@ -1291,12 +1299,16 @@ $('#host-form').addEventListener('submit', async (event) => {
     $('#host-result-title').textContent = result.ip_address;
     renderMiniMetrics($('#host-metrics'), [
       { label: 'Status', value: result.online ? 'Online' : 'No reply', note: 'ICMP result' },
-      { label: 'Latency', value: result.latency_ms === null ? '—' : `${result.latency_ms} ms`, note: 'Round trip' },
-      { label: 'TTL', value: result.ttl, note: 'Observed value' },
-      { label: 'Hostname', value: result.hostname, note: 'Reverse DNS' },
+      { label: 'Device', value: result.device_name, note: result.hostname === '-' ? 'Name unresolved' : 'Resolved name' },
+      { label: 'Type', value: result.device_type, note: 'Best-effort classification' },
+      { label: 'Operating system', value: result.os_hint, note: `${result.identity_confidence} confidence` },
     ]);
     renderDetails($('#host-details'), [
-      ['Operating-system hint', result.os_hint],
+      ['Hostname', result.hostname],
+      ['MAC address', result.mac_address],
+      ['Observed TTL', result.ttl === null ? '—' : result.ttl],
+      ['Latency', result.latency_ms === null ? '—' : `${result.latency_ms} ms`],
+      ['Identity evidence', result.identity_evidence],
       ['Observation', result.notes],
       ['Target', result.ip_address],
     ]);
