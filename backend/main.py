@@ -964,12 +964,27 @@ def check_host(
         result = profile_host(target)
     status = "online" if result.online else "offline"
     msg = (
-        f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; hostname={result.hostname}"
+        f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; "
+        f"hostname={result.hostname}; device={result.device_name}; os={result.os_hint}"
     )
     scan_run_id = add_scan_run("host_profile", target, msg, status=status)
     if result.online:
         upsert_hosts(
-            [{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}],
+            [
+                {
+                    "IP Address": result.ip_address,
+                    "Status": "Online",
+                    "Details": result.notes,
+                    "Device Name": result.device_name,
+                    "Hostname": result.hostname,
+                    "Device Type": result.device_type,
+                    "Operating System": result.os_hint,
+                    "Identity Confidence": result.identity_confidence,
+                    "Identity Evidence": result.identity_evidence,
+                    "MAC Address": result.mac_address,
+                    "TTL": result.ttl if result.ttl is not None else "-",
+                }
+            ],
             source="host check",
             scan_run_id=scan_run_id,
         )
