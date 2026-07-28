@@ -156,6 +156,10 @@ http://127.0.0.1:8501
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI documentation for local development |
 | `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
+| `NETWATCH_MAX_CAPTURE_BYTES` | `5242880` | Maximum PCAP/PCAPNG request size, bounded from 64 KB to 25 MB |
+| `NETWATCH_MAX_CAPTURE_PACKETS` | `10000` | Maximum packets decoded per upload, bounded from 100 to 50,000 |
+| `NETWATCH_MAX_CAPTURE_ROWS` | `2000` | Maximum packet rows returned, bounded from 100 to 5,000 |
+| `NETWATCH_MAX_CONCURRENT_CAPTURE_ANALYSES` | `1` | Simultaneous in-memory capture analyses, bounded from 1 to 4 |
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests allowed per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded common-port worker count |
@@ -173,6 +177,7 @@ http://127.0.0.1:8501
 | `NETWATCH_AI_RATE_LIMIT_WINDOW_SECONDS` | `600` | Separate provider rate window |
 | `NETWATCH_AI_DAILY_REQUEST_LIMIT` | `50` | Atomic local UTC daily provider-call budget, independent of cache/event retention |
 | `NETWATCH_AI_CACHE_TTL_SECONDS` | `900` | Successful brief cache lifetime |
+| `NETWATCH_OUI_DATABASE` | system IEEE database | Optional local IEEE CSV/text or Nmap MAC-prefix database; no remote lookup |
 | `NETWATCH_DATA_DIR` | `data` | Local SQLite directory |
 
 ## Persistent data
@@ -199,7 +204,7 @@ docker compose down -v
 
 The `-v` option permanently deletes the saved NetWatch database and logs.
 
-Back up the named data volume before upgrades or operational use. The v1.6 migration preserves existing records and adds integrity metadata at schema version 7. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
+Back up the named data volume before upgrades or operational use. The v1.6 migration preserves existing records and adds integrity plus device-identity metadata at schema version 9. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
 
 Admins can also use **Operations → Download database backup** to create a consistent point-in-time SQLite snapshot. The download does not include `.env` role keys. Store it in an approved encrypted location and test restoration on a separate staging copy.
 

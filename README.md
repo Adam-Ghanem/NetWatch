@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, identify same-segment device and manufacturer evidence, inspect bounded PCAP/PCAPNG metadata, track what changed between scans, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -62,6 +62,10 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Responsive liquid-glass SOC command center with focused scan actions and live, data-backed risk and activity visuals
 - Keyboard-accessible, role-aware command center (`Ctrl`/`Cmd` + `K`) with protected-data freshness status
 - Official NetWatch shield-and-network identity across navigation, secure access, favicon, and product previews
+- Confidence-rated local device identity from reverse DNS, NetBIOS, same-segment ARP, local IEEE OUI data, name-family patterns, and observed TTL evidence
+- Manufacturer, model-family, MAC address, and private/randomized-MAC labeling without remote MAC lookup
+- Wireshark-style bounded PCAP/PCAPNG metadata inspection for Ethernet, ARP, IPv4, IPv6, TCP, UDP, ICMP, and DNS
+- In-memory capture processing with raw payload omission, DNS-name opt-in, byte/packet/row limits, and a separate concurrency gate
 - Automatic company SSO session detection plus session-only local role-key fallback
 - Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization
@@ -167,6 +171,10 @@ Shows saved assets, open services, assets requiring review, recent checks, recen
 
 Checks an approved local IPv4 CIDR with a maximum of 256 hosts. Each completed scan saves a normalized snapshot and compares it with earlier observations. NetWatch highlights newly observed devices, devices seen again after an absence, and known devices that did not reply this time.
 
+For each responding host, NetWatch also reports a best-effort device name, manufacturer, model family, device type, operating-system hint, confidence level, MAC type, and the evidence used. Identification is derived locally from reverse DNS, bounded NetBIOS discovery, a same-segment ARP-neighbor entry, local IEEE OUI data, hostname family patterns, and observed TTL; it is an operational hint, not proof of an exact model, device identity, or OS version.
+
+Modern phones commonly use private/randomized MAC addresses. NetWatch labels these addresses and does not guess a vendor from their OUI. A precise name such as `Redmi Note 13 Pro` or `iPhone` appears only when the device, local DNS, or another supported local naming source exposes it. Routed targets also do not inherit a Docker bridge or gateway MAC.
+
 ICMP filtering may hide active devices, so NetWatch uses **Not observed** instead of claiming that a missing device is offline. A zero-host result does not prove that the network is empty.
 
 ### Host check
@@ -177,7 +185,10 @@ Profiles one approved IPv4 host and displays:
 - Round-trip latency
 - TTL
 - Reverse-DNS hostname
+- Best-effort device name, manufacturer, model family, and type
+- Same-segment MAC address and global/private address type
 - Cautious operating-system hint
+- Identity confidence and supporting local evidence
 - Observation notes
 
 ### Port audit
@@ -192,6 +203,17 @@ Reviews a short defensive list of common TCP services and displays:
 - Device-role hint
 
 An open port is exposure that requires context and validation. It is not automatic proof of a vulnerability.
+
+### Traffic Inspector
+
+Imports an authorized `.pcap` or `.pcapng` file and provides a Wireshark-style metadata view:
+
+- Protocol distribution and bounded packet rows
+- Top endpoints and conversations
+- Source/destination addresses, MAC addresses, ports, service labels, frame length, and TCP flag summaries
+- Ethernet, VLAN, ARP, IPv4, IPv6 extension, TCP, UDP, ICMP, and DNS question metadata
+
+This is deliberately an offline capture inspector, not a promiscuous live sniffer. Uploads are bounded, processed in memory, and never saved by NetWatch. Raw packet payloads are not returned. DNS question names are hidden unless the operator explicitly enables them for that analysis. The API requires Operator or Admin access, a fresh authorization confirmation, audit integrity, normal per-route rate limiting, and a separate capture-analysis semaphore.
 
 ### Inventory and history
 
@@ -490,9 +512,14 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI docs for local development |
 | `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
+| `NETWATCH_MAX_CAPTURE_BYTES` | `5242880` | Maximum PCAP/PCAPNG request size, bounded from 64 KB to 25 MB |
+| `NETWATCH_MAX_CAPTURE_PACKETS` | `10000` | Maximum packets decoded per upload, bounded from 100 to 50,000 |
+| `NETWATCH_MAX_CAPTURE_ROWS` | `2000` | Maximum packet rows returned, bounded from 100 to 5,000 |
+| `NETWATCH_MAX_CONCURRENT_CAPTURE_ANALYSES` | `1` | Simultaneous in-memory capture analyses |
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
+| `NETWATCH_OUI_DATABASE` | system IEEE database | Optional local IEEE CSV/text or Nmap prefix database path; no remote lookup |
 | `NETWATCH_SCHEDULER_ENABLED` | `false` | Enables execution of due approved policies in the single API process |
 | `NETWATCH_SCHEDULER_POLL_SECONDS` | `30` | Scheduler polling interval, bounded from 5 to 300 seconds |
 | `OPENAI_API_KEY` | empty | Optional server-side provider secret; never send it to the browser or commit it |

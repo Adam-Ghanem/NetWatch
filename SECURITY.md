@@ -23,7 +23,12 @@ NetWatch v1.6 includes:
 - Maximum 256 hosts per CIDR scan
 - Per-identity, route-template request rate limiting with bounded in-memory identity buckets
 - Bounded simultaneous scans
+- Same-segment MAC validation that avoids assigning a routed gateway or container bridge MAC to an endpoint
+- Local-only IEEE OUI lookup with explicit private/randomized-MAC labeling and no third-party MAC service
 - Bounded common-port worker count
+- Operator/Admin-only PCAP/PCAPNG metadata inspection with explicit authorization
+- Strict capture media type, content encoding, declared length, streamed byte, packet, row, and concurrency limits
+- In-memory capture analysis with no raw payload response or persistence and DNS names hidden by default
 - Restricted CORS origins
 - Restricted HTTP Host headers
 - Content Security Policy
@@ -52,6 +57,16 @@ NetWatch v1.6 includes:
 - Authenticated monitoring counters without target, IP, hostname, or other high-cardinality labels
 - Admin-only consistent SQLite snapshot downloads and no destructive restore endpoint
 
+## Traffic capture inspection
+
+The Traffic Inspector accepts only captures from environments the operator owns or is explicitly authorized to analyze. It is an offline parser and does not enable promiscuous live capture, stealth collection, credential extraction, payload search, packet replay, or packet injection.
+
+The API requires Operator or Admin access, a fresh authorization checkbox, normal per-identity route rate limiting, a separate non-blocking concurrency semaphore, and a healthy audit chain. Capture bodies are read through a streaming hard limit. Compressed uploads, unsupported media types, malformed block lengths, truncated records, unsupported byte order, and files beyond the configured cap fail closed.
+
+Packet bytes exist only in request memory while the bounded parser runs. NetWatch does not save the upload, return raw payload bytes, or include packet content in audit logs. Results contain protocol and addressing metadata, ports, sizes, safe flag summaries, and optional DNS question names. DNS names are excluded by default and require an explicit per-analysis opt-in because they may expose internal naming. Audit records contain only the capture format, byte count, packet count, outcome, actor, and request correlation.
+
+PCAP metadata can still contain private IP addresses, MAC addresses, DNS names, and internal topology. Keep both the source capture and browser result inside the authorized environment, and close the tab when the analysis is complete.
+
 ## Secrets
 
 The `.env` file can contain local role keys, the separate audit HMAC key, optional `OPENAI_API_KEY`, and automatically generated AI safety identity; it is ignored by Git and excluded from Docker build context.
@@ -78,7 +93,7 @@ Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost d
 
 ## Local data
 
-NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, service exposure, and internal network structure.
+NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, MAC addresses, device-manufacturer hints, service exposure, and internal network structure. Imported packet captures are not stored by NetWatch.
 
 Default SQLite path:
 

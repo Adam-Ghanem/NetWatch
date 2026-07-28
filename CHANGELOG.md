@@ -5,6 +5,10 @@
 - Redesigned the primary dashboard as a dark liquid-glass SOC command center with a persistent sidebar, compact mobile navigation, official NetWatch identity, focused scan/inventory quick actions, a data-backed seven-day activity chart, exposure distribution, and highest-asset risk gauge.
 - Added a keyboard-accessible, role-aware command palette for fast module navigation and safe refresh actions, plus visible protected-data freshness status.
 - Replaced the full product screenshot gallery with consistent dark liquid-glass previews that use sample private-network data only.
+- Added confidence-rated local device name, type, and operating-system hints to network scans, host checks, inventory, and exports using bounded DNS, NetBIOS, ARP-neighbor, and TTL evidence.
+- Added manufacturer, model-family, same-segment MAC, globally assigned/private MAC classification, local IEEE OUI resolution, and routed-gateway misattribution protection.
+- Added an Operator/Admin-only Traffic Inspector for bounded PCAP and PCAPNG metadata with protocol, endpoint, conversation, and packet-table views.
+- Added in-memory capture processing, raw-payload omission, DNS-name opt-in, strict content and byte validation, packet/row caps, a separate concurrency gate, normal rate limiting, and integrity-protected audit evidence.
 - Added optional company OIDC/JWT identity with strict HTTPS issuer/JWKS configuration, signature, audience, issuer, expiry, subject, authorized-party, algorithm, and key-header validation.
 - Added exact, non-overlapping OIDC group-to-Admin/Operator/Viewer mapping while preserving unique local role keys as an optional break-glass path.
 - Added automatic same-origin company-session detection in the dashboard so users behind an approved identity gateway do not enter shared or provider keys.
@@ -14,7 +18,7 @@
 - Added low-cardinality HTTP request, error, active-request, and duration metrics plus safe route-template correlation logs.
 - Added separate public liveness and readiness endpoints, database/auth readiness checks, stronger browser isolation headers, and response request IDs.
 - Added an enterprise deployment guide and a non-root, read-only-root Kubernetes single-instance template with secret references, resource controls, probes, and persistent storage.
-- Added OIDC, fail-closed bearer precedence, audit integrity, readiness, identity privacy, schema migration, launcher key-separation, and UI regression tests; upgraded SQLite schema to version 7.
+- Added OIDC, fail-closed bearer precedence, audit integrity, readiness, identity privacy, capture-boundary, schema migration, launcher key-separation, and UI regression tests; upgraded SQLite schema to version 9.
 
 ## v1.5.0
 
