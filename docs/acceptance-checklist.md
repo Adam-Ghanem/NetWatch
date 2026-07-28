@@ -58,7 +58,9 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.6 database migrates to schema version 7 without losing saved assets, alerts, or audit rows.
+- [ ] An existing pre-v1.6 database migrates to schema version 9 without losing saved assets, alerts, or audit rows.
+- [ ] A same-segment device can show locally supported manufacturer, model-family, MAC, and MAC-type evidence without a remote lookup; private/randomized MAC addresses are labeled instead of guessed.
+- [ ] Traffic Inspector rejects Viewer access and missing authorization, parses bounded PCAP/PCAPNG metadata for Operator/Admin, omits raw payloads, and hides DNS question names unless explicitly enabled.
 - [ ] Legacy audit rows remain labeled and new rows verify through the HMAC chain.
 
 ## Enterprise identity and audit

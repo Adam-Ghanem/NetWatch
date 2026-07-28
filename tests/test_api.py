@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -22,6 +23,20 @@ AI_SAFETY_SECRET = "test-independent-safety-secret-with-enough-characters"
 AI_SUBJECT_ID = "deployment_subject_12345"
 AUDIT_HMAC_KEY = "test-independent-audit-hmac-key-with-enough-characters"
 API_HEADERS = {"X-NetWatch-Key": TEST_API_KEY}
+
+
+def _tiny_pcap() -> bytes:
+    frame = bytes.fromhex(
+        "00112233445566778899AABB0800"
+        "450000280001400040060000C0A8010AC0A80114"
+        "C93B01BB00000001000000005002FAF000000000"
+    )
+    return (
+        b"\xd4\xc3\xb2\xa1"
+        + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
+        + struct.pack("<IIII", 1_700_000_000, 0, len(frame), len(frame))
+        + frame
+    )
 
 
 def _client(monkeypatch, tmp_path: Path) -> TestClient:
@@ -226,6 +241,60 @@ def test_authorized_scan_uses_validated_target(monkeypatch, tmp_path):
     assert payload["online_hosts"] == 1
     assert payload["changes"]["new_assets"] == ["192.168.1.1"]
     assert payload["changes"]["total_changes"] == 1
+
+
+def test_traffic_capture_analysis_requires_explicit_authorization(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
+            "/api/traffic/analyze?authorized=false",
+            headers={**API_HEADERS, "Content-Type": "application/octet-stream"},
+            content=_tiny_pcap(),
+        )
+
+    assert response.status_code == 403
+
+
+def test_traffic_capture_analysis_requires_operator_or_admin(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_VIEWER_KEY", VIEWER_API_KEY)
+        response = client.post(
+            "/api/traffic/analyze?authorized=true",
+            headers={
+                "X-NetWatch-Key": VIEWER_API_KEY,
+                "Content-Type": "application/octet-stream",
+            },
+            content=_tiny_pcap(),
+        )
+
+    assert response.status_code == 403
+
+
+def test_traffic_capture_analysis_returns_metadata_without_payload(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
+            "/api/traffic/analyze?authorized=true",
+            headers={**API_HEADERS, "Content-Type": "application/octet-stream"},
+            content=_tiny_pcap(),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["format"] == "pcap"
+    assert payload["packets_analyzed"] == 1
+    assert payload["payload_retained"] is False
+    assert payload["packets"][0]["protocol"] == "TCP"
+
+
+def test_traffic_capture_upload_limit_is_enforced_while_streaming(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "MAX_CAPTURE_BYTES", 64)
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
+            "/api/traffic/analyze?authorized=true",
+            headers={**API_HEADERS, "Content-Type": "application/octet-stream"},
+            content=_tiny_pcap(),
+        )
+
+    assert response.status_code == 413
 
 
 def test_change_and_observation_endpoints_return_saved_evidence(monkeypatch, tmp_path):

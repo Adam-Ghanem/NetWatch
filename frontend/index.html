@@ -68,6 +68,7 @@
         <button class="nav-item" data-view="network"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 4v3M20 12h-3M12 20v-3M4 12h3"/></svg></span><span class="nav-label">Network scan</span></button>
         <button class="nav-item" data-view="host"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="nav-label">Host check</span></button>
         <button class="nav-item" data-view="ports"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M18 7l-3 3M17 17H6l3 3M6 17l3-3"/></svg></span><span class="nav-label">Port audit</span></button>
+        <button class="nav-item" data-view="traffic"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/><path d="M3 4v16h18"/></svg></span><span class="nav-label">Traffic inspector</span></button>
         <button class="nav-item" data-view="inventory"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><span class="nav-label">Inventory</span></button>
         <button class="nav-item" data-view="advisor"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span><span class="nav-label">Risk advisor</span></button>
         <button class="nav-item" data-view="audit"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9"/><path d="M9 3H4a1 1 0 0 0-1 1v5h6zM9 12h8M9 16h8"/></svg></span><span class="nav-label">Audit log</span></button>
@@ -197,7 +198,7 @@
         <div class="content-grid form-layout">
           <form id="network-form" class="panel form-panel">
             <p class="eyebrow">Host discovery</p><h3>Scan a local CIDR</h3>
-            <p class="muted">NetWatch checks a maximum of 256 approved IPv4 hosts. ICMP filtering may hide active devices.</p>
+            <p class="muted">NetWatch checks a maximum of 256 approved IPv4 hosts and uses local DNS, NetBIOS, same-segment ARP, IEEE OUI, and TTL evidence to estimate device name, manufacturer, model family, type, and operating system. Private/randomized MAC addresses are labeled instead of guessed.</p>
             <label for="network-cidr">Local CIDR</label>
             <input id="network-cidr" value="192.168.1.0/24" required />
             <label class="check-row"><input id="network-authorized" type="checkbox" required /><span>I confirm I own or have explicit permission to assess this network.</span></label>
@@ -216,7 +217,7 @@
         <div class="content-grid form-layout">
           <form id="host-form" class="panel form-panel">
             <p class="eyebrow">Focused check</p><h3>Profile one host</h3>
-            <p class="muted">Check reachability, latency, TTL, reverse DNS, and a cautious operating-system hint.</p>
+            <p class="muted">Check reachability, latency, DNS/NetBIOS names, same-segment MAC evidence, manufacturer, model family, device type, and a confidence-rated operating-system hint.</p>
             <label for="host-ip">Local IPv4 address</label>
             <input id="host-ip" value="192.168.1.1" required />
             <label class="check-row"><input id="host-authorized" type="checkbox" required /><span>I confirm I am authorized to check this device.</span></label>
@@ -250,10 +251,51 @@
         </div>
       </section>
 
+      <section id="view-traffic" class="view">
+        <div class="content-grid form-layout">
+          <form id="traffic-form" class="panel form-panel">
+            <p class="eyebrow">Wireshark-style metadata</p><h3>Inspect PCAP / PCAPNG</h3>
+            <p class="muted">Import a capture from an authorized environment. NetWatch decodes bounded Ethernet, ARP, IPv4, IPv6, TCP, UDP, ICMP, and DNS metadata in memory; packet payload bytes are never returned or persisted.</p>
+            <label for="traffic-file">Capture file (maximum 5 MB by default)</label>
+            <input id="traffic-file" class="capture-file" type="file" accept=".pcap,.pcapng,application/vnd.tcpdump.pcap,application/octet-stream" required />
+            <label class="check-row"><input id="traffic-dns-names" type="checkbox" /><span>Include DNS question names in this local result. Off by default because names may be sensitive.</span></label>
+            <label class="check-row"><input id="traffic-authorized" type="checkbox" required /><span>I confirm this capture belongs to an environment I own or am explicitly authorized to analyze.</span></label>
+            <button class="button primary" type="submit">Analyze capture</button>
+            <p id="traffic-status" class="form-status"></p>
+          </form>
+          <article class="panel result-panel">
+            <div class="panel-head"><div><p class="eyebrow">Capture summary</p><h3 id="traffic-result-title">No capture analyzed</h3></div><span id="traffic-payload-state" class="risk-badge neutral">Metadata only</span></div>
+            <div id="traffic-summary" class="mini-metrics"></div>
+            <div id="traffic-warnings" class="capture-notice">Uploads are processed in memory under strict byte, packet, row, rate, and concurrency limits.</div>
+          </article>
+        </div>
+
+        <div class="traffic-grid">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Distribution</p><h3>Protocols</h3></div></div>
+            <div id="traffic-protocols" class="table-wrap empty-state">Analyze a capture to see protocol counts.</div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Activity</p><h3>Top endpoints</h3></div></div>
+            <div id="traffic-endpoints" class="table-wrap empty-state">Analyze a capture to see endpoint metadata.</div>
+          </article>
+        </div>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Flow summary</p><h3>Top conversations</h3></div></div>
+          <div id="traffic-conversations" class="table-wrap empty-state">Analyze a capture to see bounded conversations.</div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Packet list</p><h3>Decoded metadata preview</h3></div><span class="count-badge">No payload view</span></div>
+          <div id="traffic-packets" class="table-wrap packet-table empty-state">Analyze a capture to populate the packet preview.</div>
+        </article>
+      </section>
+
       <section id="view-inventory" class="view">
         <article class="panel">
           <div class="panel-head">
-            <div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div>
+            <div><p class="eyebrow">Persistent local data</p><h3>Asset identity and inventory</h3></div>
             <div class="button-row"><button id="inventory-export" class="button primary" type="button">Export CSV</button><button id="inventory-refresh" class="button ghost" type="button">Refresh inventory</button></div>
           </div>
           <div id="inventory-results" class="table-wrap"></div>
