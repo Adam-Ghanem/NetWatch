@@ -34,7 +34,7 @@
     <form id="connect-form" class="connect-card">
       <div class="connect-brand">
         <span class="brand-logo-shell large"><img src="/assets/netwatch-symbol.svg" alt="" /></span>
-        <div><strong>NetWatch</strong><span>NetWatch v1.6 · Enterprise Network Intelligence</span></div>
+        <div><strong>NetWatch</strong><span>NetWatch v1.7 · Device & Traffic Intelligence</span></div>
       </div>
       <p class="eyebrow">Secure company access</p>
       <h1>Connect to NetWatch</h1>
@@ -68,6 +68,7 @@
         <button class="nav-item" data-view="network"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 4v3M20 12h-3M12 20v-3M4 12h3"/></svg></span><span class="nav-label">Network scan</span></button>
         <button class="nav-item" data-view="host"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="nav-label">Host check</span></button>
         <button class="nav-item" data-view="ports"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M18 7l-3 3M17 17H6l3 3M6 17l3-3"/></svg></span><span class="nav-label">Port audit</span></button>
+        <button class="nav-item" data-view="traffic"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h3l2-6 4 12 3-9 2 3h4"/><path d="M4 21h16"/></svg></span><span class="nav-label">Traffic explorer</span></button>
         <button class="nav-item" data-view="inventory"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/></svg></span><span class="nav-label">Inventory</span></button>
         <button class="nav-item" data-view="advisor"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z"/></svg></span><span class="nav-label">Risk advisor</span></button>
         <button class="nav-item" data-view="audit"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 5h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9"/><path d="M9 3H4a1 1 0 0 0-1 1v5h6zM9 12h8M9 16h8"/></svg></span><span class="nav-label">Audit log</span></button>
@@ -248,6 +249,48 @@
             <div id="ports-results" class="table-wrap empty-state">Run an authorized audit to review common services.</div>
           </article>
         </div>
+      </section>
+
+      <section id="view-traffic" class="view">
+        <div class="content-grid form-layout">
+          <form id="traffic-form" class="panel form-panel">
+            <p class="eyebrow">Header-level visibility</p><h3>Capture live traffic metadata</h3>
+            <p class="muted">Wireshark-style traffic review with strict bounds. NetWatch extracts Ethernet/IP/ARP/TCP/UDP/ICMP headers and immediately discards payload bytes.</p>
+            <label for="traffic-interface">Sensor interface</label>
+            <select id="traffic-interface" required><option value="auto">Auto-detect</option></select>
+            <div class="traffic-form-grid">
+              <div><label for="traffic-duration">Duration (seconds)</label><input id="traffic-duration" type="number" min="1" max="15" value="5" required /></div>
+              <div><label for="traffic-limit">Packet limit</label><input id="traffic-limit" type="number" min="1" max="1000" value="250" required /></div>
+              <div><label for="traffic-protocol">Protocol</label><select id="traffic-protocol"><option value="all">All</option><option value="tcp">TCP</option><option value="udp">UDP</option><option value="icmp">ICMP / ICMPv6</option><option value="arp">ARP</option></select></div>
+              <div><label for="traffic-port">Port filter (optional)</label><input id="traffic-port" type="number" min="1" max="65535" placeholder="443" /></div>
+            </div>
+            <label for="traffic-ip">IP filter (optional)</label>
+            <input id="traffic-ip" maxlength="45" placeholder="192.168.1.20" />
+            <label class="check-row"><input id="traffic-authorized" type="checkbox" required /><span>I confirm I am authorized to observe traffic on this sensor interface.</span></label>
+            <div class="button-row"><button class="button primary" type="submit" data-capture-control>Start capture</button><button id="traffic-interface-refresh" class="button ghost" type="button">Refresh interfaces</button></div>
+            <p id="traffic-status" class="form-status">Select an approved sensor interface. Payload content is never returned or saved.</p>
+          </form>
+          <article class="panel result-panel">
+            <div class="panel-head"><div><p class="eyebrow">Capture summary</p><h3 id="traffic-result-title">No capture yet</h3></div><span id="traffic-retention" class="risk-badge low">No payload retention</span></div>
+            <div id="traffic-metrics" class="mini-metrics"></div>
+            <p id="traffic-visibility-note" class="muted traffic-note">A normal interface usually sees only traffic to or from the NetWatch sensor.</p>
+            <div id="traffic-protocols" class="table-wrap empty-state">Start an authorized capture to analyze protocol activity.</div>
+          </article>
+        </div>
+        <div class="split-grid traffic-analysis-grid">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Flow analytics</p><h3>Top conversations</h3></div></div>
+            <div id="traffic-conversations" class="table-wrap empty-state">No conversation data yet.</div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Observed endpoints</p><h3>Device hints</h3></div></div>
+            <div id="traffic-devices" class="table-wrap empty-state">No endpoint evidence yet.</div>
+          </article>
+        </div>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Packet headers</p><h3>Traffic timeline</h3></div><span class="count-badge">Metadata only</span></div>
+          <div id="traffic-packets" class="table-wrap empty-state">No packet headers captured yet.</div>
+        </article>
       </section>
 
       <section id="view-inventory" class="view">

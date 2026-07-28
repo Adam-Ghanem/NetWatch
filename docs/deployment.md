@@ -1,4 +1,4 @@
-# NetWatch v1.6 Deployment Guide
+# NetWatch v1.7 Deployment Guide
 
 NetWatch is designed to run locally on a trusted laptop, workstation, or lab VM connected to an authorized network.
 
@@ -156,6 +156,7 @@ http://127.0.0.1:8501
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI documentation for local development |
 | `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
+| `NETWATCH_MAX_CONCURRENT_CAPTURES` | `1` | Simultaneous traffic-metadata captures, bounded to at most 2 |
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests allowed per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded common-port worker count |
@@ -199,11 +200,11 @@ docker compose down -v
 
 The `-v` option permanently deletes the saved NetWatch database and logs.
 
-Back up the named data volume before upgrades or operational use. The v1.6 migration preserves existing records and adds integrity metadata at schema version 7. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
+Back up the named data volume before upgrades or operational use. The v1.7 migration preserves existing records and adds device-identity fields at schema version 8. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
 
 Admins can also use **Operations → Download database backup** to create a consistent point-in-time SQLite snapshot. The download does not include `.env` role keys. Store it in an approved encrypted location and test restoration on a separate staging copy.
 
-Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve the current database as a rollback copy, validate the candidate with SQLite `PRAGMA integrity_check`, restore according to the deployment owner's volume procedure, then start NetWatch and verify `/api/health/ready`, inventory, policies, maintenance windows, alert cases, audit integrity, and intelligence status. v1.6 provides consistent snapshot creation; it does not automate destructive restore operations or off-host retention.
+Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve the current database as a rollback copy, validate the candidate with SQLite `PRAGMA integrity_check`, restore according to the deployment owner's volume procedure, then start NetWatch and verify `/api/health/ready`, inventory, policies, maintenance windows, alert cases, audit integrity, and intelligence status. v1.7 provides consistent snapshot creation; it does not automate destructive restore operations or off-host retention.
 
 ## Safe operating procedure
 
@@ -211,6 +212,8 @@ Do not overwrite a live database to restore a snapshot. Stop NetWatch, preserve 
 - Keep port `8000` bound to `127.0.0.1` unless deployment security is reviewed.
 - Begin with one known host or a small CIDR such as `/28`.
 - Confirm written or explicit authorization before every assessment.
+- Use Traffic Explorer only on an approved sensor interface; its hard 15-second/1,000-frame limit is not a substitute for network-owner authorization.
+- Treat container/pod packet visibility as local to that network namespace unless an approved mirror/SPAN or sensor design provides broader visibility.
 - Treat open services as evidence requiring validation, not automatic vulnerabilities.
 - Assign owners and criticality to important assets.
 - Review the operations audit log after important checks.

@@ -1,8 +1,8 @@
-# NetWatch v1.6 Security Review
+# NetWatch v1.7 Security Review
 
 ## Scope
 
-This review covers NetWatch v1.6: one FastAPI process serving the responsive dashboard, optional OIDC identity verification, local role-key fallback, integrity-protected audit records, probes, metrics, bounded scheduler, case workflow, deterministic local advisor, and optional server-side intelligence gateway.
+This review covers NetWatch v1.7: one FastAPI process serving the responsive dashboard, optional OIDC identity verification, local role-key fallback, integrity-protected audit records, probes, metrics, device-identity correlation, bounded payload-free traffic metadata capture, scheduler, case workflow, deterministic local advisor, and optional server-side intelligence gateway.
 
 ## Threat model
 
@@ -81,7 +81,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Audit records can contain individual actor, role, authentication method, request ID, action, target, outcome, and short details but never raw keys or bearer tokens.
 - New audit records use a separate server-only HMAC key, chained hashes, and a keyed head checkpoint. Readiness and privileged operations verify every retained protected row and pause on changes, broken links, unprotected suffixes, or protected-tail deletion. Pre-v1.6 rows remain explicit legacy evidence.
 - Individual audit identities are Admin-only; generated reports use identity-redacted audit rows.
-- Existing databases migrate in place at schema version 7.
+- Existing databases migrate in place at schema version 8, adding nullable/defaulted device-identity fields without rewriting historical evidence.
 - Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
 - A resolution note is required before a case can be closed; later recurrence creates a new open case.
 - Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
@@ -113,7 +113,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 ### Container controls
 
 - The container runs as a non-root user.
-- Docker Compose drops all Linux capabilities and adds only `NET_RAW` for ping.
+- Docker Compose drops all Linux capabilities and adds only `NET_RAW` for approved ICMP checks and bounded packet-header capture.
 - `no-new-privileges` is enabled.
 - Port `8000` is published only on `127.0.0.1`.
 - Local data is persisted in named volumes.
@@ -125,6 +125,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Optional local role keys are shared break-glass secrets, not individual identity.
 - Localhost binding does not protect against every malicious process running under the same user account.
 - ICMP and TCP observations can be incomplete or misleading due to filtering and transient network conditions.
+- MAC/OUI and hostname evidence can identify a vendor or family but cannot reliably prove an exact hardware model; private/randomized MAC addresses intentionally reduce attribution.
+- Normal switched, bridged-container, and pod interfaces do not provide automatic segment-wide traffic visibility. Broader visibility requires a separately reviewed mirror/SPAN or sensor deployment.
+- Traffic Explorer returns header metadata to the authorized browser session. Payload bytes are discarded, but IP/MAC/port metadata remains sensitive and must be handled as internal network evidence.
 - The in-memory rate limiter resets when the process restarts and is not suitable for a multi-worker deployment.
 - SQLite and the current schema are designed for a trusted local pilot, not high-concurrency multi-tenant use.
 - The retained audit chain detects changes and protected-tail deletion while its separate key remains protected, but bounded local retention intentionally removes old prefixes and is not a substitute for centralized append-only export.
@@ -161,4 +164,4 @@ Do not expose the default service to other networks without adding:
 
 ## Review conclusion
 
-NetWatch v1.6 is appropriate as a reviewed single-instance internal deployment foundation when operated according to the enterprise guide. Optional intelligence remains advisory and requires provider billing, privacy, and retention review. NetWatch is not approved as-is for direct Internet exposure, unreviewed multi-tenancy, or multi-replica use against SQLite.
+NetWatch v1.7 is appropriate as a reviewed single-instance internal deployment foundation when operated according to the enterprise guide. Device identity and Traffic Explorer results remain evidence requiring owner validation. Optional intelligence remains advisory and requires provider billing, privacy, and retention review. NetWatch is not approved as-is for direct Internet exposure, unreviewed multi-tenancy, or multi-replica use against SQLite.

@@ -18,6 +18,7 @@ data:
   NETWATCH_OIDC_MAX_TOKEN_AGE_SECONDS: "3600"
   NETWATCH_SCHEDULER_ENABLED: "false"
   NETWATCH_MAX_CONCURRENT_SCANS: "1"
+  NETWATCH_MAX_CONCURRENT_CAPTURES: "1"
   NETWATCH_RATE_LIMIT_REQUESTS: "60"
   NETWATCH_RATE_LIMIT_WINDOW_SECONDS: "60"
 ---
@@ -61,7 +62,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: netwatch
-          image: your-registry.example/netwatch:1.6.0
+          image: your-registry.example/netwatch:1.7.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

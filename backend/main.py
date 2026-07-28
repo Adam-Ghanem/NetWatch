@@ -48,6 +48,9 @@ from config import (
     APP_VERSION,
     DEFAULT_API_KEY_PLACEHOLDER,
     MAINTENANCE_MAX_DURATION_DAYS,
+    MAX_CAPTURE_PACKETS,
+    MAX_CAPTURE_SECONDS,
+    MAX_CONCURRENT_CAPTURES,
     MAX_CONCURRENT_SCANS,
     MAX_INVENTORY_ROWS,
     MIN_API_KEY_LENGTH,
@@ -119,6 +122,14 @@ from port_scanner import scan_ports
 from report_builder import build_html_report, build_markdown_report
 from risk_engine import summarize_exposure, top_recommendations
 from security import validate_cidr, validate_target_ip
+from traffic_capture import (
+    CAPTURE_PROTOCOLS,
+    CapturePermissionError,
+    CaptureUnavailableError,
+    build_capture_filter,
+    capture_interfaces,
+    capture_traffic,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
@@ -242,6 +253,7 @@ _MAX_INTELLIGENCE_RATE_LIMIT_BUCKETS = 10_000
 _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
+_capture_slots = threading.BoundedSemaphore(MAX_CONCURRENT_CAPTURES)
 _intelligence_rate_lock = threading.Lock()
 _intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
 _intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
@@ -264,6 +276,7 @@ class AuthContext:
         return {
             "read": True,
             "scan": self.role in {"admin", "operator"},
+            "capture": self.role in {"admin", "operator"},
             "manage_assets": self.role == "admin",
             "manage_alerts": self.role in {"admin", "operator"},
             "manage_operations": self.role == "admin",
@@ -292,6 +305,19 @@ class HostRequest(BaseModel):
     ip: str = Field(default="192.168.1.1", min_length=7, max_length=45)
     authorized: bool = Field(
         default=False, description="Confirm explicit authorization for this check."
+    )
+
+
+class TrafficCaptureRequest(BaseModel):
+    interface: str = Field(default="auto", min_length=1, max_length=64)
+    duration_seconds: int = Field(default=5, ge=1, le=MAX_CAPTURE_SECONDS)
+    max_packets: int = Field(default=250, ge=1, le=MAX_CAPTURE_PACKETS)
+    protocol: Literal["all", "tcp", "udp", "icmp", "arp"] = "all"
+    ip_filter: str = Field(default="", max_length=45)
+    port_filter: int | None = Field(default=None, ge=1, le=65_535)
+    authorized: bool = Field(
+        default=False,
+        description="Confirm explicit authorization for metadata-only traffic capture.",
     )
 
 
@@ -650,6 +676,17 @@ def _intelligence_slot() -> Iterator[None]:
         _intelligence_slots.release()
 
 
+@contextmanager
+def _capture_slot() -> Iterator[None]:
+    acquired = _capture_slots.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(status_code=429, detail="Another traffic capture is already running.")
+    try:
+        yield
+    finally:
+        _capture_slots.release()
+
+
 def _intelligence_snapshot() -> dict[str, Any]:
     inventory_rows = asset_inventory()
     return build_deidentified_snapshot(
@@ -969,7 +1006,22 @@ def check_host(
     scan_run_id = add_scan_run("host_profile", target, msg, status=status)
     if result.online:
         upsert_hosts(
-            [{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}],
+            [
+                {
+                    "IP Address": result.ip_address,
+                    "Status": "Online",
+                    "Details": result.notes,
+                    "Hostname": result.hostname,
+                    "MAC Address": result.mac_address,
+                    "Manufacturer": result.manufacturer,
+                    "Device Name": result.device_name,
+                    "Device Type": result.device_type,
+                    "Device Family": result.device_family,
+                    "Identity Confidence": result.identity_confidence,
+                    "Identity Source": result.identity_source,
+                    "Randomized MAC": result.randomized_mac,
+                }
+            ],
             source="host check",
             scan_run_id=scan_run_id,
         )
@@ -1014,6 +1066,68 @@ def audit_ports(
         "exposure": exposure.__dict__,
         "recommendations": top_recommendations(ports),
     }
+
+
+@app.get("/api/traffic/interfaces")
+def traffic_interfaces(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
+    interfaces = capture_interfaces()
+    return {
+        "count": len(interfaces),
+        "interfaces": interfaces,
+        "protocols": list(CAPTURE_PROTOCOLS),
+        "max_duration_seconds": MAX_CAPTURE_SECONDS,
+        "max_packets": MAX_CAPTURE_PACKETS,
+        "payload_retained": False,
+    }
+
+
+@app.post("/api/traffic/capture")
+def capture_packet_metadata(
+    payload: TrafficCaptureRequest,
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> dict[str, Any]:
+    _require_authorization(payload.authorized)
+    try:
+        capture_filter = build_capture_filter(
+            protocol=payload.protocol,
+            ip_address=payload.ip_filter,
+            port=payload.port_filter,
+        )
+        with _capture_slot():
+            result = capture_traffic(
+                interface=payload.interface,
+                duration_seconds=payload.duration_seconds,
+                max_packets=payload.max_packets,
+                capture_filter=capture_filter,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CapturePermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Live capture needs NET_RAW/root packet access on the NetWatch sensor. "
+                "No packet data was retained."
+            ),
+        ) from exc
+    except CaptureUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Live packet metadata capture is unavailable on the selected interface.",
+        ) from exc
+
+    record_audit_event(
+        context.role,
+        "traffic_metadata_capture",
+        str(result["interface"]),
+        "completed",
+        (
+            f"Captured {result['captured_packets']} packet header(s) and "
+            f"{result['captured_bytes']} byte(s) of frame-size evidence; payload_retained=false."
+        ),
+        **context.audit_fields,
+    )
+    return result
 
 
 @app.get("/api/inventory", dependencies=[Depends(require_api_access)])

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 from config import MAX_WORKERS
+from device_identity import enrich_host_rows
 from ping_checker import ping_host
 from security import validate_cidr
 
@@ -34,4 +35,5 @@ def scan_network(cidr: str, max_workers: int = MAX_WORKERS) -> List[dict]:
             if online:
                 results.append({"IP Address": ip, "Status": "Online", "Details": message})
 
-    return sorted(results, key=lambda row: ipaddress.ip_address(row["IP Address"]))
+    ordered = sorted(results, key=lambda row: ipaddress.ip_address(row["IP Address"]))
+    return enrich_host_rows(ordered)

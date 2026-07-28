@@ -17,7 +17,7 @@ The deterministic Risk Advisor does not send scan results to an external service
 
 ## Optional NetWatch Intelligence
 
-NetWatch v1.6 keeps the explicitly requested second-review path beside the local advisor. The browser never talks to the provider and never receives `OPENAI_API_KEY`. The backend builds a bounded snapshot containing aggregate counts, known common-service exposure, de-identified case references, and operational state. It excludes IP addresses, CIDRs, hostnames, owners, departments, locations, notes, raw event details, prompts, and secrets.
+NetWatch v1.7 keeps the explicitly requested second-review path beside the local advisor. The browser never talks to the provider and never receives `OPENAI_API_KEY`. The backend builds a bounded snapshot containing aggregate counts, known common-service exposure, de-identified case references, and operational state. It excludes IP addresses, CIDRs, hostnames, MAC addresses, device identities, traffic metadata, owners, departments, locations, notes, raw event details, prompts, and secrets.
 
 The provider contract:
 

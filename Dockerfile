@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends iputils-ping \
+    && apt-get install -y --no-install-recommends iproute2 iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system netwatch \
     && useradd --system --gid netwatch --create-home --home-dir /home/netwatch netwatch

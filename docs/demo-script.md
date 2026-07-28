@@ -1,8 +1,8 @@
-# NetWatch v1.6 Demo Script
+# NetWatch v1.7 Demo Script
 
 ## 1. Introduction
 
-"NetWatch is a local-first defensive network visibility platform. It helps an authorized internal team discover local hosts, track meaningful changes, review common service exposure, assign accountable business context, operate approved scan policies, pause work during maintenance, manage alert cases against local SLAs, create consistent snapshots, and export reports and metrics."
+"NetWatch is a local-first defensive network visibility platform. It helps an authorized internal team discover local hosts, correlate MAC/manufacturer/device identity evidence, inspect a bounded payload-free traffic metadata view, track meaningful changes, review common service exposure, assign accountable business context, operate approved scan policies, pause work during maintenance, manage alert cases against local SLAs, create consistent snapshots, and export reports and metrics."
 
 ## 2. Explain the safety boundary
 
@@ -124,4 +124,4 @@ Explain that reports can contain sensitive internal network information and must
 
 ## 14. Close
 
-"NetWatch v1.6 adds verified OIDC identity, individual audit attribution, HMAC integrity, probes, and request observability for a reviewed internal deployment. Its SQLite store, in-process scheduler, application AI budget, and snapshot download are not multi-replica coordination, provider billing control, an external incident platform, or automated disaster recovery; production still requires an approved identity-aware TLS gateway, managed secrets, centralized append-only log export, monitoring, encrypted off-host backups with restore drills, and deployment-specific security, privacy, and AI reviews."
+"NetWatch v1.7 adds device-identity evidence and bounded payload-free traffic metadata to the verified OIDC identity, individual audit attribution, HMAC integrity, probes, and request observability foundation. Its SQLite store, in-process scheduler, application AI budget, and snapshot download are not multi-replica coordination, provider billing control, an external incident platform, or automated disaster recovery; production still requires an approved identity-aware TLS gateway, managed secrets, centralized append-only log export, monitoring, encrypted off-host backups with restore drills, and deployment-specific security, privacy, and AI reviews."

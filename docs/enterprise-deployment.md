@@ -1,6 +1,6 @@
 # Enterprise deployment guide
 
-NetWatch v1.6 provides enterprise identity, audit-integrity, observability, and container controls for a reviewed internal deployment. The current persistence and scheduler design is intentionally single-instance; this guide does not claim multi-replica high availability.
+NetWatch v1.7 provides enterprise identity, audit-integrity, device-identity correlation, bounded traffic-metadata visibility, observability, and container controls for a reviewed internal deployment. The current persistence and scheduler design is intentionally single-instance; this guide does not claim multi-replica high availability.
 
 ## Recommended topology
 
@@ -72,7 +72,7 @@ Alert on readiness failures, HTTP 5xx growth, overdue/critical unresolved cases,
 `deploy/kubernetes.yaml` provides a starting point with:
 
 - one replica and `Recreate` updates for the current SQLite boundary;
-- non-root execution, read-only root filesystem, no privilege escalation, runtime-default seccomp, and only `NET_RAW` added for approved ICMP checks;
+- non-root execution, read-only root filesystem, no privilege escalation, runtime-default seccomp, and only `NET_RAW` added for approved ICMP checks and bounded packet-header capture;
 - disabled service-account token mounting;
 - CPU/memory requests and limits;
 - liveness/readiness probes;
@@ -89,7 +89,7 @@ Replace the image, host/origin, issuer, audience, JWKS URL, groups, StorageClass
 4. Deploy to staging behind the identity gateway.
 5. Test Viewer, Operator, Admin, unmapped, expired-token, wrong-audience, and break-glass paths.
 6. Verify `/api/health/ready`, Prometheus scraping, request correlation, and audit-chain status.
-7. Run a bounded approved scan and verify policy, maintenance, case, report, backup, and optional AI workflows.
+7. Run a bounded approved scan and capture on a staging sensor interface; verify device identity, no-payload behavior, policy, maintenance, case, report, backup, and optional AI workflows.
 8. Complete the organization's security, privacy, data-retention, AI, and disaster-recovery reviews before production.
 
 ## Current scale boundary
