@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+import re
 import subprocess
 from typing import Tuple
 
@@ -42,7 +43,19 @@ def ping_host(ip: str, timeout: int = 3) -> Tuple[bool, str]:
     try:
         result = ping_host_raw(ip, timeout=timeout)
         if result.returncode == 0:
-            return True, "Host is online"
+            output = f"{result.stdout}\n{result.stderr}"
+            evidence = ["Host is online"]
+            ttl_match = re.search(r"ttl[= ]([0-9]+)", output, flags=re.IGNORECASE)
+            latency_match = re.search(
+                r"time[=<]([0-9]+(?:\.[0-9]+)?)\s*ms",
+                output,
+                flags=re.IGNORECASE,
+            )
+            if ttl_match:
+                evidence.append(f"TTL={ttl_match.group(1)}")
+            if latency_match:
+                evidence.append(f"latency={latency_match.group(1)} ms")
+            return True, "; ".join(evidence)
         message = result.stderr.strip() or "Host is offline or blocking ICMP"
         return False, message
     except subprocess.TimeoutExpired:

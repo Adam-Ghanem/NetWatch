@@ -715,6 +715,43 @@ tbody tr:hover { background: #141f30; }
 .skeleton-block { background: linear-gradient(90deg, #172235, #202c40, #172235); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 
+.traffic-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+.traffic-grid .panel { margin-top: 0; }
+.capture-file {
+  min-height: 64px;
+  padding: 11px;
+  border-style: dashed;
+  color: var(--muted);
+  background: rgba(10, 19, 33, 0.74);
+}
+.capture-file::file-selector-button {
+  margin-right: 12px;
+  padding: 9px 12px;
+  border: 1px solid rgba(192, 132, 252, 0.3);
+  border-radius: 8px;
+  color: #f5efff;
+  background: rgba(126, 72, 204, 0.34);
+  cursor: pointer;
+}
+.capture-notice {
+  margin-top: 15px;
+  padding: 13px 14px;
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(22, 101, 52, 0.08);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+.capture-notice p { margin: 0; }
+.capture-notice p + p { margin-top: 6px; }
+.packet-table table { min-width: 1180px; }
+
 @media (max-width: 1180px) {
   .sidebar { width: 78px; padding-inline: 11px; }
   .sidebar::after, .brand > div, .nav::before, .nav-label, .health-line div, .sidebar-foot .button { display: none; }
@@ -730,7 +767,7 @@ tbody tr:hover { background: #141f30; }
 }
 
 @media (max-width: 920px) {
-  .soc-top-grid, .soc-analysis-grid, .soc-data-grid, .split-grid, .content-grid.form-layout { grid-template-columns: 1fr; }
+  .soc-top-grid, .soc-analysis-grid, .soc-data-grid, .split-grid, .content-grid.form-layout, .traffic-grid { grid-template-columns: 1fr; }
   .risk-score-panel { min-height: 280px; }
   .form-panel { position: static; }
   .advisor-grid { grid-template-columns: 1fr; }

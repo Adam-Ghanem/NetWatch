@@ -139,7 +139,7 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-        assert version == 7
+        assert version == 9
     assert {
         "network_observations",
         "asset_events",
@@ -151,6 +151,46 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
         "intelligence_events",
         "intelligence_daily_usage",
     }.issubset(tables)
+
+
+def test_network_identity_is_persisted_in_inventory_and_observations(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.record_network_scan(
+        "192.168.1.0/30",
+        [
+            {
+                "IP Address": "192.168.1.1",
+                "Status": "Online",
+                "Details": "Host is online; TTL=64",
+                "Device Name": "router.local",
+                "Hostname": "router.local",
+                "Device Type": "Router / access point",
+                "Manufacturer": "TP-Link",
+                "Device Model": "Archer family",
+                "Operating System": "Network appliance OS (probable)",
+                "Identity Confidence": "High",
+                "Identity Evidence": "Reverse DNS: router.local; Observed TTL: 64",
+                "MAC Address": "00:11:22:33:44:55",
+                "MAC Address Type": "Globally assigned",
+                "TTL": 64,
+            }
+        ],
+    )
+
+    asset = inventory_store.asset_inventory()[0]
+    observation = inventory_store.recent_network_observations()[0]
+
+    assert asset["device_name"] == "router.local"
+    assert asset["device_type"] == "Router / access point"
+    assert asset["manufacturer"] == "TP-Link"
+    assert asset["device_model"] == "Archer family"
+    assert asset["mac_address_type"] == "Globally assigned"
+    assert asset["operating_system"] == "Network appliance OS (probable)"
+    assert asset["observed_ttl"] == 64
+    assert observation["device_name"] == "router.local"
+    assert observation["manufacturer"] == "TP-Link"
+    assert observation["mac_address"] == "00:11:22:33:44:55"
+    assert observation["identity_confidence"] == "High"
 
 
 def test_change_history_retention_is_bounded(monkeypatch, tmp_path):

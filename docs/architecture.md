@@ -21,8 +21,13 @@ FastAPI application (`backend/main.py`)
           +--> Host discovery and service review
           |      - `ping_checker.py`
           |      - `network_scanner.py`
+          |      - local device identity (`device_identity.py`)
           |      - `host_profiler.py`
           |      - `port_scanner.py`
+          |
+          +--> Offline traffic inspection
+          |      - bounded PCAP/PCAPNG parsing (`packet_analyzer.py`)
+          |      - metadata-only results; no payload persistence
           |
           +--> Exposure analysis
           |      - `risk_engine.py`
@@ -61,7 +66,9 @@ It provides:
 - Overview metrics and recent checks
 - Authorized local CIDR discovery
 - Single-host profiling
+- Local manufacturer, model-family, MAC-type, and confidence evidence
 - Common TCP service audit
+- Operator/Admin-only bounded PCAP/PCAPNG metadata inspection
 - Persistent asset inventory
 - Asset ownership, department, location, criticality, and notes
 - Scan-to-scan asset change history
@@ -94,8 +101,10 @@ It is not the default deployment path.
 - `frontend/app.js`: API client, dashboard state, scan workflows, rendering, and report downloads.
 - `security.py`: explicit local IPv4 validation, scan-size limits, and service review guidance.
 - `network_scanner.py`: local CIDR host discovery.
-- `host_profiler.py`: latency, TTL, hostname, and cautious OS hints.
+- `device_identity.py`: local-only name, same-segment MAC, IEEE OUI, manufacturer, model-family, device-type, and cautious OS evidence.
+- `host_profiler.py`: latency, TTL, hostname, device identity, and cautious OS hints.
 - `port_scanner.py`: bounded concurrent TCP service review.
+- `packet_analyzer.py`: bounded PCAP/PCAPNG protocol and conversation metadata parsing without raw-payload output.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
 - `ai_advisor.py`: de-identified snapshot construction, fixed defensive provider contract, strict response validation, key-separated safety identifiers, redirect refusal, and safe upstream error mapping.
@@ -118,7 +127,7 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 7 with individual integrity-protected audit metadata, company asset context, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
+- Schema version 9 with individual integrity-protected audit metadata, device-manufacturer/model/MAC evidence, company asset context, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
 - Bounded change-event, observation, audit, alert, policy, maintenance-window, and intelligence-event retention
 - Named Docker volumes in the default Compose deployment
 
@@ -151,6 +160,8 @@ NetWatch is intended for approved local environments and applies these controls:
 - Explicit RFC1918, loopback, and link-local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
+- Same-segment MAC attribution only, private/randomized-MAC labeling, and local-only IEEE OUI lookup
+- Offline PCAP/PCAPNG inspection only, with explicit authorization, Operator/Admin access, byte/packet/row/concurrency limits, no raw-payload output or persistence, and DNS names hidden by default
 - Rate limiting per authenticated identity and endpoint
 - Individual audit identities are Admin-only; reports use identity-redacted audit rows
 - Separate-key HMAC audit integrity with a keyed head checkpoint, a five-second maximum public readiness cache, and fresh fail-closed verification for privileged operations

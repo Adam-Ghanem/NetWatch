@@ -43,6 +43,7 @@ const titles = {
   network: 'Network scan',
   host: 'Host check',
   ports: 'Port audit',
+  traffic: 'Traffic inspector',
   inventory: 'Inventory',
   advisor: 'Risk advisor',
   audit: 'Audit log',
@@ -55,6 +56,7 @@ const commandCatalog = [
   { id: 'network', label: 'Start a network scan', description: 'Open the authorization-first private network discovery form.', view: 'network', marker: 'NS', tag: 'Scan', keywords: 'cidr discover hosts assets' },
   { id: 'host', label: 'Check one host', description: 'Profile an approved device without starting a broad scan.', view: 'host', marker: 'HC', tag: 'Scan', keywords: 'ip device ping profile' },
   { id: 'ports', label: 'Audit TCP services', description: 'Review the bounded common-service exposure list.', view: 'ports', marker: 'PA', tag: 'Scan', keywords: 'ports tcp services exposure' },
+  { id: 'traffic', label: 'Inspect a packet capture', description: 'Analyze bounded PCAP or PCAPNG metadata without retaining payloads.', view: 'traffic', marker: 'TI', tag: 'Analysis', keywords: 'wireshark packets pcap pcapng protocols traffic' },
   { id: 'inventory', label: 'Open asset inventory', description: 'Review monitored devices, ownership, and business context.', view: 'inventory', marker: 'AI', tag: 'Data', keywords: 'assets devices owner department' },
   { id: 'advisor', label: 'Open risk advisor', description: 'Review evidence-backed priorities and recommended next steps.', view: 'advisor', marker: 'RA', tag: 'Analysis', keywords: 'priority advice intelligence' },
   { id: 'operations', label: 'Open operations', description: 'Manage approved policies, maintenance, alerts, and backups.', view: 'operations', marker: 'OP', tag: 'Module', keywords: 'alerts policies maintenance backup' },
@@ -137,6 +139,15 @@ function localTimestamp(value) {
   if (!value) return '—';
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? text(value) : parsed.toLocaleString();
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const amount = bytes / (1024 ** index);
+  return `${amount >= 10 || index === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`;
 }
 
 function updateDataFreshness() {
@@ -420,7 +431,7 @@ function applyRoleAccess() {
   $('#command-trigger').disabled = !Boolean(state.role);
 
   const canScan = Boolean(state.capabilities.scan);
-  ['#network-form', '#host-form', '#ports-form'].forEach((selector) => {
+  ['#network-form', '#host-form', '#ports-form', '#traffic-form'].forEach((selector) => {
     $$('input, button', $(selector)).forEach((control) => { control.disabled = !canScan; });
   });
   $$('[data-scan-control]').forEach((control) => { control.disabled = !canScan; });
@@ -551,7 +562,15 @@ async function loadInventory() {
   ]);
   state.assets = inventoryPayload.assets || [];
   renderTable($('#inventory-results'), state.assets, [
+    { key: 'device_name', label: 'Device name' },
+    { key: 'manufacturer', label: 'Manufacturer' },
+    { key: 'device_model', label: 'Model / family' },
+    { key: 'device_type', label: 'Device type' },
+    { key: 'operating_system', label: 'Operating system' },
+    { key: 'identity_confidence', label: 'ID confidence', chip: true },
     { key: 'ip_address', label: 'IP address' },
+    { key: 'mac_address', label: 'MAC address' },
+    { key: 'mac_address_type', label: 'MAC type', chip: true },
     { key: 'owner', label: 'Owner' },
     { key: 'department', label: 'Department' },
     { key: 'location', label: 'Location' },
@@ -1055,7 +1074,7 @@ function renderCommandResults(query = '') {
 
     const tag = document.createElement('span');
     tag.className = 'command-item-tag';
-    const isScanModule = ['network', 'host', 'ports'].includes(command.view);
+    const isScanModule = ['network', 'host', 'ports', 'traffic'].includes(command.view);
     if (command.view === state.view) tag.textContent = 'Current';
     else if (isScanModule && !state.capabilities.scan) tag.textContent = 'View only';
     else tag.textContent = command.tag;
@@ -1265,9 +1284,17 @@ $('#network-form').addEventListener('submit', async (event) => {
       { label: 'Not observed', value: (changes.not_observed_assets || []).length, note: 'Verify manually' },
     ]);
     renderTable($('#network-results'), payload.hosts || [], [
+      { key: 'Device Name', label: 'Device name' },
+      { key: 'Manufacturer', label: 'Manufacturer' },
+      { key: 'Device Model', label: 'Model / family' },
+      { key: 'Device Type', label: 'Device type' },
+      { key: 'Operating System', label: 'Operating system' },
+      { key: 'Identity Confidence', label: 'Confidence', chip: true },
       { key: 'IP Address', label: 'IP address' },
+      { key: 'MAC Address', label: 'MAC address' },
+      { key: 'MAC Address Type', label: 'MAC type', chip: true },
       { key: 'Status', label: 'Status', chip: true },
-      { key: 'Details', label: 'Detection details' },
+      { key: 'Identity Evidence', label: 'Identity evidence' },
     ], 'No hosts replied. Active hosts may be blocking ICMP.');
     setFormStatus('network-status', payload.summary, 'success');
     showToast(payload.summary);
@@ -1291,18 +1318,112 @@ $('#host-form').addEventListener('submit', async (event) => {
     $('#host-result-title').textContent = result.ip_address;
     renderMiniMetrics($('#host-metrics'), [
       { label: 'Status', value: result.online ? 'Online' : 'No reply', note: 'ICMP result' },
-      { label: 'Latency', value: result.latency_ms === null ? '—' : `${result.latency_ms} ms`, note: 'Round trip' },
-      { label: 'TTL', value: result.ttl, note: 'Observed value' },
-      { label: 'Hostname', value: result.hostname, note: 'Reverse DNS' },
+      { label: 'Device', value: result.device_name, note: result.hostname === '-' ? 'Name unresolved' : 'Resolved name' },
+      { label: 'Manufacturer', value: result.manufacturer, note: result.device_model },
+      { label: 'Type', value: result.device_type, note: 'Best-effort classification' },
+      { label: 'Operating system', value: result.os_hint, note: `${result.identity_confidence} confidence` },
     ]);
     renderDetails($('#host-details'), [
-      ['Operating-system hint', result.os_hint],
+      ['Hostname', result.hostname],
+      ['Model / family', result.device_model],
+      ['MAC address', result.mac_address],
+      ['MAC type', result.mac_address_type],
+      ['Observed TTL', result.ttl === null ? '—' : result.ttl],
+      ['Latency', result.latency_ms === null ? '—' : `${result.latency_ms} ms`],
+      ['Identity evidence', result.identity_evidence],
       ['Observation', result.notes],
       ['Target', result.ip_address],
     ]);
     setFormStatus('host-status', result.notes, result.online ? 'success' : 'error');
   } catch (error) {
     setFormStatus('host-status', error.message, 'error');
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+$('#traffic-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.submitter;
+  const file = $('#traffic-file').files[0];
+  if (!file) {
+    setFormStatus('traffic-status', 'Choose a .pcap or .pcapng file first.', 'error');
+    return;
+  }
+  setBusy(button, true, 'Analyzing…');
+  setFormStatus('traffic-status', 'Reading bounded packet metadata in memory…');
+  try {
+    const query = new URLSearchParams({
+      authorized: String($('#traffic-authorized').checked),
+      include_dns_names: String($('#traffic-dns-names').checked),
+    });
+    const payload = await apiJson(`/api/traffic/analyze?${query.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    $('#traffic-result-title').textContent = `${file.name} · ${String(payload.format).toUpperCase()}`;
+    $('#traffic-payload-state').textContent = payload.payload_retained ? 'Payload retained' : 'Metadata only';
+    $('#traffic-payload-state').className = `risk-badge ${payload.payload_retained ? 'high' : 'low'}`;
+    renderMiniMetrics($('#traffic-summary'), [
+      { label: 'Packets analyzed', value: payload.packets_analyzed, note: `${payload.packets_returned} table rows` },
+      { label: 'Observed bytes', value: formatBytes(payload.bytes_observed), note: 'Original frame lengths' },
+      { label: 'Duration', value: `${Number(payload.duration_seconds || 0).toFixed(3)} s`, note: (payload.link_types || []).join(', ') || 'Unknown link type' },
+      { label: 'Protocols', value: (payload.protocols || []).length, note: payload.truncated ? 'Bounded preview' : 'Complete upload' },
+    ]);
+    renderTable($('#traffic-protocols'), payload.protocols || [], [
+      { key: 'protocol', label: 'Protocol', chip: true },
+      { key: 'packets', label: 'Packets' },
+      { key: 'bytes', label: 'Bytes' },
+    ], 'No protocol metadata was decoded.');
+    renderTable($('#traffic-endpoints'), payload.top_endpoints || [], [
+      { key: 'endpoint', label: 'Endpoint' },
+      { key: 'packets', label: 'Packets' },
+      { key: 'bytes', label: 'Bytes' },
+    ], 'No endpoint metadata was decoded.');
+    renderTable($('#traffic-conversations'), payload.top_conversations || [], [
+      { key: 'source', label: 'Endpoint A' },
+      { key: 'destination', label: 'Endpoint B' },
+      { key: 'protocol', label: 'Protocol', chip: true },
+      { key: 'packets', label: 'Packets' },
+      { key: 'bytes', label: 'Bytes' },
+    ], 'No conversations were decoded.');
+    renderTable($('#traffic-packets'), payload.packets || [], [
+      { key: 'number', label: 'No.' },
+      { key: 'time_seconds', label: 'Time (s)' },
+      { key: 'source', label: 'Source' },
+      { key: 'destination', label: 'Destination' },
+      { key: 'source_mac', label: 'Source MAC' },
+      { key: 'destination_mac', label: 'Destination MAC' },
+      { key: 'protocol', label: 'Protocol', chip: true },
+      { key: 'source_port', label: 'Src port' },
+      { key: 'destination_port', label: 'Dst port' },
+      { key: 'service', label: 'Service' },
+      { key: 'length', label: 'Length' },
+      { key: 'info', label: 'Metadata' },
+    ], 'No packet rows were returned.');
+
+    const warnings = $('#traffic-warnings');
+    warnings.replaceChildren();
+    const warningItems = payload.warnings || [];
+    if (!warningItems.length) {
+      warnings.textContent = 'Packet payload bytes were discarded after metadata analysis.';
+    } else {
+      warningItems.forEach((warning) => {
+        const item = document.createElement('p');
+        item.textContent = warning;
+        warnings.appendChild(item);
+      });
+    }
+    setFormStatus(
+      'traffic-status',
+      `Analyzed ${payload.packets_analyzed} packet(s); raw payloads were not returned or stored.`,
+      'success',
+    );
+    markDataUpdated();
+    showToast('Capture metadata analyzed safely.');
+  } catch (error) {
+    setFormStatus('traffic-status', error.message, 'error');
   } finally {
     setBusy(button, false);
   }

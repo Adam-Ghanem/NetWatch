@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Res
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from advisory_engine import advice_to_markdown, build_advice
 from ai_advisor import (
@@ -48,6 +49,10 @@ from config import (
     APP_VERSION,
     DEFAULT_API_KEY_PLACEHOLDER,
     MAINTENANCE_MAX_DURATION_DAYS,
+    MAX_CAPTURE_BYTES,
+    MAX_CAPTURE_PACKETS,
+    MAX_CAPTURE_ROWS,
+    MAX_CONCURRENT_CAPTURE_ANALYSES,
     MAX_CONCURRENT_SCANS,
     MAX_INVENTORY_ROWS,
     MIN_API_KEY_LENGTH,
@@ -115,6 +120,7 @@ from operations_store import (
     update_operation_alert,
     update_scan_policy,
 )
+from packet_analyzer import CaptureFormatError, analyze_capture
 from port_scanner import scan_ports
 from report_builder import build_html_report, build_markdown_report
 from risk_engine import summarize_exposure, top_recommendations
@@ -242,6 +248,7 @@ _MAX_INTELLIGENCE_RATE_LIMIT_BUCKETS = 10_000
 _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
+_capture_slots = threading.BoundedSemaphore(MAX_CONCURRENT_CAPTURE_ANALYSES)
 _intelligence_rate_lock = threading.Lock()
 _intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
 _intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
@@ -621,7 +628,10 @@ def _require_authorization(authorized: bool) -> None:
     if not authorized:
         raise HTTPException(
             status_code=403,
-            detail="Explicit authorization confirmation is required for network checks.",
+            detail=(
+                "Explicit authorization confirmation is required for "
+                "network checks and captures."
+            ),
         )
 
 
@@ -634,6 +644,50 @@ def _scan_slot() -> Iterator[None]:
         yield
     finally:
         _scan_slots.release()
+
+
+@contextmanager
+def _capture_slot() -> Iterator[None]:
+    acquired = _capture_slots.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(
+            status_code=429,
+            detail="Another capture analysis is already running.",
+        )
+    try:
+        yield
+    finally:
+        _capture_slots.release()
+
+
+async def _bounded_capture_body(request: Request) -> bytes:
+    encodings = request.headers.get("content-encoding", "identity").strip().lower()
+    if encodings not in {"", "identity"}:
+        raise HTTPException(status_code=415, detail="Compressed capture uploads are not accepted.")
+
+    raw_lengths = [
+        value for key, value in request.scope.get("headers", []) if key.lower() == b"content-length"
+    ]
+    if len(raw_lengths) > 1:
+        raise HTTPException(status_code=400, detail="Ambiguous Content-Length headers.")
+    if raw_lengths:
+        try:
+            declared_length = int(raw_lengths[0].decode("ascii"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header.") from exc
+        if declared_length < 0:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header.")
+        if declared_length > MAX_CAPTURE_BYTES:
+            raise HTTPException(status_code=413, detail="Capture exceeds the upload limit.")
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_CAPTURE_BYTES:
+            raise HTTPException(status_code=413, detail="Capture exceeds the upload limit.")
+        body.extend(chunk)
+    if not body:
+        raise HTTPException(status_code=400, detail="Choose a non-empty PCAP or PCAPNG file.")
+    return bytes(body)
 
 
 @contextmanager
@@ -964,12 +1018,30 @@ def check_host(
         result = profile_host(target)
     status = "online" if result.online else "offline"
     msg = (
-        f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; hostname={result.hostname}"
+        f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; "
+        f"hostname={result.hostname}; device={result.device_name}; os={result.os_hint}"
     )
     scan_run_id = add_scan_run("host_profile", target, msg, status=status)
     if result.online:
         upsert_hosts(
-            [{"IP Address": result.ip_address, "Status": "Online", "Details": result.notes}],
+            [
+                {
+                    "IP Address": result.ip_address,
+                    "Status": "Online",
+                    "Details": result.notes,
+                    "Device Name": result.device_name,
+                    "Hostname": result.hostname,
+                    "Device Type": result.device_type,
+                    "Manufacturer": result.manufacturer,
+                    "Device Model": result.device_model,
+                    "Operating System": result.os_hint,
+                    "Identity Confidence": result.identity_confidence,
+                    "Identity Evidence": result.identity_evidence,
+                    "MAC Address": result.mac_address,
+                    "MAC Address Type": result.mac_address_type,
+                    "TTL": result.ttl if result.ttl is not None else "-",
+                }
+            ],
             source="host check",
             scan_run_id=scan_run_id,
         )
@@ -1014,6 +1086,82 @@ def audit_ports(
         "exposure": exposure.__dict__,
         "recommendations": top_recommendations(ports),
     }
+
+
+@app.post("/api/traffic/analyze")
+async def analyze_traffic(
+    request: Request,
+    authorized: bool = Query(default=False),
+    include_dns_names: bool = Query(default=False),
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> dict[str, object]:
+    """Analyze bounded PCAP metadata without retaining packet payloads."""
+
+    _require_authorization(authorized)
+    media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    allowed_media_types = {
+        "application/octet-stream",
+        "application/vnd.tcpdump.pcap",
+        "application/vnd.tcpdump.pcapng",
+        "application/x-pcap",
+        "application/x-pcapng",
+    }
+    if media_type not in allowed_media_types:
+        raise HTTPException(
+            status_code=415,
+            detail="Upload the capture as PCAP, PCAPNG, or application/octet-stream.",
+        )
+    capture = await _bounded_capture_body(request)
+    capture_size = len(capture)
+    try:
+        with _capture_slot():
+            result = await run_in_threadpool(
+                analyze_capture,
+                capture,
+                maximum_bytes=MAX_CAPTURE_BYTES,
+                maximum_packets=MAX_CAPTURE_PACKETS,
+                maximum_rows=MAX_CAPTURE_ROWS,
+                include_dns_names=include_dns_names,
+            )
+    except CaptureFormatError as exc:
+        record_audit_event(
+            context.role,
+            "traffic_capture_analysis",
+            "uploaded_capture",
+            "rejected",
+            f"Capture format validation failed; bytes={capture_size}.",
+            **context.audit_fields,
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - malformed-capture safety boundary
+        LOGGER.exception("capture_analysis_failed request_id=%s", context.request_id)
+        record_audit_event(
+            context.role,
+            "traffic_capture_analysis",
+            "uploaded_capture",
+            "failed",
+            f"Capture analysis failed safely; bytes={capture_size}.",
+            **context.audit_fields,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Capture analysis failed safely without retaining the upload.",
+        ) from exc
+
+    record_audit_event(
+        context.role,
+        "traffic_capture_analysis",
+        "uploaded_capture",
+        "completed",
+        (
+            f"format={result['format']}; bytes={capture_size}; "
+            f"packets={result['packets_analyzed']}; payload_retained=false"
+        ),
+        **context.audit_fields,
+    )
+    return result
 
 
 @app.get("/api/inventory", dependencies=[Depends(require_api_access)])

@@ -81,7 +81,9 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Audit records can contain individual actor, role, authentication method, request ID, action, target, outcome, and short details but never raw keys or bearer tokens.
 - New audit records use a separate server-only HMAC key, chained hashes, and a keyed head checkpoint. Readiness and privileged operations verify every retained protected row and pause on changes, broken links, unprotected suffixes, or protected-tail deletion. Pre-v1.6 rows remain explicit legacy evidence.
 - Individual audit identities are Admin-only; generated reports use identity-redacted audit rows.
-- Existing databases migrate in place at schema version 7.
+- Existing databases migrate in place at schema version 9.
+- Device manufacturer and model-family evidence stays local: same-segment MAC checks avoid routed gateway attribution, private/randomized addresses are labeled, and IEEE OUI data is never fetched from a third-party service.
+- Traffic inspection is offline and Operator/Admin-only. Capture uploads require explicit authorization, remain in request memory, and are bounded by byte, packet, row, rate, and concurrency limits. Raw payloads are not returned or stored, and DNS names require an explicit per-analysis opt-in.
 - Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
 - A resolution note is required before a case can be closed; later recurrence creates a new open case.
 - Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
