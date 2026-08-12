@@ -31,6 +31,7 @@ def test_outbox_is_idempotent_and_claimed_once_until_stale():
         aggregate_id="alert:7",
         dedupe_key="alert-created:7",
         payload={"alert_id": 7, "severity": "High"},
+        available_at="2026-08-12T09:59:00+00:00",
     )
     second = enqueue_outbox_event(
         conn,
@@ -39,6 +40,7 @@ def test_outbox_is_idempotent_and_claimed_once_until_stale():
         aggregate_id="alert:7",
         dedupe_key="alert-created:7",
         payload={"alert_id": 7, "severity": "High"},
+        available_at="2026-08-12T09:59:00+00:00",
     )
 
     assert first == second
@@ -59,6 +61,7 @@ def test_stale_outbox_claim_can_be_recovered():
         aggregate_id="alert:8",
         dedupe_key="alert-created:8",
         payload={"alert_id": 8},
+        available_at="2026-08-12T09:59:00+00:00",
     )
     assert claim_outbox_events(conn, consumer_id="worker-a", now="2026-08-12T10:00:00+00:00")
     recovered = claim_outbox_events(conn, consumer_id="worker-b", now="2026-08-12T10:06:00+00:00")
@@ -73,6 +76,7 @@ def test_jobs_are_idempotent_and_fail_after_bounded_attempts():
         job_type="network_scan",
         dedupe_key="scan:default:42",
         payload={"scan_policy_id": 42},
+        available_at="2026-08-12T09:59:00+00:00",
         max_attempts=2,
     )
     assert (

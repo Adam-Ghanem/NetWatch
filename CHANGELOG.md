@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a free local k3d deployment path with a single-node overlay, local image import workflow, NodePort/port-forward access, and a runbook that preserves the SQLite single-instance boundary. This does not claim HA, GKE readiness, or shared-service production.
+
 - Added bounded PDF report export and Admin-only retention status, dry-run preview, and confirmed operational cleanup. Cleanup excludes audit-chain evidence and is capped by configured row limits.
 
 - Bulk network scans now perform bounded reverse-DNS enrichment by default, preserve MAC/OUI evidence, and show hostname plus identity source beside device name, MAC address, manufacturer, and confidence in scan and inventory tables. The lookup can be disabled with `NETWATCH_HOSTNAME_LOOKUP_ENABLED=false`.
