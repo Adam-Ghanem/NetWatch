@@ -575,11 +575,13 @@ async function loadInventory() {
   state.assets = inventoryPayload.assets || [];
   renderTable($('#inventory-results'), state.assets, [
     { key: 'device_name', label: 'Device' },
+    { key: 'hostname', label: 'Hostname' },
     { key: 'device_type', label: 'Type' },
     { key: 'ip_address', label: 'IP address' },
     { key: 'mac_address', label: 'MAC address' },
     { key: 'manufacturer', label: 'Manufacturer' },
     { key: 'identity_confidence', label: 'Identity confidence', chip: true },
+    { key: 'identity_source', label: 'Evidence' },
     { key: 'owner', label: 'Owner' },
     { key: 'department', label: 'Department' },
     { key: 'location', label: 'Location' },
@@ -1424,11 +1426,13 @@ $('#network-form').addEventListener('submit', async (event) => {
     ]);
     renderTable($('#network-results'), payload.hosts || [], [
       { key: 'Device Name', label: 'Device' },
+      { key: 'Hostname', label: 'Hostname' },
       { key: 'Device Type', label: 'Type' },
       { key: 'IP Address', label: 'IP address' },
       { key: 'MAC Address', label: 'MAC address' },
       { key: 'Manufacturer', label: 'Manufacturer' },
       { key: 'Identity Confidence', label: 'Identity confidence', chip: true },
+      { key: 'Identity Source', label: 'Evidence' },
       { key: 'Status', label: 'Status', chip: true },
       { key: 'Details', label: 'Detection details' },
     ], 'No hosts replied. Active hosts may be blocking ICMP.');

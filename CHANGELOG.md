@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bulk network scans now perform bounded reverse-DNS enrichment by default, preserve MAC/OUI evidence, and show hostname plus identity source beside device name, MAC address, manufacturer, and confidence in scan and inventory tables. The lookup can be disabled with `NETWATCH_HOSTNAME_LOOKUP_ENABLED=false`.
+
 - Added optional HTTPS generic-webhook and Slack-compatible alert delivery with Admin-only status/test controls, de-identified payloads by default, bounded retries, debounce, response caps, and per-channel circuit breaking.
 - Added normalized per-scan service findings for port audits with sanitized protocol, port, service, status, risk, and response-time fields, bounded 50,000-row retention, authenticated filtering, and a dashboard history panel.
 - Upgraded SQLite schema tracking to version 9 and added migration, retention, API, and frontend regression coverage for service findings.

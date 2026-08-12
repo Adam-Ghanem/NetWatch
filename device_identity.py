@@ -6,12 +6,16 @@ import re
 import shutil
 import socket
 import subprocess
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from typing import Iterable
 
 from netaddr import EUI
 from netaddr.core import NotRegisteredError
+
+from config import HOSTNAME_LOOKUP_TIMEOUT_SECONDS
 
 _MAC_PATTERN = re.compile(r"^[0-9A-F]{12}$")
 _MAC_INPUT_PATTERN = re.compile(r"^[0-9A-Fa-f:.-]+$")
@@ -319,25 +323,74 @@ def enrich_host_rows(
     rows: Iterable[dict],
     *,
     entries: Iterable[NeighborEntry] | None = None,
+    resolve_hostnames: bool = False,
 ) -> list[dict]:
+    materialized = [dict(row) for row in rows]
     lookup = neighbor_map(entries)
+    hostname_lookup = (
+        resolve_hostnames_fn([str(row.get("IP Address", "")).strip() for row in materialized])
+        if resolve_hostnames
+        else {}
+    )
     enriched: list[dict] = []
-    for row in rows:
+    for row in materialized:
         item = dict(row)
         ip_address = str(item.get("IP Address", "")).strip()
         entry = lookup.get(ip_address)
+        hostname = item.get("Hostname", "") or hostname_lookup.get(ip_address, "")
         identity = infer_device_identity(
             entry.mac_address if entry else "",
-            hostname=item.get("Hostname", ""),
+            hostname=hostname,
         )
         item.update(identity.as_scan_fields())
         enriched.append(item)
     return enriched
 
 
-def reverse_hostname(ip_address: str) -> str:
+def _reverse_hostname_worker(ip_address: str, result: list[str]) -> None:
     try:
         hostname, _, _ = socket.gethostbyaddr(ip_address)
     except OSError:
-        return "-"
-    return _safe_hostname(hostname) or "-"
+        result.append("-")
+        return
+    result.append(_safe_hostname(hostname) or "-")
+
+
+def reverse_hostname(
+    ip_address: str, *, timeout_seconds: int = HOSTNAME_LOOKUP_TIMEOUT_SECONDS
+) -> str:
+    result: list[str] = []
+    worker = threading.Thread(
+        target=_reverse_hostname_worker,
+        args=(ip_address, result),
+        name="netwatch-reverse-dns",
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=max(1, min(int(timeout_seconds), 3)))
+    return result[0] if result else "-"
+
+
+def resolve_hostnames(ip_addresses: Iterable[str], *, max_workers: int = 16) -> dict[str, str]:
+    targets = tuple(
+        dict.fromkeys(str(value).strip() for value in ip_addresses if str(value).strip())
+    )
+    if not targets:
+        return {}
+    worker_count = max(1, min(int(max_workers), 16, len(targets)))
+    resolved: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = {executor.submit(reverse_hostname, target): target for target in targets}
+        for future in as_completed(futures):
+            target = futures[future]
+            try:
+                hostname = future.result()
+            except Exception:
+                hostname = "-"
+            if hostname != "-":
+                resolved[target] = hostname
+    return resolved
+
+
+# Alias kept separate so callers/tests can patch the resolver without changing identity rules.
+resolve_hostnames_fn = resolve_hostnames
