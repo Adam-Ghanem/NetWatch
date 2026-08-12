@@ -100,6 +100,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Formula-safe inventory CSV export
 - Normalized per-scan service findings with bounded retention and scan/IP filters
 - Admin-only retention status, dry-run preview, and confirmed cleanup that never deletes audit-chain evidence
+- Admin-only Readiness Center for A/B evidence gates, blockers, and explicit operator-declared score status
 - Immediate scan tables showing device name, hostname, MAC address, manufacturer, confidence, and identity evidence source
 - Public, oversized, and unsupported targets blocked
 - API authentication, bounded per-identity rate-limit state, scan concurrency limits, and security headers
@@ -564,6 +565,10 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_HOSTNAME_LOOKUP_TIMEOUT_SECONDS` | `1` | Per-host reverse-DNS timeout, bounded from 1 to 3 seconds |
 | `NETWATCH_RETENTION_DEFAULT_DAYS` | `90` | Default dry-run retention horizon for operational-history cleanup |
 | `NETWATCH_RETENTION_MAX_DELETE_ROWS` | `10000` | Maximum rows any one confirmed cleanup can remove, bounded to 25,000 |
+| `NETWATCH_TRACK_A_EVIDENCE_VERIFIED` | `false` | Explicit Track A evidence declaration; remains false until the accountable owner archives the package |
+| `NETWATCH_TRACK_A_EVIDENCE_REFERENCE` | empty | Bounded change/ticket/reference ID for the Track A evidence package |
+| `NETWATCH_TRACK_B_EVIDENCE_VERIFIED` | `false` | Explicit Track B evidence declaration; never enables shared service by itself |
+| `NETWATCH_TRACK_B_EVIDENCE_REFERENCE` | empty | Bounded change/ticket/reference ID for the Track B evidence package |
 | `NETWATCH_WEBHOOK_URL` | empty | Optional HTTPS generic webhook for alert delivery; disabled when empty or invalid |
 | `NETWATCH_SLACK_WEBHOOK_URL` | empty | Optional HTTPS Slack-compatible webhook; disabled when empty or invalid |
 | `NETWATCH_NOTIFY_MIN_SEVERITY` | `High` | Minimum alert severity sent to configured channels |

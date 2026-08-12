@@ -483,6 +483,7 @@ function applyRoleAccess() {
   $('#database-backup').disabled = !Boolean(state.capabilities.backup);
   $('#retention-refresh').disabled = !Boolean(state.capabilities.manage_operations);
   $('#retention-cleanup').disabled = !Boolean(state.capabilities.manage_operations);
+  $('#readiness-refresh').disabled = !Boolean(state.capabilities.manage_operations);
   $('#nav [data-view="audit"]').hidden = !Boolean(state.capabilities.view_audit_identity);
   $('#metrics-download').disabled = !Boolean(state.capabilities.read);
   $('#intelligence-generate').disabled = !Boolean(
@@ -1003,11 +1004,12 @@ async function loadOperations() {
   const alertPath = filter
     ? `/api/alerts?status=${encodeURIComponent(filter)}&limit=200`
     : '/api/alerts?limit=200';
-  const [policyPayload, alertPayload, maintenancePayload, retentionPayload] = await Promise.all([
+  const [policyPayload, alertPayload, maintenancePayload, retentionPayload, readinessPayload] = await Promise.all([
     apiJson('/api/scan-policies'),
     apiJson(alertPath),
     apiJson('/api/maintenance-windows'),
     state.capabilities.manage_operations ? apiJson('/api/retention/status') : Promise.resolve(null),
+    state.capabilities.manage_operations ? apiJson('/api/readiness') : Promise.resolve(null),
   ]);
   const policies = policyPayload.items || [];
   const alerts = alertPayload.items || [];
@@ -1032,6 +1034,7 @@ async function loadOperations() {
     const rows = tracked.reduce((total, item) => total + Number(item.count || 0), 0);
     $('#retention-status').textContent = `${tracked.length} operational tables · ${rows} retained rows · audit chain protected`;
   }
+  renderReadiness(readinessPayload);
   renderPolicies(policies);
   populateMaintenancePolicies(policies);
   renderMaintenanceWindows(windows);
@@ -1039,6 +1042,29 @@ async function loadOperations() {
   if (state.selectedAlertId) selectAlertCase(state.selectedAlertId);
   applyRoleAccess();
   markDataUpdated();
+}
+
+function renderReadiness(payload) {
+  const stateBadge = $('#readiness-state');
+  if (!payload) {
+    stateBadge.textContent = 'Admin only';
+    stateBadge.className = 'risk-badge neutral';
+    $('#readiness-summary').textContent = 'Admin access is required to inspect readiness evidence.';
+    $('#readiness-metrics').replaceChildren();
+    return;
+  }
+  const score = Number(payload.score || 0);
+  stateBadge.textContent = `${score}% · ${text(payload.status)}`;
+  stateBadge.className = `risk-badge ${score === 100 ? 'low' : 'medium'}`;
+  const blockers = (payload.blockers || []).map((item) => text(item)).join(', ') || 'None declared';
+  const reference = payload.evidence_reference ? `Evidence: ${text(payload.evidence_reference)}` : 'No evidence reference declared';
+  $('#readiness-summary').textContent = `${text(payload.active_track)} · ${reference} · Blockers: ${blockers}`;
+  renderMiniMetrics($('#readiness-metrics'), [
+    { label: 'Active track', value: text(payload.active_track), note: text(payload.operating_mode) },
+    { label: 'Score', value: `${score}%`, note: score === 100 ? 'Operator-declared evidence' : 'Evidence pending' },
+    { label: 'Track A', value: `${Number(payload.track_a?.score || 0)}%`, note: text(payload.track_a?.status) },
+    { label: 'Track B', value: `${Number(payload.track_b?.score || 0)}%`, note: text(payload.track_b?.status) },
+  ]);
 }
 
 function renderIntelligenceList(container, items) {
@@ -1755,6 +1781,13 @@ $('#retention-refresh').addEventListener('click', async (event) => {
   setBusy(event.currentTarget, true, 'Previewing…');
   try { await previewRetention(); showToast('Retention preview refreshed.'); }
   catch (error) { $('#retention-status').textContent = error.message; showToast(error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+$('#readiness-refresh').addEventListener('click', async (event) => {
+  setBusy(event.currentTarget, true, 'Refreshing…');
+  try { await loadOperations(); showToast('Readiness evidence refreshed.'); }
+  catch (error) { showToast(error.message, 'error'); }
   finally { setBusy(event.currentTarget, false); }
 });
 
