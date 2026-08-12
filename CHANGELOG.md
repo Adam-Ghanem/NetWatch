@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added bounded PDF report export and Admin-only retention status, dry-run preview, and confirmed operational cleanup. Cleanup excludes audit-chain evidence and is capped by configured row limits.
+
 - Bulk network scans now perform bounded reverse-DNS enrichment by default, preserve MAC/OUI evidence, and show hostname plus identity source beside device name, MAC address, manufacturer, and confidence in scan and inventory tables. The lookup can be disabled with `NETWATCH_HOSTNAME_LOOKUP_ENABLED=false`.
 
 - Added optional HTTPS generic-webhook and Slack-compatible alert delivery with Admin-only status/test controls, de-identified payloads by default, bounded retries, debounce, response caps, and per-channel circuit breaking.

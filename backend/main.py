@@ -128,7 +128,8 @@ from operations_store import (
     update_scan_policy,
 )
 from port_scanner import scan_ports
-from report_builder import build_html_report, build_markdown_report
+from report_builder import build_html_report, build_markdown_report, build_pdf_report
+from retention_store import cleanup_retention, retention_status
 from risk_engine import summarize_exposure, top_recommendations
 from security import validate_cidr, validate_target_ip
 from traffic_capture import (
@@ -404,6 +405,13 @@ class AlertUpdateRequest(BaseModel):
 
 class IntelligenceBriefRequest(BaseModel):
     refresh: bool = False
+
+
+class RetentionCleanupRequest(BaseModel):
+    older_than_days: int | None = Field(default=None, ge=1, le=3_650)
+    max_rows: int | None = Field(default=None, ge=100, le=25_000)
+    dry_run: bool = True
+    confirmed: bool = False
 
 
 def _valid_api_key(value: str) -> bool:
@@ -946,6 +954,40 @@ def enterprise_status(_: AuthContext = Depends(require_admin_access)) -> dict[st
         "readiness": enterprise_readiness(),
         "queue": enterprise_queue_metrics(),
     }
+
+
+@app.get("/api/retention/status")
+def retention_status_endpoint(_: AuthContext = Depends(require_admin_access)) -> dict[str, Any]:
+    return retention_status()
+
+
+@app.post("/api/retention/cleanup")
+def retention_cleanup_endpoint(
+    payload: RetentionCleanupRequest,
+    context: AuthContext = Depends(require_audited_admin_access),
+) -> dict[str, Any]:
+    if not payload.dry_run and not payload.confirmed:
+        raise HTTPException(
+            status_code=400,
+            detail="Set confirmed=true before running destructive retention cleanup.",
+        )
+    result = cleanup_retention(
+        older_than_days=payload.older_than_days,
+        dry_run=payload.dry_run,
+        max_rows=payload.max_rows,
+    )
+    record_audit_event(
+        context.role,
+        "retention_cleanup_preview" if payload.dry_run else "retention_cleanup",
+        "operational retention tables",
+        "completed",
+        (
+            f"dry_run={payload.dry_run}; older_than_days={result['older_than_days']}; "
+            f"rows={result['total']}"
+        ),
+        **context.audit_fields,
+    )
+    return result
 
 
 @app.get("/api/metrics", response_class=PlainTextResponse)
@@ -1764,6 +1806,34 @@ def html_report() -> str:
         alerts_df,
         policies_df,
         maintenance_df,
+    )
+
+
+@app.get("/api/reports/pdf")
+def pdf_report(_: AuthContext = Depends(require_api_access)) -> Response:
+    hosts_df = pd.DataFrame(asset_inventory())
+    ports_df = pd.DataFrame(asset_port_findings())
+    changes_df = pd.DataFrame(recent_asset_events(limit=50))
+    audit_df = pd.DataFrame(recent_audit_log(limit=100))
+    alerts_df = pd.DataFrame(recent_alerts(limit=100))
+    policies_df = pd.DataFrame(scan_policies())
+    maintenance_df = pd.DataFrame(maintenance_windows())
+    try:
+        content = build_pdf_report(
+            hosts_df,
+            ports_df,
+            changes_df,
+            audit_df,
+            alerts_df,
+            policies_df,
+            maintenance_df,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="netwatch-report.pdf"'},
     )
 
 

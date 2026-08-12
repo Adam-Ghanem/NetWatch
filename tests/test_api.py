@@ -1232,3 +1232,36 @@ def test_shared_service_mode_fails_closed_until_adapters_are_validated(monkeypat
         "shared_service_requires_postgresql_redis_s3_and_external_event_sink"
         in payload["capabilities"]["blockers"]
     )
+
+
+def test_pdf_report_is_available_as_bounded_download(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.get("/api/reports/pdf", headers=API_HEADERS)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.content.startswith(b"%PDF")
+    assert "netwatch-report.pdf" in response.headers["content-disposition"]
+
+
+def test_retention_controls_are_admin_only_and_dry_run_first(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        status = client.get("/api/retention/status", headers=API_HEADERS)
+        preview = client.post(
+            "/api/retention/cleanup",
+            headers=API_HEADERS,
+            json={"dry_run": True},
+        )
+        blocked = client.post(
+            "/api/retention/cleanup",
+            headers=API_HEADERS,
+            json={"dry_run": False, "confirmed": False},
+        )
+        missing = client.get("/api/retention/status")
+
+    assert status.status_code == 200
+    assert status.json()["audit_protection"].startswith("The retention endpoint never deletes")
+    assert preview.status_code == 200
+    assert preview.json()["dry_run"] is True
+    assert blocked.status_code == 400
+    assert missing.status_code == 401

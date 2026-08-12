@@ -59,14 +59,16 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Risk Advisor rebuilds from saved evidence.
 - [ ] Markdown report downloads correctly.
 - [ ] HTML report downloads and opens correctly.
+- [ ] PDF report downloads as a readable bounded hand-off artifact.
 - [ ] Both report formats include recent asset changes.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.7 database migrates to schema version 9 without losing saved assets, alerts, audit rows, or port-audit history.
+- [ ] An existing pre-v1.7 database migrates to schema version 10 without losing saved assets, alerts, audit rows, or port-audit history.
 - [ ] Normalized service findings are bounded, authenticated, filterable by scan/IP, and contain no payload data.
 - [ ] Optional notifications remain disabled when channel URLs are empty or unsafe; configured channels expose no secrets or raw targets by default.
 - [ ] Legacy audit rows remain labeled and new rows verify through the HMAC chain.
+- [ ] Admin can inspect retention status, preview cleanup, and confirm cleanup only after reviewing the eligible counts; audit-chain rows remain present.
 
 ## Enterprise identity and audit
 

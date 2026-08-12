@@ -163,8 +163,8 @@ Before use by multiple employees or on a remote server, configure and review:
 ## Recommended next product improvements
 
 - Normalized service findings per scan run
-- Configurable retention and cleanup controls
-- PDF reports
+- Configurable retention and cleanup controls — delivered with Admin-only status, dry-run preview, explicit confirmation, row caps, and audit-chain protection.
+- PDF reports — delivered in the next-release bundle with bounded export rows and the same redacted report inputs.
 - ARP discovery where permissions allow
 - Progress and cancellation for long scans
 - PostgreSQL/distributed coordination for multi-replica deployments

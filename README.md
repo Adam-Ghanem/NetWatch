@@ -96,9 +96,10 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Optional server-side NetWatch Intelligence with structured defensive output
 - De-identified AI snapshots that exclude private identifiers and free-text evidence
 - AI cache, separate rate/concurrency limits, atomic daily request budget, redirect refusal, safe failure handling, and local fallback
-- Markdown and standalone HTML report downloads
+- Markdown, standalone HTML, and bounded PDF report downloads
 - Formula-safe inventory CSV export
 - Normalized per-scan service findings with bounded retention and scan/IP filters
+- Admin-only retention status, dry-run preview, and confirmed cleanup that never deletes audit-chain evidence
 - Immediate scan tables showing device name, hostname, MAC address, manufacturer, confidence, and identity evidence source
 - Public, oversized, and unsupported targets blocked
 - API authentication, bounded per-identity rate-limit state, scan concurrency limits, and security headers
@@ -561,6 +562,8 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
 | `NETWATCH_HOSTNAME_LOOKUP_ENABLED` | `true` | Performs bounded reverse-DNS lookup for bulk scan results; disable in privacy-sensitive environments |
 | `NETWATCH_HOSTNAME_LOOKUP_TIMEOUT_SECONDS` | `1` | Per-host reverse-DNS timeout, bounded from 1 to 3 seconds |
+| `NETWATCH_RETENTION_DEFAULT_DAYS` | `90` | Default dry-run retention horizon for operational-history cleanup |
+| `NETWATCH_RETENTION_MAX_DELETE_ROWS` | `10000` | Maximum rows any one confirmed cleanup can remove, bounded to 25,000 |
 | `NETWATCH_WEBHOOK_URL` | empty | Optional HTTPS generic webhook for alert delivery; disabled when empty or invalid |
 | `NETWATCH_SLACK_WEBHOOK_URL` | empty | Optional HTTPS Slack-compatible webhook; disabled when empty or invalid |
 | `NETWATCH_NOTIFY_MIN_SEVERITY` | `High` | Minimum alert severity sent to configured channels |
