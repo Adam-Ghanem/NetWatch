@@ -1,6 +1,6 @@
 # Enterprise deployment guide
 
-NetWatch v1.7 provides enterprise identity, audit-integrity, device-identity correlation, bounded traffic-metadata visibility, observability, durable outbox/job seams, and container controls for a reviewed internal deployment. The current SQLite persistence and in-process scheduler design is intentionally single-instance; this guide does not claim multi-replica high availability. See [enterprise ABC architecture](enterprise-abc-architecture.md) for the staged migration path.
+NetWatch v1.7 provides enterprise-oriented identity, audit-integrity, device-identity correlation, bounded traffic-metadata visibility, observability, durable outbox/job seams, and container controls for a reviewed **single-instance internal deployment**. It is not approved as-is for multi-tenant or multi-replica production. The current SQLite persistence and in-process scheduler design is intentionally single-instance; this guide does not claim high availability. See [enterprise ABC architecture](enterprise-abc-architecture.md) and the [production-readiness report](production-readiness-report.md) for the evidence-gated migration path.
 
 ## Recommended topology
 
@@ -89,13 +89,13 @@ For repeatable cluster application, `deploy/kustomization-single-tenant.yaml` pi
 
 Replace the image, host/origin, issuer, audience, JWKS URL, groups, StorageClass, and namespace policy before applying it. Put an approved identity-aware TLS gateway in front of the ClusterIP Service; do not expose the pod directly to the Internet. Validate that the cluster network policy and CNI permit only the approved private scan ranges and required HTTPS/DNS egress.
 
-`deploy/kubernetes-enterprise.yaml` is the ABC shared-service reference. It uses two stateless API replicas, a rolling update with zero voluntary unavailability, a PodDisruptionBudget, default-deny network policy, managed secret references, and explicit PostgreSQL/Redis/S3/event-sink configuration. Build it with `Dockerfile.enterprise`, which installs only the optional adapter dependencies into a separate image. It is intentionally not deployable as-is: replace the image with a signed digest, create the secret, and complete adapter, migration, tenant-scope, and recovery validation first.
+`deploy/kubernetes-enterprise.yaml` is an ABC shared-service **reference manifest**, not a production approval or deployable-as-is package. It describes two stateless API replicas, a rolling update, a PodDisruptionBudget, default-deny network policy, managed secret references, and PostgreSQL/Redis/S3/event-sink configuration. Build it with `Dockerfile.enterprise`, which installs only optional adapter dependencies into a separate image. Before applying it, replace the image with a signed digest, create managed secrets, and complete adapter, migration, tenant-scope, resource, failure-injection, and recovery validation.
 
-The `Supply Chain` workflow produces a source SPDX SBOM on pull requests and main, and tagged releases build container images with BuildKit SBOM/provenance metadata and GitHub artifact attestations. Release policy should verify the digest and attestations before a cluster admission controller allows deployment.
+A supply-chain release workflow is a required follow-up control: it should produce an SPDX SBOM, build signed images with provenance, and verify attestations before cluster admission. The current repository does not claim that this workflow is installed; adding workflow files requires GitHub credentials with the `workflows` permission.
 
 ## Rollout and recovery
 
-1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging.
+1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging with `python3 scripts/verify_sqlite_backup.py <backup> --expected-schema 10`. This utility is read-only and does not restore over a live database.
 2. Create managed secrets and reviewed non-secret configuration.
 3. Configure IdP application/audience and least-privilege groups.
 4. Deploy to staging behind the identity gateway.
@@ -103,7 +103,9 @@ The `Supply Chain` workflow produces a source SPDX SBOM on pull requests and mai
 6. Verify `/api/health/ready`, Prometheus scraping, request correlation, and audit-chain status.
 7. Run a bounded approved scan and capture on a staging sensor interface; verify device identity, no-payload behavior, policy, maintenance, case, report, backup, and optional AI workflows.
 8. Complete the organization's security, privacy, data-retention, AI, and disaster-recovery reviews before production.
-9. Verify the release image digest, SBOM, provenance attestation, dependency policy, and migration checksum before production promotion.
+9. Verify the release image digest, SBOM, provenance attestation, dependency policy, and migration checksum before production promotion. The current repository does not claim that its SBOM/provenance workflow is installed.
+10. Run `python3 scripts/benchmark_api.py` against staging for health, inventory, report, and retention-preview endpoints. Record p50/p95/p99, throughput, errors, CPU/memory, database connections, and queue age; do not use the harness to start broad network scans automatically.
+11. Complete the [security assessment checklist](security-assessment-checklist.md) and attach staging/manual evidence before a production readiness review.
 
 ## Current scale boundary
 
