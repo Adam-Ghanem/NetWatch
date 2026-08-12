@@ -92,3 +92,47 @@ def test_scan_rows_are_enriched_from_one_neighbor_snapshot():
     assert rows[0]["Device Name"] == "Xiaomi / Redmi device"
     assert rows[0]["Device Type"] == "Personal device"
     assert rows[0]["Identity Confidence"] == "Medium"
+
+
+def test_scan_rows_can_add_bounded_reverse_dns_hostname(monkeypatch):
+    monkeypatch.setattr(
+        "device_identity.resolve_hostnames_fn",
+        lambda addresses: {"192.168.1.20": "Adam-iPhone"},
+    )
+    rows = enrich_host_rows(
+        [{"IP Address": "192.168.1.20", "Status": "Online", "Details": "reply"}],
+        entries=[
+            NeighborEntry(
+                ip_address="192.168.1.20",
+                mac_address="00:1C:B3:00:00:01",
+                interface="wlan0",
+                state="REACHABLE",
+                source="ip-neigh",
+            )
+        ],
+        resolve_hostnames=True,
+    )
+
+    assert rows[0]["Hostname"] == "Adam-iPhone"
+    assert rows[0]["Device Name"] == "Adam-iPhone"
+    assert rows[0]["Identity Confidence"] == "High"
+    assert rows[0]["Identity Source"] == "hostname, MAC OUI"
+
+
+def test_scan_rows_can_disable_hostname_lookup(monkeypatch):
+    called = False
+
+    def resolver(_addresses):
+        nonlocal called
+        called = True
+        return {"192.168.1.20": "should-not-be-used"}
+
+    monkeypatch.setattr("device_identity.resolve_hostnames_fn", resolver)
+    rows = enrich_host_rows(
+        [{"IP Address": "192.168.1.20", "Status": "Online", "Details": "reply"}],
+        resolve_hostnames=False,
+    )
+
+    assert called is False
+    assert rows[0]["Hostname"] == "-"
+    assert rows[0]["Device Name"] == "Unknown device"

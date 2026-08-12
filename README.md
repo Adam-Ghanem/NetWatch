@@ -70,7 +70,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization
 - Authorized local IPv4 CIDR discovery
-- MAC-address, offline manufacturer/OUI, hostname, device-family, and identity-confidence evidence
+- MAC-address, offline manufacturer/OUI, bounded reverse-DNS hostname, device-family, and identity-confidence evidence
 - iPhone, iPad, Mac, Redmi/Xiaomi, Pixel, Galaxy, printer, router, camera, and other cautious device-family hints
 - Bounded Wireshark-style live header analysis with protocol, conversation, endpoint, TCP-flag, VLAN, and frame-size views
 - Explicit no-payload retention, 15-second/1,000-frame limits, and one capture at a time by default
@@ -99,6 +99,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Markdown and standalone HTML report downloads
 - Formula-safe inventory CSV export
 - Normalized per-scan service findings with bounded retention and scan/IP filters
+- Immediate scan tables showing device name, hostname, MAC address, manufacturer, confidence, and identity evidence source
 - Public, oversized, and unsupported targets blocked
 - API authentication, bounded per-identity rate-limit state, scan concurrency limits, and security headers
 - Minimum-length API secrets and explicit HTTP Host/CORS allowlists
@@ -558,6 +559,8 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
+| `NETWATCH_HOSTNAME_LOOKUP_ENABLED` | `true` | Performs bounded reverse-DNS lookup for bulk scan results; disable in privacy-sensitive environments |
+| `NETWATCH_HOSTNAME_LOOKUP_TIMEOUT_SECONDS` | `1` | Per-host reverse-DNS timeout, bounded from 1 to 3 seconds |
 | `NETWATCH_WEBHOOK_URL` | empty | Optional HTTPS generic webhook for alert delivery; disabled when empty or invalid |
 | `NETWATCH_SLACK_WEBHOOK_URL` | empty | Optional HTTPS Slack-compatible webhook; disabled when empty or invalid |
 | `NETWATCH_NOTIFY_MIN_SEVERITY` | `High` | Minimum alert severity sent to configured channels |

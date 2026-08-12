@@ -18,3 +18,17 @@ def test_network_scanner_clamps_non_positive_worker_count(monkeypatch):
 def test_port_scanner_rejects_unsafe_timeouts(timeout):
     with pytest.raises(ValueError, match="Timeout"):
         scan_ports("192.168.1.1", timeout=timeout)
+
+
+def test_network_scan_requests_hostname_enrichment(monkeypatch):
+    monkeypatch.setattr(network_scanner, "ping_host", lambda ip: (True, "mock"))
+    calls = {}
+
+    def enrich(rows, **kwargs):
+        calls.update(kwargs)
+        return rows
+
+    monkeypatch.setattr(network_scanner, "enrich_host_rows", enrich)
+    network_scanner.scan_network("192.168.1.0/30")
+
+    assert calls["resolve_hostnames"] is network_scanner.HOSTNAME_LOOKUP_ENABLED
