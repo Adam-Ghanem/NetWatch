@@ -114,3 +114,5 @@ The current release is appropriate for one active application instance per datab
 
 True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 10 and preserves existing data.
  Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
+
+`enterprise_worker.py` provides the next bounded execution seam: workers claim jobs or outbox events, dispatch only to an explicit handler/publisher allowlist, persist success/failure, and preserve retry/dead-letter semantics. `run_poll_loop` clamps the polling interval and cycle count. The module is safe to run as a separate process, but shared-service approval still requires external coordination, PostgreSQL/Redis integration, failure injection, and staging evidence.
