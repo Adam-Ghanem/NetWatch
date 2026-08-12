@@ -1,0 +1,6 @@
+# Optional Track B stack. Install only in the enterprise image after service-level validation.
+psycopg[binary,pool]==3.3.4
+SQLAlchemy==2.0.52
+alembic==1.19.1
+redis==8.1.0
+boto3==1.43.69

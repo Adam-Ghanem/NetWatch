@@ -89,23 +89,24 @@ For repeatable cluster application, `deploy/kustomization-single-tenant.yaml` pi
 
 Replace the image, host/origin, issuer, audience, JWKS URL, groups, StorageClass, and namespace policy before applying it. Put an approved identity-aware TLS gateway in front of the ClusterIP Service; do not expose the pod directly to the Internet. Validate that the cluster network policy and CNI permit only the approved private scan ranges and required HTTPS/DNS egress.
 
-`deploy/kubernetes-enterprise.yaml` is an ABC shared-service **reference manifest**, not a production approval or deployable-as-is package. It describes two stateless API replicas, a rolling update, a PodDisruptionBudget, default-deny network policy, managed secret references, and PostgreSQL/Redis/S3/event-sink configuration. Build it with `Dockerfile.enterprise`, which installs only optional adapter dependencies into a separate image. Before applying it, replace the image with a signed digest, create managed secrets, and complete adapter, migration, tenant-scope, resource, failure-injection, and recovery validation.
+`deploy/kubernetes-enterprise.yaml` is an ABC shared-service **reference manifest**, not a production approval or deployable-as-is package. It describes two stateless API replicas, a rolling update, a PodDisruptionBudget, default-deny network policy, managed secret references, and PostgreSQL/Redis/S3/event-sink configuration. Build it with `Dockerfile.enterprise`, which installs only optional adapter dependencies into a separate image. The pinned optional dependency baseline is `requirements-enterprise-lock.txt`; install it only in the enterprise image after the selected managed-service versions are approved. `migrations/postgresql/001_tenant_foundation.sql` provides a transaction-wrapped tenant/membership/RLS foundation and is not a complete application migration. Before applying the manifest, replace the image with a signed digest, create managed secrets, and complete adapter, migration, tenant-scope, resource, failure-injection, and recovery validation.
 
 A supply-chain release workflow is a required follow-up control: it should produce an SPDX SBOM, build signed images with provenance, and verify attestations before cluster admission. The current repository does not claim that this workflow is installed; adding workflow files requires GitHub credentials with the `workflows` permission.
 
 ## Rollout and recovery
 
 1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging with `python3 scripts/verify_sqlite_backup.py <backup> --expected-schema 10`. This utility is read-only and does not restore over a live database.
-2. Create managed secrets and reviewed non-secret configuration.
-3. Configure IdP application/audience and least-privilege groups.
-4. Deploy to staging behind the identity gateway.
-5. Test Viewer, Operator, Admin, unmapped, expired-token, wrong-audience, and break-glass paths.
-6. Verify `/api/health/ready`, Prometheus scraping, request correlation, and audit-chain status.
-7. Run a bounded approved scan and capture on a staging sensor interface; verify device identity, no-payload behavior, policy, maintenance, case, report, backup, and optional AI workflows.
-8. Complete the organization's security, privacy, data-retention, AI, and disaster-recovery reviews before production.
-9. Verify the release image digest, SBOM, provenance attestation, dependency policy, and migration checksum before production promotion. The current repository does not claim that its SBOM/provenance workflow is installed.
-10. Run `python3 scripts/benchmark_api.py` against staging for health, inventory, report, and retention-preview endpoints. Record p50/p95/p99, throughput, errors, CPU/memory, database connections, and queue age; do not use the harness to start broad network scans automatically.
-11. Complete the [security assessment checklist](security-assessment-checklist.md) and attach staging/manual evidence before a production readiness review.
+2. For a shared-service trial, apply the PostgreSQL tenant foundation only through the approved migration process, set a transaction-local tenant context for every request/worker transaction, and run negative cross-tenant tests before any replica increase. The SQL file is a foundation, not an automatic migration of the existing SQLite tables.
+3. Create managed secrets and reviewed non-secret configuration.
+4. Configure IdP application/audience and least-privilege groups.
+5. Deploy to staging behind the identity gateway.
+6. Test Viewer, Operator, Admin, unmapped, expired-token, wrong-audience, and break-glass paths.
+7. Verify `/api/health/ready`, Prometheus scraping, request correlation, and audit-chain status.
+8. Run a bounded approved scan and capture on a staging sensor interface; verify device identity, no-payload behavior, policy, maintenance, case, report, backup, and optional AI workflows.
+9. Complete the organization's security, privacy, data-retention, AI, and disaster-recovery reviews before production.
+10. Verify the release image digest, SBOM, provenance attestation, dependency policy, and migration checksum before production promotion. The current repository does not claim that its SBOM/provenance workflow is installed.
+11. Run `python3 scripts/benchmark_api.py` against staging for health, inventory, report, and retention-preview endpoints. Record p50/p95/p99, throughput, errors, CPU/memory, database connections, and queue age; do not use the harness to start broad network scans automatically.
+12. Complete the [security assessment checklist](security-assessment-checklist.md) and attach staging/manual evidence before a production readiness review.
 
 ## Current scale boundary
 
