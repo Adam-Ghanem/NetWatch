@@ -57,7 +57,7 @@ The new Traffic Explorer provides a bounded Wireshark-style metadata view for au
 
 v1.6 adds an optional enterprise identity boundary. A reviewed OIDC-aware reverse proxy can forward signed bearer tokens, which NetWatch validates against one configured HTTPS JWKS endpoint with an explicit issuer, audience, algorithm allowlist, expiry, subject, and exact company-group mapping. Users then authenticate through company SSO without receiving a NetWatch role key or provider key. Local role keys remain available for local and controlled break-glass use.
 
-Every protected audit event can now carry an individual actor, authentication method, and request ID inside a separate-key HMAC chain with a keyed head checkpoint. Fresh full retained-chain verification gates every privileged operation; the public readiness probe reuses a result for at most five seconds to bound its cost. NetWatch also exposes separate liveness/readiness probes, low-cardinality HTTP metrics, safe correlation logs, and stricter browser headers. See the [enterprise deployment guide](docs/enterprise-deployment.md) and [Kubernetes template](deploy/kubernetes.yaml).
+Every protected audit event can now carry an individual actor, authentication method, and request ID inside a separate-key HMAC chain with a keyed head checkpoint. Fresh full retained-chain verification gates every privileged operation; the public readiness probe reuses a result for at most five seconds to bound its cost. NetWatch also exposes separate liveness/readiness probes, low-cardinality HTTP metrics, safe correlation logs, and stricter browser headers. See the [enterprise deployment guide](docs/enterprise-deployment.md), [Kubernetes template](deploy/kubernetes.yaml), and [free local k3d runbook](docs/k3d-local.md). The k3d path uses the `deploy/kustomization-k3d.yaml` overlay and remains single-instance SQLite; it is for local testing, not HA or shared-service production.
 
 These controls make NetWatch suitable for a reviewed internal deployment foundation; they do not turn the current SQLite and in-process scheduler design into multi-replica HA. Large deployments still need the external controls and scale-out work listed in the enterprise guide. The staged ABC plan is documented in [enterprise ABC architecture](docs/enterprise-abc-architecture.md): SQLite remains the safe default, compatibility mode adds durable seams, and shared-service mode fails closed until PostgreSQL/Redis/object-storage adapters and migration checks are validated.
 
@@ -708,6 +708,7 @@ NetWatch/
 ├── .env.example
 ├── Dockerfile
 ├── docker-compose.yml
+├── deploy/kustomization-k3d.yaml
 └── Makefile
 ```
 
