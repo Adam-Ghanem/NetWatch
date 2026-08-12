@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.6 is a local-first defensive network visibility application with optional enterprise identity. The professional dashboard, protected API, bounded scheduler, maintenance controls, case workflow, authenticated metrics, audit integrity verification, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.7 is a local-first defensive network visibility application with optional enterprise identity. The professional dashboard, protected API, device-identity correlation, bounded traffic-metadata sensor, scheduler, maintenance controls, case workflow, authenticated metrics, audit integrity verification, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
 
 ## Runtime flow
 
@@ -23,6 +23,12 @@ FastAPI application (`backend/main.py`)
           |      - `network_scanner.py`
           |      - `host_profiler.py`
           |      - `port_scanner.py`
+          |      - neighbor/MAC/OUI identity (`device_identity.py`)
+          |
+          +--> Bounded traffic metadata (`traffic_capture.py`)
+          |      - allowlisted Linux sensor interface
+          |      - Ethernet/VLAN/ARP/IP/TCP/UDP/ICMP headers
+          |      - payload bytes discarded
           |
           +--> Exposure analysis
           |      - `risk_engine.py`
@@ -61,7 +67,9 @@ It provides:
 - Overview metrics and recent checks
 - Authorized local CIDR discovery
 - Single-host profiling
+- Neighbor-table MAC, offline manufacturer/OUI, hostname, device-family, and identity-confidence evidence
 - Common TCP service audit
+- Operator/Admin Traffic Explorer with bounded metadata-only header capture and exact filters
 - Persistent asset inventory
 - Asset ownership, department, location, criticality, and notes
 - Scan-to-scan asset change history
@@ -94,8 +102,10 @@ It is not the default deployment path.
 - `frontend/app.js`: API client, dashboard state, scan workflows, rendering, and report downloads.
 - `security.py`: explicit local IPv4 validation, scan-size limits, and service review guidance.
 - `network_scanner.py`: local CIDR host discovery.
-- `host_profiler.py`: latency, TTL, hostname, and cautious OS hints.
+- `device_identity.py`: normalized neighbor-table parsing, offline MAC/OUI lookup, private-MAC detection, and cautious device-family evidence.
+- `host_profiler.py`: latency, TTL, hostname, cautious OS hints, and correlated device identity.
 - `port_scanner.py`: bounded concurrent TCP service review.
+- `traffic_capture.py`: allowlisted Linux raw-socket capture, bounded header parsing, protocol/conversation/device summaries, and no payload retention.
 - `risk_engine.py`: exposure priority calculation.
 - `advisory_engine.py`: deterministic local summary and next actions.
 - `ai_advisor.py`: de-identified snapshot construction, fixed defensive provider contract, strict response validation, key-separated safety identifiers, redirect refusal, and safe upstream error mapping.
@@ -118,14 +128,14 @@ The database uses:
 - Busy timeout
 - UTC timestamps
 - Indexes for scan and asset lookup
-- Schema version 7 with individual integrity-protected audit metadata, company asset context, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
+- Schema version 8 with device-identity evidence, individual integrity-protected audit metadata, company asset context, policies, maintenance windows, alert cases, and bounded intelligence metadata/cache
 - Bounded change-event, observation, audit, alert, policy, maintenance-window, and intelligence-event retention
 - Named Docker volumes in the default Compose deployment
 
 The nine operational tables have separate responsibilities:
 
 - `scan_runs` records each check and its summary.
-- `assets` stores current inventory state, last confirmed sighting, owner, department, location, criticality, and notes.
+- `assets` stores current inventory state, last confirmed sighting, hostname/MAC/manufacturer/device identity evidence, owner, department, location, criticality, and notes.
 - `network_observations` records observed and not-observed evidence for each network scan.
 - `asset_events` records meaningful transitions: new asset, returned asset, and not observed.
 - `audit_log` records actor identity, role, authentication method, request correlation, action, target, outcome, bounded summary, and an optional separate-key HMAC link. Legacy rows remain unprotected and labeled.
@@ -145,9 +155,9 @@ NetWatch is intended for approved local environments and applies these controls:
 - A valid signed company token or local Admin, Operator, or Viewer key is required for every non-health API route
 - Company tokens require the configured issuer, audience, signing algorithm/key, time claims, subject, and exact group mapping
 - A supplied invalid bearer token is never allowed to fall back to a valid shared key
-- Viewer can read/export, Operator can also scan and triage alerts, and Admin can also edit asset context, manage policies, and download backups
+- Viewer can read/export, Operator can also scan, capture bounded packet metadata, and triage alerts, and Admin can also edit asset context, manage policies, and download backups
 - API disabled until valid OIDC mapping or at least one unique valid role key is configured
-- Server-side `authorized: true` confirmation for scans
+- Server-side `authorized: true` confirmation for scans and traffic capture
 - Explicit RFC1918, loopback, and link-local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
@@ -157,6 +167,8 @@ NetWatch is intended for approved local environments and applies these controls:
 - Generated response request IDs and safe route-template correlation logs
 - Separate liveness and readiness probes
 - Bounded simultaneous scans
+- One metadata capture by default, with hard 15-second and 1,000-matching-frame request limits
+- Exact interface allowlisting and IP/port/protocol filters; packet payload bytes are immediately discarded and never persisted
 - Scheduler disabled by default and limited to persisted Admin-approved CIDRs
 - Atomic due-policy claims and one policy execution per scheduler cycle
 - Active maintenance windows are checked by scheduler claims and manual policy runs

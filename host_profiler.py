@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-import socket
 from dataclasses import dataclass
 
+from device_identity import identity_for_ip, reverse_hostname
 from ping_checker import ping_host_raw
 from security import validate_target_ip
 
@@ -17,6 +17,14 @@ class HostProfile:
     ttl: int | None
     os_hint: str
     notes: str
+    mac_address: str
+    manufacturer: str
+    device_name: str
+    device_type: str
+    device_family: str
+    identity_confidence: str
+    identity_source: str
+    randomized_mac: bool
 
 
 def parse_latency_ms(output: str) -> float | None:
@@ -49,19 +57,26 @@ def os_hint_from_ttl(ttl: int | None) -> str:
     return "Network device or unknown"
 
 
-def reverse_hostname(ip: str) -> str:
-    try:
-        hostname, _, _ = socket.gethostbyaddr(ip)
-        return hostname
-    except OSError:
-        return "-"
-
-
 def profile_host(ip: str) -> HostProfile:
     validation = validate_target_ip(ip)
     if not validation.ok:
+        identity = identity_for_ip(ip)
         return HostProfile(
-            ip, "-", False, None, None, "Blocked", validation.error or "Invalid target"
+            ip,
+            "-",
+            False,
+            None,
+            None,
+            "Blocked",
+            validation.error or "Invalid target",
+            identity.mac_address,
+            identity.manufacturer,
+            identity.device_name,
+            identity.device_type,
+            identity.device_family,
+            identity.identity_confidence,
+            identity.identity_source,
+            identity.randomized_mac,
         )
 
     target = validation.value or ip.strip()
@@ -71,6 +86,7 @@ def profile_host(ip: str) -> HostProfile:
     ttl = parse_ttl(output)
     online = result.returncode == 0
     hostname = reverse_hostname(target) if online else "-"
+    identity = identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
 
     if online:
         notes = "Host replied to ICMP ping"
@@ -85,4 +101,12 @@ def profile_host(ip: str) -> HostProfile:
         ttl=ttl,
         os_hint=os_hint_from_ttl(ttl),
         notes=notes,
+        mac_address=identity.mac_address,
+        manufacturer=identity.manufacturer,
+        device_name=identity.device_name,
+        device_type=identity.device_type,
+        device_family=identity.device_family,
+        identity_confidence=identity.identity_confidence,
+        identity_source=identity.identity_source,
+        randomized_mac=identity.randomized_mac,
     )

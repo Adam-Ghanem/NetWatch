@@ -139,7 +139,7 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-        assert version == 7
+        assert version == 8
     assert {
         "network_observations",
         "asset_events",
@@ -220,6 +220,81 @@ def test_existing_inventory_schema_migrates_without_losing_assets(monkeypatch, t
     assert asset["details"] == "legacy asset"
     assert asset["owner"] == "Infrastructure"
     assert asset["criticality"] == "High"
+    assert asset["mac_address"] == "-"
+    assert asset["device_name"] == "Unknown device"
+
+
+def test_device_identity_is_saved_and_unknown_refreshes_do_not_erase_it(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    enriched = {
+        "IP Address": "192.168.1.77",
+        "Status": "Online",
+        "Hostname": "Adam-iPhone",
+        "MAC Address": "00:1C:B3:00:00:01",
+        "Manufacturer": "Apple, Inc.",
+        "Device Name": "Adam-iPhone",
+        "Device Type": "Mobile device",
+        "Device Family": "Apple iPhone",
+        "Identity Confidence": "High",
+        "Identity Source": "hostname, MAC OUI",
+        "Randomized MAC": False,
+    }
+    inventory_store.upsert_hosts([enriched])
+    inventory_store.upsert_hosts(
+        [{"IP Address": "192.168.1.77", "Status": "Online", "Details": "second reply"}]
+    )
+
+    asset = inventory_store.asset_inventory()[0]
+
+    assert asset["hostname"] == "Adam-iPhone"
+    assert asset["mac_address"] == "00:1C:B3:00:00:01"
+    assert asset["manufacturer"] == "Apple, Inc."
+    assert asset["device_family"] == "Apple iPhone"
+    assert asset["identity_confidence"] == "High"
+    assert asset["randomized_mac"] is False
+
+
+def test_new_mac_replaces_stale_identity_for_reused_ip(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.upsert_hosts(
+        [
+            {
+                "IP Address": "192.168.1.78",
+                "Status": "Online",
+                "Hostname": "Adam-iPhone",
+                "MAC Address": "00:1C:B3:00:00:01",
+                "Manufacturer": "Apple, Inc.",
+                "Device Name": "Adam-iPhone",
+                "Device Type": "Mobile device",
+                "Device Family": "Apple iPhone",
+                "Identity Confidence": "High",
+                "Identity Source": "hostname, MAC OUI",
+            }
+        ]
+    )
+    inventory_store.upsert_hosts(
+        [
+            {
+                "IP Address": "192.168.1.78",
+                "Status": "Online",
+                "MAC Address": "10:22:33:44:55:66",
+                "Manufacturer": "Unknown",
+                "Device Name": "Unknown device",
+                "Device Type": "Unknown device",
+                "Device Family": "Unknown",
+                "Identity Confidence": "Low",
+                "Identity Source": "neighbor table",
+            }
+        ]
+    )
+
+    asset = inventory_store.asset_inventory()[0]
+
+    assert asset["mac_address"] == "10:22:33:44:55:66"
+    assert asset["hostname"] == "-"
+    assert asset["manufacturer"] == "Unknown"
+    assert asset["device_name"] == "Unknown device"
+    assert asset["identity_confidence"] == "Low"
 
 
 def test_asset_context_is_normalized_and_recorded_in_audit_log(monkeypatch, tmp_path):

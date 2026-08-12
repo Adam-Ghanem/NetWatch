@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -44,11 +45,13 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
         response = client.get("/")
     assert response.status_code == 200
     assert "Connect to NetWatch" in response.text
-    assert "NetWatch v1.6" in response.text
+    assert "NetWatch v1.7" in response.text
     assert "Company context" in response.text
     assert "Operations audit log" in response.text
     assert "Company operations" in response.text
     assert "NetWatch Intelligence" in response.text
+    assert "Traffic explorer" in response.text
+    assert 'id="traffic-form"' in response.text
     assert response.headers["x-frame-options"] == "DENY"
     assert "default-src 'self'" in response.headers["content-security-policy"]
     assert response.headers["strict-transport-security"].startswith("max-age=31536000")
@@ -61,6 +64,8 @@ def test_frontend_assets_are_served(monkeypatch, tmp_path):
     assert response.status_code == 200
     assert "NetWatchApi" in response.text
     assert "/api/session" in response.text
+    assert "/api/traffic/capture" in response.text
+    assert "renderTrafficCapture" in response.text
     assert "innerHTML" not in response.text
     assert "URLSearchParams(window.location.search)" not in response.text
     assert "candidate.origin !== window.location.origin" in response.text
@@ -72,7 +77,7 @@ def test_health_is_public(monkeypatch, tmp_path):
         response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["version"] == "1.6.0"
+    assert response.json()["version"] == "1.7.0"
     assert response.json()["access_enabled"] is True
     assert response.json()["auth_methods"] == ["api_key"]
     assert response.headers["cache-control"] == "no-store"
@@ -312,6 +317,7 @@ def test_session_reports_admin_capabilities(monkeypatch, tmp_path):
         "capabilities": {
             "read": True,
             "scan": True,
+            "capture": True,
             "manage_assets": True,
             "manage_alerts": True,
             "manage_operations": True,
@@ -435,6 +441,160 @@ def test_operator_can_scan_but_cannot_edit_asset_context(monkeypatch, tmp_path):
 
     assert scan.status_code == 200
     assert update.status_code == 403
+
+
+def test_traffic_interfaces_are_protected_and_report_metadata_only_limits(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        api,
+        "capture_interfaces",
+        lambda: [
+            {
+                "name": "eth0",
+                "ipv4_address": "192.168.1.10",
+                "mac_address": "00:1C:B3:00:00:01",
+                "loopback": False,
+            }
+        ],
+    )
+    with _client(monkeypatch, tmp_path) as client:
+        unauthenticated = client.get("/api/traffic/interfaces")
+        response = client.get("/api/traffic/interfaces", headers=API_HEADERS)
+
+    assert unauthenticated.status_code == 401
+    assert response.status_code == 200
+    assert response.json()["interfaces"][0]["name"] == "eth0"
+    assert response.json()["payload_retained"] is False
+    assert response.json()["max_duration_seconds"] == 15
+    assert response.json()["max_packets"] == 1_000
+
+
+def test_authorized_traffic_capture_is_bounded_audited_and_metadata_only(monkeypatch, tmp_path):
+    captured_arguments = {}
+
+    def fake_capture(**kwargs):
+        captured_arguments.update(kwargs)
+        return {
+            "interface": "eth0",
+            "duration_seconds": 3,
+            "captured_packets": 2,
+            "captured_bytes": 120,
+            "payload_retained": False,
+            "filter": {"protocol": "tcp", "ip_address": "", "port": 443},
+            "protocols": [{"protocol": "TCP", "packets": 2}],
+            "conversations": [],
+            "devices": [],
+            "packets": [],
+            "visibility_note": "host traffic only",
+        }
+
+    monkeypatch.setattr(api, "capture_traffic", fake_capture)
+    with _client(monkeypatch, tmp_path) as client:
+        missing_authorization = client.post(
+            "/api/traffic/capture",
+            headers=API_HEADERS,
+            json={
+                "interface": "eth0",
+                "duration_seconds": 3,
+                "max_packets": 25,
+                "protocol": "tcp",
+                "port_filter": 443,
+                "authorized": False,
+            },
+        )
+        invalid_filter = client.post(
+            "/api/traffic/capture",
+            headers=API_HEADERS,
+            json={
+                "interface": "eth0",
+                "duration_seconds": 3,
+                "max_packets": 25,
+                "protocol": "tcp",
+                "ip_filter": "example.com",
+                "authorized": True,
+            },
+        )
+        too_long = client.post(
+            "/api/traffic/capture",
+            headers=API_HEADERS,
+            json={"interface": "eth0", "duration_seconds": 16, "authorized": True},
+        )
+        too_many = client.post(
+            "/api/traffic/capture",
+            headers=API_HEADERS,
+            json={"interface": "eth0", "max_packets": 1_001, "authorized": True},
+        )
+        response = client.post(
+            "/api/traffic/capture",
+            headers=API_HEADERS,
+            json={
+                "interface": "eth0",
+                "duration_seconds": 3,
+                "max_packets": 25,
+                "protocol": "tcp",
+                "port_filter": 443,
+                "authorized": True,
+            },
+        )
+        audit = client.get("/api/audit-log", headers=API_HEADERS)
+
+    assert missing_authorization.status_code == 403
+    assert invalid_filter.status_code == 400
+    assert too_long.status_code == 422
+    assert too_many.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["payload_retained"] is False
+    assert captured_arguments["duration_seconds"] == 3
+    assert captured_arguments["max_packets"] == 25
+    assert captured_arguments["capture_filter"].protocol == "tcp"
+    assert captured_arguments["capture_filter"].port == 443
+    assert audit.json()["items"][0]["action"] == "traffic_metadata_capture"
+    assert "payload_retained=false" in audit.json()["items"][0]["details"]
+
+
+def test_viewer_cannot_start_traffic_capture(monkeypatch, tmp_path):
+    capture_called = False
+
+    def fake_capture(**_):
+        nonlocal capture_called
+        capture_called = True
+        return {}
+
+    monkeypatch.setattr(api, "capture_traffic", fake_capture)
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_VIEWER_KEY", VIEWER_API_KEY)
+        viewer_headers = {"X-NetWatch-Key": VIEWER_API_KEY}
+        session = client.get("/api/session", headers=viewer_headers)
+        response = client.post(
+            "/api/traffic/capture",
+            headers=viewer_headers,
+            json={"interface": "eth0", "authorized": True},
+        )
+
+    assert session.json()["capabilities"]["capture"] is False
+    assert response.status_code == 403
+    assert capture_called is False
+
+
+def test_traffic_capture_concurrency_limit_fails_fast(monkeypatch, tmp_path):
+    capture_called = False
+
+    def fake_capture(**_):
+        nonlocal capture_called
+        capture_called = True
+        return {}
+
+    monkeypatch.setattr(api, "capture_traffic", fake_capture)
+    monkeypatch.setattr(api, "_capture_slots", threading.BoundedSemaphore(1))
+    with _client(monkeypatch, tmp_path) as client:
+        with api._capture_slot():
+            response = client.post(
+                "/api/traffic/capture",
+                headers=API_HEADERS,
+                json={"interface": "eth0", "authorized": True},
+            )
+
+    assert response.status_code == 429
+    assert capture_called is False
 
 
 def test_admin_can_update_asset_context_and_audit_event(monkeypatch, tmp_path):

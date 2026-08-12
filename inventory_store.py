@@ -21,6 +21,7 @@ from config import (
     MAX_NETWORK_OBSERVATIONS,
     MIN_AUDIT_HMAC_KEY_LENGTH,
 )
+from device_identity import normalize_mac
 from intelligence_store import create_intelligence_schema
 from operations_store import create_operations_schema
 
@@ -127,6 +128,15 @@ def init_db() -> None:
                 last_seen TEXT NOT NULL,
                 status TEXT NOT NULL,
                 details TEXT NOT NULL DEFAULT '',
+                hostname TEXT NOT NULL DEFAULT '',
+                mac_address TEXT NOT NULL DEFAULT '',
+                manufacturer TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                device_type TEXT NOT NULL DEFAULT '',
+                device_family TEXT NOT NULL DEFAULT '',
+                identity_confidence TEXT NOT NULL DEFAULT '',
+                identity_source TEXT NOT NULL DEFAULT '',
+                randomized_mac INTEGER NOT NULL DEFAULT 0 CHECK (randomized_mac IN (0, 1)),
                 open_ports TEXT NOT NULL DEFAULT '[]',
                 exposure_score INTEGER NOT NULL DEFAULT 0,
                 exposure_level TEXT NOT NULL DEFAULT 'Clean',
@@ -206,7 +216,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
         create_operations_schema(conn)
         create_intelligence_schema(conn)
-        conn.execute("PRAGMA user_version = 7")
+        conn.execute("PRAGMA user_version = 8")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
@@ -218,6 +228,15 @@ def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
         "criticality": "TEXT NOT NULL DEFAULT 'Medium'",
         "notes": "TEXT NOT NULL DEFAULT ''",
         "context_updated_at": "TEXT NOT NULL DEFAULT ''",
+        "hostname": "TEXT NOT NULL DEFAULT ''",
+        "mac_address": "TEXT NOT NULL DEFAULT ''",
+        "manufacturer": "TEXT NOT NULL DEFAULT ''",
+        "device_name": "TEXT NOT NULL DEFAULT ''",
+        "device_type": "TEXT NOT NULL DEFAULT ''",
+        "device_family": "TEXT NOT NULL DEFAULT ''",
+        "identity_confidence": "TEXT NOT NULL DEFAULT ''",
+        "identity_source": "TEXT NOT NULL DEFAULT ''",
+        "randomized_mac": "INTEGER NOT NULL DEFAULT 0",
     }
     for name, definition in columns.items():
         if name not in existing:
@@ -581,6 +600,30 @@ def _prune_audit_log(conn: sqlite3.Connection) -> None:
     )
 
 
+def _identity_values(row: dict | None) -> dict[str, object]:
+    item = row or {}
+
+    def value(display_name: str, storage_name: str, limit: int) -> str:
+        raw = item.get(display_name, item.get(storage_name, ""))
+        normalized = " ".join(str(raw or "").split())[:limit]
+        if normalized in {"-", "Unknown", "Unknown device", "insufficient evidence"}:
+            return ""
+        return normalized
+
+    mac_address = normalize_mac(value("MAC Address", "mac_address", 17))
+    return {
+        "hostname": value("Hostname", "hostname", 120),
+        "mac_address": mac_address,
+        "manufacturer": value("Manufacturer", "manufacturer", 160),
+        "device_name": value("Device Name", "device_name", 160),
+        "device_type": value("Device Type", "device_type", 80),
+        "device_family": value("Device Family", "device_family", 120),
+        "identity_confidence": value("Identity Confidence", "identity_confidence", 20),
+        "identity_source": value("Identity Source", "identity_source", 240),
+        "randomized_mac": int(bool(item.get("Randomized MAC", item.get("randomized_mac", False)))),
+    }
+
+
 def _upsert_observed_asset(
     conn: sqlite3.Connection,
     ip_address: str,
@@ -588,21 +631,89 @@ def _upsert_observed_asset(
     details: str,
     source: str,
     scan_run_id: int | None = None,
+    identity: dict | None = None,
 ) -> str | None:
     previous = conn.execute(
         "SELECT status FROM assets WHERE ip_address = ?", (ip_address,)
     ).fetchone()
     now = _utc_now()
+    identity_values = _identity_values(identity)
     conn.execute(
         """
-        INSERT INTO assets (ip_address, first_seen, last_seen, status, details)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO assets (
+            ip_address, first_seen, last_seen, status, details,
+            hostname, mac_address, manufacturer, device_name, device_type,
+            device_family, identity_confidence, identity_source, randomized_mac
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(ip_address) DO UPDATE SET
             last_seen=excluded.last_seen,
             status=excluded.status,
-            details=excluded.details
+            details=excluded.details,
+            hostname=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.hostname
+                WHEN excluded.hostname != '' THEN excluded.hostname ELSE assets.hostname END,
+            mac_address=CASE
+                WHEN excluded.mac_address != '' THEN excluded.mac_address
+                ELSE assets.mac_address END,
+            manufacturer=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.manufacturer
+                WHEN excluded.manufacturer != '' THEN excluded.manufacturer
+                ELSE assets.manufacturer END,
+            device_name=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.device_name
+                WHEN excluded.device_name != '' THEN excluded.device_name
+                ELSE assets.device_name END,
+            device_type=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.device_type
+                WHEN excluded.device_type != '' THEN excluded.device_type
+                ELSE assets.device_type END,
+            device_family=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.device_family
+                WHEN excluded.device_family != '' THEN excluded.device_family
+                ELSE assets.device_family END,
+            identity_confidence=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.identity_confidence
+                WHEN excluded.identity_confidence != '' THEN excluded.identity_confidence
+                ELSE assets.identity_confidence END,
+            identity_source=CASE
+                WHEN excluded.mac_address != ''
+                    AND excluded.mac_address != assets.mac_address
+                    THEN excluded.identity_source
+                WHEN excluded.identity_source != '' THEN excluded.identity_source
+                ELSE assets.identity_source END,
+            randomized_mac=CASE
+                WHEN excluded.mac_address != '' THEN excluded.randomized_mac
+                ELSE assets.randomized_mac END
         """,
-        (ip_address, now, now, status[:40], details[:1_000]),
+        (
+            ip_address,
+            now,
+            now,
+            status[:40],
+            details[:1_000],
+            identity_values["hostname"],
+            identity_values["mac_address"],
+            identity_values["manufacturer"],
+            identity_values["device_name"],
+            identity_values["device_type"],
+            identity_values["device_family"],
+            identity_values["identity_confidence"],
+            identity_values["identity_source"],
+            identity_values["randomized_mac"],
+        ),
     )
     if previous is None:
         _insert_asset_event(
@@ -646,7 +757,15 @@ def upsert_hosts(
             seen.add(ip)
             status = str(row.get("Status", "Online"))
             details = str(row.get("Details", ""))
-            _upsert_observed_asset(conn, ip, status, details, source, scan_run_id)
+            _upsert_observed_asset(
+                conn,
+                ip,
+                status,
+                details,
+                source,
+                scan_run_id,
+                identity=row,
+            )
         _prune_change_history(conn)
 
 
@@ -687,6 +806,7 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
                 str(row.get("Details", "")),
                 "network scan",
                 scan_run_id,
+                identity=row,
             )
             if transition == "new_asset":
                 new_assets.append(ip)
@@ -892,6 +1012,8 @@ def update_asset_context(
             """
             SELECT
                 ip_address, first_seen, last_seen, status, details,
+                hostname, mac_address, manufacturer, device_name, device_type,
+                device_family, identity_confidence, identity_source, randomized_mac,
                 exposure_score, exposure_level, open_ports,
                 owner, department, location, criticality, notes, context_updated_at
             FROM assets
@@ -1037,6 +1159,18 @@ def _decode_ports(raw: str | None) -> list[dict]:
 def _asset_record(row: sqlite3.Row) -> dict:
     item = dict(row)
     ports = _decode_ports(item.pop("open_ports", "[]"))
+    item["randomized_mac"] = bool(item.get("randomized_mac", 0))
+    for key, fallback in (
+        ("hostname", "-"),
+        ("mac_address", "-"),
+        ("manufacturer", "Unknown"),
+        ("device_name", "Unknown device"),
+        ("device_type", "Unknown device"),
+        ("device_family", "Unknown"),
+        ("identity_confidence", "Low"),
+        ("identity_source", "insufficient evidence"),
+    ):
+        item[key] = item.get(key) or fallback
     item["open_port_count"] = len(ports)
     item["open_ports"] = ", ".join(str(port.get("Port")) for port in ports) if ports else "-"
     return item
@@ -1073,6 +1207,8 @@ def asset_inventory(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
             """
             SELECT
                 ip_address, first_seen, last_seen, status, details,
+                hostname, mac_address, manufacturer, device_name, device_type,
+                device_family, identity_confidence, identity_source, randomized_mac,
                 exposure_score, exposure_level, open_ports,
                 owner, department, location, criticality, notes, context_updated_at
             FROM assets

@@ -266,7 +266,22 @@ def show_host_check() -> None:
         scan_run_id = add_scan_run("host_profile", target, msg, status=status)
         if profile.online:
             upsert_hosts(
-                [{"IP Address": profile.ip_address, "Status": "Online", "Details": profile.notes}],
+                [
+                    {
+                        "IP Address": profile.ip_address,
+                        "Status": "Online",
+                        "Details": profile.notes,
+                        "Hostname": profile.hostname,
+                        "MAC Address": profile.mac_address,
+                        "Manufacturer": profile.manufacturer,
+                        "Device Name": profile.device_name,
+                        "Device Type": profile.device_type,
+                        "Device Family": profile.device_family,
+                        "Identity Confidence": profile.identity_confidence,
+                        "Identity Source": profile.identity_source,
+                        "Randomized MAC": profile.randomized_mac,
+                    }
+                ],
                 source="host check",
                 scan_run_id=scan_run_id,
             )

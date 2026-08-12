@@ -1,11 +1,11 @@
-# NetWatch v1.6 Acceptance Checklist
+# NetWatch v1.7 Acceptance Checklist
 
 Use this checklist before merging, presenting, or handing over NetWatch.
 
 ## Repository and release
 
-- [ ] README shows NetWatch v1.6 and the correct startup command.
-- [ ] Changelog contains the v1.6.0 release.
+- [ ] README shows NetWatch v1.7 and the correct startup command.
+- [ ] Changelog contains the v1.7.0 release.
 - [ ] Architecture, deployment, and security documentation match the current code.
 - [ ] `.env`, database files, logs, and reports are ignored by Git.
 - [ ] No real API key or internal network evidence is committed.
@@ -37,7 +37,12 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 
 - [ ] Network Scan rejects requests without authorization confirmation.
 - [ ] Network Scan works on a small approved IPv4 CIDR.
-- [ ] Host Check displays reachability, latency, TTL, hostname, and notes.
+- [ ] Host Check displays reachability, latency, TTL, hostname, MAC/manufacturer, device identity, confidence/source, and notes.
+- [ ] A same-segment device with neighbor evidence shows a normalized MAC and offline OUI manufacturer.
+- [ ] Private/randomized MAC addresses are labeled and do not receive a false hardware-vendor claim.
+- [ ] Traffic Explorer rejects requests without authorization and Viewer access.
+- [ ] Traffic Explorer enforces interface allowlisting, exact filters, 15-second/1,000-frame limits, and the capture semaphore.
+- [ ] Traffic Explorer displays protocol, conversation, endpoint, and packet-header metadata without payload content.
 - [ ] Port Audit displays service status, response time, priority, and recommendation.
 - [ ] Port Audit distinguishes open, closed, and filtered/unreachable states.
 - [ ] Inventory displays saved assets and exposure information.
@@ -58,7 +63,7 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.6 database migrates to schema version 7 without losing saved assets, alerts, or audit rows.
+- [ ] An existing pre-v1.7 database migrates to schema version 8 without losing saved assets, alerts, or audit rows.
 - [ ] Legacy audit rows remain labeled and new rows verify through the HMAC chain.
 
 ## Enterprise identity and audit

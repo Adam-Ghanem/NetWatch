@@ -8,21 +8,23 @@ It is not an Internet scanner and it does not include exploitation, credential t
 
 ## Built-in safeguards
 
-NetWatch v1.6 includes:
+NetWatch v1.7 includes:
 
 - Verified OIDC bearer identity or valid Admin, Operator, or Viewer key required for every non-health API endpoint
 - Strict issuer, audience, asymmetric algorithm, signing key, expiry, subject, authorized-party, and exact group-to-role validation
 - Invalid bearer tokens never fall back to a simultaneously supplied local key
 - Malformed or ambiguous authorization headers are rejected, and local role-key values must be unique
-- Viewer read/export, Operator scan/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
+- Viewer read/export, Operator scan/metadata-capture/alert triage, and Admin asset-context/policy/backup authorization enforced server-side
 - Protected operations disabled until at least one non-placeholder role key of 32+ characters is configured
 - Constant-time API-key comparison
-- Server-side authorization confirmation for scan requests
+- Server-side authorization confirmation for scan and traffic-metadata requests
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - Maximum 256 hosts per CIDR scan
 - Per-identity, route-template request rate limiting with bounded in-memory identity buckets
 - Bounded simultaneous scans
+- Exact capture-interface allowlisting, one concurrent capture by default, and hard 15-second/1,000-matching-frame limits
+- Ethernet/IP/ARP/TCP/UDP/ICMP header parsing that immediately discards payload bytes and persists only aggregate no-payload audit evidence
 - Bounded common-port worker count
 - Restricted CORS origins
 - Restricted HTTP Host headers
@@ -36,7 +38,7 @@ NetWatch v1.6 includes:
 - HTML report values escaped
 - Docker container runs as a non-root user
 - Docker service published on localhost only by default
-- Linux capabilities dropped except the minimum raw-network capability required for ping
+- Linux capabilities dropped except the minimum raw-network capability required for ping and bounded packet-header capture
 - FastAPI interactive documentation disabled by default
 - Deterministic local Risk Advisor with no external service calls
 - Optional server-side intelligence that excludes private identifiers and free-text evidence before provider calls
@@ -78,7 +80,7 @@ Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost d
 
 ## Local data
 
-NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, service exposure, and internal network structure.
+NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, MAC/manufacturer/device-identity evidence, service exposure, and internal network structure. Traffic capture metadata is returned to the authorized browser session rather than written to SQLite, but remains sensitive internal evidence.
 
 Default SQLite path:
 

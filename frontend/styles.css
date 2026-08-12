@@ -513,6 +513,15 @@ input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; color:
 .company-form-grid label { margin-top: 4px; }
 .company-form-grid > div { margin-bottom: 16px; }
 .company-form-grid .field-span-2 { grid-column: 1 / -1; }
+.traffic-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.traffic-form-grid label { margin-top: 4px; }
+.traffic-analysis-grid { margin: 18px 0; }
+.traffic-note { min-height: 42px; margin: 0 0 14px; line-height: 1.55; }
+#traffic-packets { max-height: 520px; }
+#traffic-packets td:first-child, #traffic-packets td:nth-child(2) {
+  color: #91a0b7;
+  font-variant-numeric: tabular-nums;
+}
 .triage-grid {
   display: grid;
   grid-template-columns: minmax(180px, 0.35fr) minmax(220px, 0.65fr);
@@ -774,6 +783,7 @@ tbody tr:hover { background: #141f30; }
   .report-grid, .advisor-columns { grid-template-columns: 1fr; }
   .company-form-grid { grid-template-columns: 1fr; }
   .company-form-grid .field-span-2 { grid-column: auto; }
+  .traffic-form-grid { grid-template-columns: 1fr; }
   .triage-grid { grid-template-columns: 1fr; }
   .triage-grid .field-span-2 { grid-column: auto; }
   .mini-metrics { grid-template-columns: 1fr 1fr; }

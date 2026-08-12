@@ -1,8 +1,8 @@
-# NetWatch v1.6 Company Handover
+# NetWatch v1.7 Company Handover
 
 ## Product summary
 
-NetWatch is a local network visibility and defensive review application for authorized internal environments. It gives a trusted internal pilot team a clear web dashboard for host discovery, focused device checks, common-service review, accountable asset context, local risk guidance, operations logging, and lightweight report export.
+NetWatch is a local network visibility and defensive review application for authorized internal environments. It gives a trusted internal pilot team a clear web dashboard for host discovery, device-identity evidence, bounded traffic-metadata analysis, focused device checks, common-service review, accountable asset context, local risk guidance, operations logging, and lightweight report export.
 
 The default product interface and API are served together by FastAPI at:
 
@@ -12,13 +12,15 @@ http://127.0.0.1:8000
 
 ## Current scope
 
-NetWatch v1.6 provides:
+NetWatch v1.7 provides:
 
 - Protected dashboard with automatic company SSO detection and local role-key fallback
 - Strict OIDC token verification and exact company-group role mapping
 - Approved private/local IPv4 validation
 - Local CIDR discovery up to 256 hosts
-- Single-host latency, TTL, hostname, and OS hints
+- Single-host latency, TTL, hostname, MAC/manufacturer/device identity, confidence/source, and OS hints
+- Offline OUI manufacturer lookup, private-MAC detection, and cautious iPhone/Redmi and other device-family hints
+- Operator/Admin Traffic Explorer with bounded Linux header capture, exact filters, protocol/conversation/endpoint summaries, and no payload retention
 - Concurrent review of a conservative common TCP port list
 - Open, Closed, and Filtered/Unreachable result states
 - Exposure priority scoring and recommendations

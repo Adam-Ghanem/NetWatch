@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.7.0
+
+- Added normalized MAC-address discovery from Linux, macOS/BSD, and Windows neighbor-table formats after authorized host checks and local CIDR discovery.
+- Added offline IEEE OUI manufacturer lookup, private/randomized MAC detection, hostname-aware device-family inference, cautious iPhone/Redmi and other device hints, and explicit confidence/source evidence.
+- Persisted hostname, MAC, manufacturer, device name/type/family, identity confidence/source, and randomized-MAC state in the SQLite asset inventory; upgraded the schema to version 8 with an in-place migration.
+- Added an Operator/Admin Traffic Explorer with strict authorization, interface allowlisting, exact IP/port/protocol filters, and a raw Linux Ethernet parser for VLAN, ARP, IPv4/IPv6, TCP, UDP, ICMP, and ICMPv6 headers.
+- Added protocol distribution, top-conversation, observed-endpoint, TCP-flag, VLAN, timestamp, and frame-size views without returning or retaining packet payload bytes.
+- Bounded captures to 15 seconds, 1,000 matching frames, and one concurrent capture by default; recorded only aggregate metadata and the no-payload result in the protected audit log.
+- Updated the responsive dashboard, role capabilities, deployment defaults, documentation, and regression coverage for device identity and packet-metadata analysis.
+
 ## v1.6.0
 
 - Redesigned the primary dashboard as a dark liquid-glass SOC command center with a persistent sidebar, compact mobile navigation, official NetWatch identity, focused scan/inventory quick actions, a data-backed seven-day activity chart, exposure distribution, and highest-asset risk gauge.

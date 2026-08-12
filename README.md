@@ -16,7 +16,7 @@
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
+NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, identify devices from hostname and MAC/OUI evidence, review bounded live traffic metadata, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
 
 > Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
 
@@ -41,7 +41,7 @@ The previews below use sample data and do not contain real network identifiers.
 
 Capture guidance for future screenshots and short demos is documented in [`docs/screenshots/README.md`](docs/screenshots/README.md).
 
-## NetWatch v1.6 Enterprise foundations
+## NetWatch v1.7 Device and traffic intelligence
 
 The default product is a responsive dark, liquid-glass SOC command-center dashboard served together with the protected FastAPI API at one local address:
 
@@ -50,6 +50,10 @@ http://127.0.0.1:8000
 ```
 
 The original Streamlit interface remains available as an optional legacy profile, but it is no longer the default product UI.
+
+v1.7 adds device-identity evidence to discovery, host checks, and inventory. NetWatch correlates reverse-DNS hostnames, the operating-system neighbor table, normalized MAC addresses, an offline IEEE OUI database, and cautious heuristics to show names such as iPhone or Redmi when the available evidence supports them. It also detects locally administered/private MAC addresses and always reports an identity confidence and source.
+
+The new Traffic Explorer provides a bounded Wireshark-style metadata view for authorized Operator and Admin users. It parses Ethernet, VLAN, ARP, IPv4/IPv6, TCP, UDP, and ICMP headers; summarizes protocols, conversations, and observed endpoint hints; limits each capture to 15 seconds and 1,000 matching frames; and immediately discards payload bytes. Capture metadata is returned to the current browser session and is not written to inventory.
 
 v1.6 adds an optional enterprise identity boundary. A reviewed OIDC-aware reverse proxy can forward signed bearer tokens, which NetWatch validates against one configured HTTPS JWKS endpoint with an explicit issuer, audience, algorithm allowlist, expiry, subject, and exact company-group mapping. Users then authenticate through company SSO without receiving a NetWatch role key or provider key. Local role keys remain available for local and controlled break-glass use.
 
@@ -66,6 +70,10 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Strict OIDC/JWT verification with exact group-to-role mapping
 - Admin, Operator, and Viewer access tiers with server-side authorization
 - Authorized local IPv4 CIDR discovery
+- MAC-address, offline manufacturer/OUI, hostname, device-family, and identity-confidence evidence
+- iPhone, iPad, Mac, Redmi/Xiaomi, Pixel, Galaxy, printer, router, camera, and other cautious device-family hints
+- Bounded Wireshark-style live header analysis with protocol, conversation, endpoint, TCP-flag, VLAN, and frame-size views
+- Explicit no-payload retention, 15-second/1,000-frame limits, and one capture at a time by default
 - Historical scan snapshots with new, returned, and not-observed asset detection
 - Single-host latency, TTL, hostname, and cautious OS hints
 - Bounded concurrent common-port audit
@@ -167,6 +175,8 @@ Shows saved assets, open services, assets requiring review, recent checks, recen
 
 Checks an approved local IPv4 CIDR with a maximum of 256 hosts. Each completed scan saves a normalized snapshot and compares it with earlier observations. NetWatch highlights newly observed devices, devices seen again after an absence, and known devices that did not reply this time.
 
+For devices visible in the sensor's local neighbor table, results also include normalized MAC address, offline manufacturer/OUI lookup, hostname, device name/family, private-MAC status, confidence, and evidence source.
+
 ICMP filtering may hide active devices, so NetWatch uses **Not observed** instead of claiming that a missing device is offline. A zero-host result does not prove that the network is empty.
 
 ### Host check
@@ -177,6 +187,8 @@ Profiles one approved IPv4 host and displays:
 - Round-trip latency
 - TTL
 - Reverse-DNS hostname
+- MAC address and offline manufacturer/OUI evidence
+- Device name, type, family, private-MAC status, identity confidence, and evidence source
 - Cautious operating-system hint
 - Observation notes
 
@@ -193,15 +205,27 @@ Reviews a short defensive list of common TCP services and displays:
 
 An open port is exposure that requires context and validation. It is not automatic proof of a vulnerability.
 
+### Traffic Explorer
+
+Runs a short, explicitly authorized metadata capture on one Linux sensor interface and displays:
+
+- Protocol counts for Ethernet, ARP, IPv4/IPv6, TCP, UDP, ICMP, and ICMPv6 observations
+- Top source-to-destination conversations with packet and frame-byte counts
+- Endpoint MAC addresses, IP addresses, offline manufacturer/OUI, device hints, confidence, and private-MAC status
+- A packet timeline containing timestamps, endpoints, ports, TCP flags, VLAN IDs, and frame lengths
+- Optional exact IP, port, and protocol filters
+
+NetWatch never returns or stores payload bytes. A normal switched interface generally sees only traffic to or from the NetWatch sensor. Segment-wide visibility requires a separately approved SPAN/mirror port or sensor architecture. Docker bridge and Kubernetes pod networking expose the container or pod interface, not automatically the host LAN.
+
 ### Inventory and history
 
-Stores local assets, first and last confirmed sightings, status, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite. Admins can assign an owner, department, location, business criticality, and operational notes. Viewer and Operator roles can read this context but cannot edit it.
+Stores local assets, first and last confirmed sightings, status, hostname/MAC/manufacturer/device-identity evidence, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite. Admins can assign an owner, department, location, business criticality, and operational notes. Viewer and Operator roles can read this context but cannot edit it.
 
 Inventory can be exported as formula-safe CSV for an approved internal workflow.
 
 ### Operations audit log
 
-Records successful network scans, host checks, port audits, and controlled operations with UTC time, individual actor, role, authentication method, request ID, target, outcome, and a short summary. A separate server-only key protects new records with a chained HMAC and keyed latest-event checkpoint; full retained-chain verification pauses privileged operations after detected tampering. Raw API keys and bearer tokens are never written to the log. Retention is bounded to the latest 10,000 events, and pre-v1.6 rows remain clearly marked as legacy rather than being silently re-signed.
+Records successful network scans, host checks, port audits, metadata-only traffic captures, and controlled operations with UTC time, individual actor, role, authentication method, request ID, target, outcome, and a short summary. Traffic audit entries store only the interface, header/frame counts, and the no-payload-retention result. A separate server-only key protects new records with a chained HMAC and keyed latest-event checkpoint; full retained-chain verification pauses privileged operations after detected tampering. Raw API keys and bearer tokens are never written to the log. Retention is bounded to the latest 10,000 events, and pre-v1.6 rows remain clearly marked as legacy rather than being silently re-signed.
 
 ### Company operations
 
@@ -244,7 +268,7 @@ Role-protected FastAPI application (`backend/main.py`)
               |
     +---------+----------+
     |         |          |
-Validation  Scanners   Operations
+Validation  Sensors    Operations
     |         |          |
     +---------+----------+
               |
@@ -263,9 +287,9 @@ NetWatch applies defense in depth:
 - A verified company bearer token or `X-NetWatch-Key` is required for all non-health API endpoints
 - Exact OIDC issuer, audience, asymmetric algorithm, signing key, expiry, subject, authorized-party, and group validation
 - Admin (`NETWATCH_API_KEY`), optional Operator, and optional Viewer keys remain available for local/break-glass use
-- Viewer can read and export; Operator can also run authorized checks and triage alert cases; Admin can also edit asset context, manage approved policies and maintenance windows, and create backups
+- Viewer can read and export; Operator can also run authorized checks, start bounded metadata-only captures, and triage alert cases; Admin can also edit asset context, manage approved policies and maintenance windows, and create backups
 - Protected access disabled until a valid OIDC mapping or at least one unique valid role key is configured
-- Server-side `authorized: true` required for scan requests
+- Server-side `authorized: true` required for scan and traffic-capture requests
 - Explicit local IPv4 allowlists
 - Public and unsupported IPv6 targets rejected
 - CIDR scans limited to 256 hosts
@@ -274,6 +298,8 @@ NetWatch applies defense in depth:
 - Admin-only individual audit identity plus separate-key retained HMAC-chain verification
 - Generated response request IDs, safe route-template correlation logs, and separate liveness/readiness probes
 - One simultaneous scan by default
+- One simultaneous traffic capture by default, with a hard 15-second and 1,000-matching-frame bound per request
+- Traffic capture keeps parsed header metadata only for the response, immediately discards payload bytes, and writes only aggregate no-payload evidence to the audit log
 - Scheduled scans are opt-in, use persisted Admin-approved private CIDRs, and share the same scan semaphore
 - Policy intervals are limited to 15 minutes through 7 days and policy count is bounded to 50
 - Maintenance windows are timezone-aware, limited to 31 days, bounded to 100 records, and enforced before policy execution
@@ -328,6 +354,22 @@ curl -X POST http://127.0.0.1:8000/api/audit/ports \
   -H "Content-Type: application/json" \
   -H "X-NetWatch-Key: YOUR_LOCAL_KEY" \
   -d '{"ip":"192.168.1.1","authorized":true}'
+```
+
+List sensor interfaces:
+
+```bash
+curl http://127.0.0.1:8000/api/traffic/interfaces \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
+Run a three-second metadata-only capture on an approved interface (Operator/Admin only):
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/traffic/capture \
+  -H "Content-Type: application/json" \
+  -H "X-NetWatch-Key: YOUR_OPERATOR_OR_ADMIN_KEY" \
+  -d '{"interface":"auto","duration_seconds":3,"max_packets":100,"protocol":"tcp","port_filter":443,"authorized":true}'
 ```
 
 Recent asset changes:
@@ -490,6 +532,7 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI docs for local development |
 | `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
+| `NETWATCH_MAX_CONCURRENT_CAPTURES` | `1` | Simultaneous metadata-capture limit, bounded to at most 2 |
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
@@ -520,7 +563,7 @@ data/netwatch.db
 The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Compose persists it in a named volume. Its main records are:
 
 - `scan_runs`: one audit record per completed check
-- `assets`: current inventory, last confirmed sighting, ownership, location, criticality, and notes
+- `assets`: current inventory, last confirmed sighting, device identity/MAC/manufacturer evidence, ownership, location, criticality, and notes
 - `network_observations`: normalized observed/not-observed evidence per network scan
 - `asset_events`: new, returned, and not-observed transitions
 - `audit_log`: bounded role/action/target records for operational accountability
@@ -573,6 +616,11 @@ NetWatch provides useful local evidence, not absolute truth:
 - ICMP discovery can miss hosts that block ping
 - **Not observed** means no reply in the latest relevant scan; it does not mean confirmed offline
 - Reverse DNS may not return a hostname
+- A MAC address is normally available only for devices visible on the sensor's Layer-2 neighbor segment; routed or containerized scans may show only a gateway
+- MAC/OUI identifies a manufacturer allocation, not an exact product model; iPhone/Redmi-style names require supporting hostname evidence
+- Modern private/randomized MAC addresses can intentionally hide the hardware manufacturer
+- A normal switched interface sees mainly traffic to or from the sensor; full-segment capture requires an approved mirror/SPAN design
+- Live traffic capture currently requires Linux `AF_PACKET` plus `NET_RAW` permission and never retains payload bytes
 - TTL-based OS hints are approximate
 - Firewalls can affect Closed and Filtered results
 - Device roles are inferred from observed services
@@ -601,6 +649,7 @@ NetWatch/
 ├── app.py                  # optional legacy Streamlit UI
 ├── advisory_engine.py
 ├── config.py
+├── device_identity.py
 ├── host_profiler.py
 ├── inventory_store.py
 ├── network_scanner.py
@@ -610,6 +659,7 @@ NetWatch/
 ├── risk_engine.py
 ├── security.py
 ├── service_catalog.py
+├── traffic_capture.py
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -625,7 +675,7 @@ NetWatch/
 - Per-scan normalized service findings
 - Configurable retention and cleanup controls
 - Local CVE enrichment with explicit version-confidence handling
-- ARP discovery where operating-system permissions allow
+- Optional active ARP discovery beyond the current passive neighbor-table correlation
 - Progress updates and cancellation for longer scans
 - PDF reports
 - Safe public demo mode with sample data and scanning disabled
@@ -643,4 +693,4 @@ NetWatch is released under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-NetWatch is a defensive local visibility tool. Use it only with clear authorization. v1.6 can form the application layer of a reviewed internal company deployment, but it must not be exposed directly to the Internet or treated as a multi-tenant or multi-replica HA service without the external controls and architecture described in the enterprise deployment guide.
+NetWatch is a defensive local visibility tool. Use it only with clear authorization. v1.7 can form the application layer of a reviewed internal company deployment, but it must not be exposed directly to the Internet or treated as a multi-tenant or multi-replica HA service without the external controls and architecture described in the enterprise deployment guide.
