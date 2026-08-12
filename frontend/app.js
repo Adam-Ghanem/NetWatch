@@ -566,10 +566,11 @@ async function loadOverview() {
 }
 
 async function loadInventory() {
-  const [inventoryPayload, historyPayload, changesPayload] = await Promise.all([
+  const [inventoryPayload, historyPayload, changesPayload, servicePayload] = await Promise.all([
     apiJson('/api/inventory'),
     apiJson('/api/history?limit=50'),
     apiJson('/api/changes?limit=50'),
+    apiJson('/api/service-findings?limit=200'),
   ]);
   state.assets = inventoryPayload.assets || [];
   renderTable($('#inventory-results'), state.assets, [
@@ -589,6 +590,17 @@ async function loadInventory() {
     { key: 'exposure_score', label: 'Score' },
     { key: 'exposure_level', label: 'Priority', chip: true },
   ], 'Inventory is empty. Run a network scan or port audit.');
+  renderTable($('#service-findings-results'), servicePayload.items || [], [
+    { key: 'observed_at', label: 'Observed' },
+    { key: 'scan_run_id', label: 'Scan' },
+    { key: 'ip_address', label: 'IP address' },
+    { key: 'port', label: 'Port' },
+    { key: 'protocol', label: 'Protocol' },
+    { key: 'service', label: 'Service' },
+    { key: 'status', label: 'Status', chip: true },
+    { key: 'risk', label: 'Risk', chip: true },
+    { key: 'response_time_ms', label: 'Response ms' },
+  ], 'No normalized service findings yet. Run an authorized port audit.');
   renderTable($('#changes-results'), changesPayload.items || [], [
     { key: 'created_at', label: 'Time' },
     { key: 'ip_address', label: 'IP address' },

@@ -299,10 +299,16 @@
             <div><p class="eyebrow">Persistent local data</p><h3>Asset inventory</h3></div>
             <div class="button-row"><button id="inventory-export" class="button primary" type="button">Export CSV</button><button id="inventory-refresh" class="button ghost" type="button">Refresh inventory</button></div>
           </div>
-          <div id="inventory-results" class="table-wrap"></div>
+                    <div id="inventory-results" class="table-wrap"></div>
         </article>
         <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Company context</p><h3>Ownership and business priority</h3></div><span class="count-badge">Admin</span></div>
+          <div class="panel-head"><div><p class="eyebrow">Service history</p><h3>Normalized service findings</h3></div><span class="count-badge">Per scan</span></div>
+          <p class="muted">Historical port-audit metadata is retained with bounded limits. This view contains service state and timing only; it does not store payloads.</p>
+          <div id="service-findings-results" class="table-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Company context</p>
+<h3>Ownership and business priority</h3></div><span class="count-badge">Admin</span></div>
           <form id="asset-context-form" class="company-form-grid">
             <div class="field-span-2">
               <label for="asset-ip">Inventory asset</label>

@@ -139,7 +139,7 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-        assert version == 8
+        assert version == 9
     assert {
         "network_observations",
         "asset_events",
@@ -150,6 +150,7 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
         "maintenance_windows",
         "intelligence_events",
         "intelligence_daily_usage",
+        "service_findings",
     }.issubset(tables)
 
 
@@ -605,3 +606,83 @@ def test_audit_identity_preserves_bounded_oidc_subject(monkeypatch, tmp_path):
 
     saved = inventory_store.recent_audit_log(include_identity=True)
     assert saved[0]["actor_id"] == actor_id
+
+
+def test_service_findings_are_normalized_and_filterable(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    scan_run_id = inventory_store.add_scan_run("ports", "192.168.1.10", "port audit completed")
+    inventory_store.update_asset_ports(
+        "192.168.1.10",
+        [
+            {
+                "Port": 22,
+                "Protocol": "tcp",
+                "Service": " SSH " + ("x" * 200),
+                "Status": "Open",
+                "Risk": "Medium",
+                "Response Time (ms)": "12.345",
+            },
+            {
+                "Port": 443,
+                "Protocol": "TCP",
+                "Service": "HTTPS",
+                "Status": "Closed",
+                "Risk": "None",
+                "Response Time (ms)": "-",
+            },
+            {"Port": 70_000, "Protocol": "TCP", "Status": "Open"},
+        ],
+        exposure_score=2,
+        exposure_level="Low",
+        scan_run_id=scan_run_id,
+    )
+
+    findings = inventory_store.recent_service_findings()
+    filtered = inventory_store.recent_service_findings(scan_run_id=scan_run_id)
+
+    assert len(findings) == 2
+    assert filtered == findings
+    assert findings[0]["scan_run_id"] == scan_run_id
+    assert findings[0]["ip_address"] == "192.168.1.10"
+    assert findings[0]["port"] == 443
+    assert findings[1]["port"] == 22
+    assert len(findings[1]["service"]) <= 120
+    assert findings[1]["response_time_ms"] == 12.35
+
+
+def test_service_findings_retention_is_bounded(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setattr(inventory_store, "MAX_SERVICE_FINDINGS", 2)
+
+    for index in range(3):
+        scan_run_id = inventory_store.add_scan_run(
+            "ports", f"192.168.1.{index + 1}", "port audit completed"
+        )
+        inventory_store.update_asset_ports(
+            f"192.168.1.{index + 1}",
+            [{"Port": 22, "Protocol": "TCP", "Service": "SSH", "Status": "Open"}],
+            exposure_score=2,
+            exposure_level="Low",
+            scan_run_id=scan_run_id,
+        )
+
+    findings = inventory_store.recent_service_findings(limit=20)
+    assert len(findings) == 2
+    assert {item["ip_address"] for item in findings} == {"192.168.1.2", "192.168.1.3"}
+
+
+def test_service_findings_reject_invalid_ip_filter(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    with pytest.raises(ValueError, match="valid IPv4"):
+        inventory_store.recent_service_findings(ip_address="not-an-ip")
+
+
+def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.update_asset_ports(
+        "192.168.1.10",
+        [{"Port": 22, "Protocol": "TCP", "Service": "SSH", "Status": "Open"}],
+        exposure_score=2,
+        exposure_level="Low",
+    )
+    assert inventory_store.recent_service_findings() == []

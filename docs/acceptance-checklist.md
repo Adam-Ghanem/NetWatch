@@ -63,7 +63,9 @@ Use this checklist before merging, presenting, or handing over NetWatch.
 - [ ] Audit Log records scan and context operations without API keys.
 - [ ] Both report formats include recent operations audit events.
 - [ ] Both report formats include case/SLA evidence, approved scan policies, and maintenance windows.
-- [ ] An existing pre-v1.7 database migrates to schema version 8 without losing saved assets, alerts, or audit rows.
+- [ ] An existing pre-v1.7 database migrates to schema version 9 without losing saved assets, alerts, audit rows, or port-audit history.
+- [ ] Normalized service findings are bounded, authenticated, filterable by scan/IP, and contain no payload data.
+- [ ] Optional notifications remain disabled when channel URLs are empty or unsafe; configured channels expose no secrets or raw targets by default.
 - [ ] Legacy audit rows remain labeled and new rows verify through the HMAC chain.
 
 ## Enterprise identity and audit
