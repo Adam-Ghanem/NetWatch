@@ -77,11 +77,11 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 
 - SQLite uses WAL mode and busy timeout.
 - Timestamps are stored in UTC.
-- Asset events, normalized observations, and operations audit records have bounded retention.
+- Asset events, normalized observations, normalized per-scan service findings, and operations audit records have bounded retention.
 - Audit records can contain individual actor, role, authentication method, request ID, action, target, outcome, and short details but never raw keys or bearer tokens.
 - New audit records use a separate server-only HMAC key, chained hashes, and a keyed head checkpoint. Readiness and privileged operations verify every retained protected row and pause on changes, broken links, unprotected suffixes, or protected-tail deletion. Pre-v1.6 rows remain explicit legacy evidence.
 - Individual audit identities are Admin-only; generated reports use identity-redacted audit rows.
-- Existing databases migrate in place at schema version 8, adding nullable/defaulted device-identity fields without rewriting historical evidence.
+- Existing databases migrate in place at schema version 9, adding the bounded service-findings table alongside the prior device-identity fields without rewriting historical evidence.
 - Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
 - A resolution note is required before a case can be closed; later recurrence creates a new open case.
 - Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
@@ -93,6 +93,7 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - HTML report values are escaped.
 - Markdown table delimiters and line breaks are escaped.
 - The dashboard renders dynamic values with text nodes instead of HTML insertion.
+- Service findings accept only bounded normalized port-audit fields, enforce IPv4/port validation, and never retain packet payloads.
 
 ### Optional intelligence boundary
 

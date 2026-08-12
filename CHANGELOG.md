@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added optional HTTPS generic-webhook and Slack-compatible alert delivery with Admin-only status/test controls, de-identified payloads by default, bounded retries, debounce, response caps, and per-channel circuit breaking.
+- Added normalized per-scan service findings for port audits with sanitized protocol, port, service, status, risk, and response-time fields, bounded 50,000-row retention, authenticated filtering, and a dashboard history panel.
+- Upgraded SQLite schema tracking to version 9 and added migration, retention, API, and frontend regression coverage for service findings.
+
 ## v1.7.0
 
 - Added normalized MAC-address discovery from Linux, macOS/BSD, and Windows neighbor-table formats after authorized host checks and local CIDR discovery.

@@ -19,6 +19,7 @@ from config import (
     MAX_AUDIT_LOG_ENTRIES,
     MAX_INVENTORY_ROWS,
     MAX_NETWORK_OBSERVATIONS,
+    MAX_SERVICE_FINDINGS,
     MIN_AUDIT_HMAC_KEY_LENGTH,
 )
 from device_identity import normalize_mac
@@ -201,6 +202,30 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             )
             """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS service_findings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scan_run_id INTEGER NOT NULL,
+                ip_address TEXT NOT NULL,
+                port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
+                protocol TEXT NOT NULL,
+                service TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                risk TEXT NOT NULL DEFAULT 'None',
+                response_time_ms REAL,
+                observed_at TEXT NOT NULL,
+                UNIQUE(scan_run_id, ip_address, protocol, port),
+                FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
+            )
+            """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_service_findings_scan "
+            "ON service_findings(scan_run_id, id)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_service_findings_asset "
+            "ON service_findings(ip_address, id)"
+        )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_observations_scan ON network_observations(scan_run_id)"
         )
@@ -216,7 +241,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
         create_operations_schema(conn)
         create_intelligence_schema(conn)
-        conn.execute("PRAGMA user_version = 8")
+        conn.execute("PRAGMA user_version = 9")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
@@ -862,6 +887,69 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
     return result
 
 
+def _normalized_service_findings(
+    ip_address: str,
+    port_rows: Iterable[dict],
+    scan_run_id: int | None,
+    observed_at: str,
+) -> list[tuple[object, ...]]:
+    if scan_run_id is None:
+        return []
+    findings: list[tuple[object, ...]] = []
+    for row in port_rows:
+        if not isinstance(row, dict):
+            continue
+        raw_port = row.get("Port")
+        if raw_port is None:
+            continue
+        try:
+            port = int(str(raw_port))
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= port <= 65_535:
+            continue
+        protocol = _audit_value(row.get("Protocol", "TCP"), 20).upper() or "TCP"
+        service = _audit_value(row.get("Service", ""), 120)
+        status = _audit_value(row.get("Status", "Unknown"), 40) or "Unknown"
+        risk = _audit_value(row.get("Risk", "None"), 20) or "None"
+        response_time: float | None = None
+        raw_response = row.get("Response Time (ms)")
+        if raw_response not in {None, "", "-"}:
+            try:
+                parsed_response = float(str(raw_response))
+                if 0 <= parsed_response <= 600_000:
+                    response_time = round(parsed_response, 2)
+            except (TypeError, ValueError):
+                pass
+        findings.append(
+            (
+                scan_run_id,
+                ip_address,
+                port,
+                protocol,
+                service,
+                status,
+                risk,
+                response_time,
+                observed_at,
+            )
+        )
+    return findings
+
+
+def _prune_service_findings(conn: sqlite3.Connection) -> None:
+    total = int(conn.execute("SELECT COUNT(*) FROM service_findings").fetchone()[0])
+    excess = max(0, total - MAX_SERVICE_FINDINGS)
+    if excess:
+        conn.execute(
+            """
+            DELETE FROM service_findings
+            WHERE id IN (SELECT id FROM service_findings ORDER BY id ASC LIMIT ?)
+            """,
+            (excess,),
+        )
+
+
 def update_asset_ports(
     ip_address: str,
     port_rows: Iterable[dict],
@@ -874,7 +962,8 @@ def update_asset_ports(
     if not normalized_ip:
         raise ValueError("A valid IPv4 asset address is required.")
     now = _utc_now()
-    open_ports = [row for row in port_rows if row.get("Status") == "Open"]
+    normalized_rows = [dict(row) for row in port_rows if isinstance(row, dict)]
+    open_ports = [row for row in normalized_rows if row.get("Status") == "Open"]
     encoded = json.dumps(open_ports, ensure_ascii=False)
     with _connect() as conn:
         previous = conn.execute(
@@ -897,6 +986,16 @@ def update_asset_ports(
             """,
             (normalized_ip, now, now, encoded, exposure_score, exposure_level),
         )
+        if scan_run_id is not None:
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO service_findings (
+                    scan_run_id, ip_address, port, protocol, service,
+                    status, risk, response_time_ms, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                _normalized_service_findings(normalized_ip, normalized_rows, scan_run_id, now),
+            )
         if previous is None:
             _insert_asset_event(
                 conn,
@@ -914,6 +1013,7 @@ def update_asset_ports(
                 scan_run_id,
             )
         _prune_change_history(conn)
+        _prune_service_findings(conn)
 
 
 def record_audit_event(
@@ -1025,6 +1125,37 @@ def update_asset_context(
     if row is None:
         raise RuntimeError("Asset context was updated but could not be reloaded.")
     return _asset_record(row)
+
+
+def recent_service_findings(
+    *,
+    limit: int = 200,
+    scan_run_id: int | None = None,
+    ip_address: str | None = None,
+) -> list[dict]:
+    init_db()
+    safe_limit = max(1, min(int(limit), 1_000))
+    normalized_ip = None
+    if ip_address:
+        normalized_ip = _normalize_ipv4(ip_address)
+        if not normalized_ip:
+            raise ValueError("A valid IPv4 asset address is required.")
+    if scan_run_id is not None and int(scan_run_id) < 1:
+        raise ValueError("scan_run_id must be a positive integer.")
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT scan_run_id, observed_at, ip_address, port, protocol,
+                   service, status, risk, response_time_ms
+            FROM service_findings
+            WHERE (? IS NULL OR scan_run_id = ?)
+              AND (? IS NULL OR ip_address = ?)
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (scan_run_id, scan_run_id, normalized_ip, normalized_ip, safe_limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def recent_scan_runs(limit: int = 30) -> list[dict]:

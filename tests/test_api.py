@@ -51,6 +51,7 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
     assert "Company operations" in response.text
     assert "NetWatch Intelligence" in response.text
     assert "Traffic explorer" in response.text
+    assert "Normalized service findings" in response.text
     assert 'id="traffic-form"' in response.text
     assert response.headers["x-frame-options"] == "DENY"
     assert "default-src 'self'" in response.headers["content-security-policy"]
@@ -65,6 +66,7 @@ def test_frontend_assets_are_served(monkeypatch, tmp_path):
     assert "NetWatchApi" in response.text
     assert "/api/session" in response.text
     assert "/api/traffic/capture" in response.text
+    assert "/api/service-findings" in response.text
     assert "renderTrafficCapture" in response.text
     assert "innerHTML" not in response.text
     assert "URLSearchParams(window.location.search)" not in response.text
@@ -1175,3 +1177,26 @@ def test_daily_budget_rejects_before_a_second_provider_call(monkeypatch, tmp_pat
     assert first.status_code == 200
     assert second.status_code == 429
     assert provider_calls == 1
+
+
+def test_service_findings_endpoint_is_authenticated_and_filterable(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        scan_run_id = inventory_store.add_scan_run("ports", "192.168.1.10", "port audit completed")
+        inventory_store.update_asset_ports(
+            "192.168.1.10",
+            [{"Port": 22, "Protocol": "TCP", "Service": "SSH", "Status": "Open"}],
+            exposure_score=2,
+            exposure_level="Low",
+            scan_run_id=scan_run_id,
+        )
+        response = client.get(
+            "/api/service-findings",
+            headers=API_HEADERS,
+            params={"scan_run_id": scan_run_id},
+        )
+        missing_key = client.get("/api/service-findings")
+
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["items"][0]["port"] == 22
+    assert missing_key.status_code == 401

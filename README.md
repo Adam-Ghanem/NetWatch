@@ -84,6 +84,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Approved scan policies with immutable private CIDR scope and 15-minute minimum intervals
 - Opt-in single-process scheduler using the existing scan concurrency limit
 - Deduplicated operational alert cases for new, returned, and not-observed assets
+- Optional HTTPS webhook/Slack alert delivery with de-identified payloads, debounce, retry bounds, and circuit breaking
 - Criticality-aware severity, local SLA due times, assignment, acknowledgement, and evidence-backed resolution
 - Bounded global or policy-specific maintenance windows that pause policy execution
 - Authenticated Prometheus text-format operational and HTTP counters without target labels
@@ -95,6 +96,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - AI cache, separate rate/concurrency limits, atomic daily request budget, redirect refusal, safe failure handling, and local fallback
 - Markdown and standalone HTML report downloads
 - Formula-safe inventory CSV export
+- Normalized per-scan service findings with bounded retention and scan/IP filters
 - Public, oversized, and unsupported targets blocked
 - API authentication, bounded per-identity rate-limit state, scan concurrency limits, and security headers
 - Minimum-length API secrets and explicit HTTP Host/CORS allowlists
@@ -386,6 +388,13 @@ curl "http://127.0.0.1:8000/api/observations?limit=100" \
   -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
 ```
 
+Historical normalized service findings:
+
+```bash
+curl "http://127.0.0.1:8000/api/service-findings?limit=100&ip_address=192.168.1.20" \
+  -H "X-NetWatch-Key: YOUR_LOCAL_KEY"
+```
+
 Update company context for a saved asset (Admin only):
 
 ```bash
@@ -536,6 +545,11 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
 | `NETWATCH_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window |
 | `NETWATCH_PORT_SCAN_WORKERS` | `12` | Bounded TCP review workers |
+| `NETWATCH_WEBHOOK_URL` | empty | Optional HTTPS generic webhook for alert delivery; disabled when empty or invalid |
+| `NETWATCH_SLACK_WEBHOOK_URL` | empty | Optional HTTPS Slack-compatible webhook; disabled when empty or invalid |
+| `NETWATCH_NOTIFY_MIN_SEVERITY` | `High` | Minimum alert severity sent to configured channels |
+| `NETWATCH_NOTIFY_DEBOUNCE_SECONDS` | `900` | Minimum repeat interval for the same notification fingerprint |
+| `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS` | `false` | Explicitly includes alert targets in outbound payloads; keep disabled by default |
 | `NETWATCH_SCHEDULER_ENABLED` | `false` | Enables execution of due approved policies in the single API process |
 | `NETWATCH_SCHEDULER_POLL_SECONDS` | `30` | Scheduler polling interval, bounded from 5 to 300 seconds |
 | `OPENAI_API_KEY` | empty | Optional server-side provider secret; never send it to the browser or commit it |
@@ -569,10 +583,11 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 - `audit_log`: bounded role/action/target records for operational accountability
 - `scan_policies`: Admin-approved private CIDRs, intervals, enablement, and last/next run state
 - `operation_alerts`: deduplicated alert cases with severity, occurrence count, SLA, assignment, acknowledgement, and resolution evidence
+- `service_findings`: bounded per-scan service metadata including IP, port, protocol, service, status, risk, and response timing; no payload data
 - `maintenance_windows`: bounded global or policy-specific execution pauses with UTC schedule and change reason
 - `intelligence_events`: bounded provider-call metadata, safe error codes, token counts, and de-identified structured brief cache; prompts, snapshots, keys, and raw network evidence are not stored
 
-Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50 scan policies, 100 maintenance windows, and 1,000 intelligence events so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50,000 service findings, 50 scan policies, 100 maintenance windows, and 1,000 intelligence events so a long-running local installation does not grow without limit.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
