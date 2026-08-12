@@ -5,6 +5,9 @@
 - Added optional HTTPS generic-webhook and Slack-compatible alert delivery with Admin-only status/test controls, de-identified payloads by default, bounded retries, debounce, response caps, and per-channel circuit breaking.
 - Added normalized per-scan service findings for port audits with sanitized protocol, port, service, status, risk, and response-time fields, bounded 50,000-row retention, authenticated filtering, and a dashboard history panel.
 - Upgraded SQLite schema tracking to version 9 and added migration, retention, API, and frontend regression coverage for service findings.
+- Added the ABC enterprise architecture document with explicit `single_tenant`, `compatibility`, and fail-closed `shared_service` modes.
+- Added SQLite-compatible transactional outbox and idempotent job primitives with tenant scope, dedupe keys, leases, bounded attempts, retry state, and dead-letter visibility.
+- Added Admin-only `/api/enterprise/status` and authenticated queue gauges for platform readiness without returning secrets or backend URLs; upgraded SQLite schema tracking to version 10.
 
 ## v1.7.0
 

@@ -1,6 +1,6 @@
 # Enterprise deployment guide
 
-NetWatch v1.7 provides enterprise identity, audit-integrity, device-identity correlation, bounded traffic-metadata visibility, observability, and container controls for a reviewed internal deployment. The current persistence and scheduler design is intentionally single-instance; this guide does not claim multi-replica high availability.
+NetWatch v1.7 provides enterprise identity, audit-integrity, device-identity correlation, bounded traffic-metadata visibility, observability, durable outbox/job seams, and container controls for a reviewed internal deployment. The current SQLite persistence and in-process scheduler design is intentionally single-instance; this guide does not claim multi-replica high availability. See [enterprise ABC architecture](enterprise-abc-architecture.md) for the staged migration path.
 
 ## Recommended topology
 
@@ -47,6 +47,11 @@ Inject secrets from the platform's managed secret store at runtime:
 - `NETWATCH_AI_SUBJECT_ID`: optional opaque deployment subject.
 - `NETWATCH_API_KEY`, `NETWATCH_OPERATOR_KEY`, `NETWATCH_VIEWER_KEY`: optional break-glass role keys.
 
+The staged backend settings are explicit and fail closed:
+
+- `NETWATCH_ENTERPRISE_MODE`: `single_tenant` (safe default), `compatibility` (durable local outbox/jobs), or `shared_service` (not ready until external adapters and migrations are validated).
+- `NETWATCH_DATABASE_BACKEND`, `NETWATCH_COORDINATION_BACKEND`, `NETWATCH_OBJECT_STORAGE_BACKEND`, and `NETWATCH_EVENT_SINK`: backend selections; do not select shared-service values until the matching adapters are deployed and tested.
+
 Do not put these values in Git, a ConfigMap, image layer, frontend setting, ticket, report, or screenshot. Each enabled role key must be unique. The audit HMAC key must not equal a role key, provider key, or AI safety secret; NetWatch readiness fails when that separation is violated.
 
 Treat the audit HMAC key as long-lived integrity material under the organization's managed-key lifecycle. Replacing it while protected rows remain makes verification fail closed. Restore the previous key to recover verification; before any planned audit-chain reinitialization, export and archive the existing evidence in approved append-only storage. NetWatch intentionally has no remote endpoint that resets or re-signs the chain.
@@ -64,12 +69,15 @@ Every response includes `X-Request-ID`. Application logs record only request ID,
 - `/api/health/live`: process liveness only; never depends on the database or IdP.
 - `/api/health/ready`: local database, unique role-key configuration, OIDC configuration, and a full retained audit-chain result cached for no more than five seconds. Privileged operations always force a fresh verification.
 - `/api/metrics`: authenticated, low-cardinality Prometheus text without target/IP labels.
+- `/api/enterprise/status`: Admin-only non-secret capability, readiness, outbox, and job status; it never returns backend credentials or URLs.
 
 Alert on readiness failures, HTTP 5xx growth, overdue/critical unresolved cases, scheduler failure logs, and backup age. Do not use the liveness probe as an external dependency check; repeated restarts during an IdP or storage incident can make an outage worse.
 
 ## Kubernetes template
 
-`deploy/kubernetes.yaml` provides a starting point with:
+`deploy/kubernetes.yaml` provides the hardened single-tenant starting point with:
+
+For repeatable cluster application, `deploy/kustomization-single-tenant.yaml` pins the deployment to one replica and `Recreate` updates, preserving the SQLite one-active-instance boundary.
 
 - one replica and `Recreate` updates for the current SQLite boundary;
 - non-root execution, read-only root filesystem, no privilege escalation, runtime-default seccomp, and only `NET_RAW` added for approved ICMP checks and bounded packet-header capture;
@@ -81,6 +89,10 @@ Alert on readiness failures, HTTP 5xx growth, overdue/critical unresolved cases,
 
 Replace the image, host/origin, issuer, audience, JWKS URL, groups, StorageClass, and namespace policy before applying it. Put an approved identity-aware TLS gateway in front of the ClusterIP Service; do not expose the pod directly to the Internet. Validate that the cluster network policy and CNI permit only the approved private scan ranges and required HTTPS/DNS egress.
 
+`deploy/kubernetes-enterprise.yaml` is the ABC shared-service reference. It uses two stateless API replicas, a rolling update with zero voluntary unavailability, a PodDisruptionBudget, default-deny network policy, managed secret references, and explicit PostgreSQL/Redis/S3/event-sink configuration. Build it with `Dockerfile.enterprise`, which installs only the optional adapter dependencies into a separate image. It is intentionally not deployable as-is: replace the image with a signed digest, create the secret, and complete adapter, migration, tenant-scope, and recovery validation first.
+
+The `Supply Chain` workflow produces a source SPDX SBOM on pull requests and main, and tagged releases build container images with BuildKit SBOM/provenance metadata and GitHub artifact attestations. Release policy should verify the digest and attestations before a cluster admission controller allows deployment.
+
 ## Rollout and recovery
 
 1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging.
@@ -91,9 +103,11 @@ Replace the image, host/origin, issuer, audience, JWKS URL, groups, StorageClass
 6. Verify `/api/health/ready`, Prometheus scraping, request correlation, and audit-chain status.
 7. Run a bounded approved scan and capture on a staging sensor interface; verify device identity, no-payload behavior, policy, maintenance, case, report, backup, and optional AI workflows.
 8. Complete the organization's security, privacy, data-retention, AI, and disaster-recovery reviews before production.
+9. Verify the release image digest, SBOM, provenance attestation, dependency policy, and migration checksum before production promotion.
 
 ## Current scale boundary
 
-The current release is appropriate for one active application instance per database. Do not run multiple replicas against copied or shared SQLite files. The scheduler, request rate limits, scan semaphore, and some metrics are process-local.
+The current release is appropriate for one active application instance per database. Do not run multiple replicas against copied or shared SQLite files. The scheduler, request rate limits, scan semaphore, and some metrics are process-local. Compatibility mode adds durable outbox/jobs and explicit readiness reporting, but does not make SQLite active-active.
 
-True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, and tested zero/low-downtime migrations. Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
+True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 10 and preserves existing data.
+ Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.

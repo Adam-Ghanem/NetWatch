@@ -1,0 +1,5 @@
+# Optional dependencies for NETWATCH_ENTERPRISE_MODE=shared_service.
+# Install only after the corresponding managed services and migration tests are approved.
+psycopg[binary]>=3.2,<4
+redis>=5.0,<8
+boto3>=1.35,<2

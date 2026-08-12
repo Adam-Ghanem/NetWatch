@@ -23,6 +23,7 @@ from config import (
     MIN_AUDIT_HMAC_KEY_LENGTH,
 )
 from device_identity import normalize_mac
+from enterprise_store import create_enterprise_schema
 from intelligence_store import create_intelligence_schema
 from operations_store import create_operations_schema
 
@@ -241,7 +242,8 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, id)")
         create_operations_schema(conn)
         create_intelligence_schema(conn)
-        conn.execute("PRAGMA user_version = 9")
+        create_enterprise_schema(conn)
+        conn.execute("PRAGMA user_version = 10")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:

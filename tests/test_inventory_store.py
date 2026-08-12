@@ -139,7 +139,7 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
-        assert version == 9
+        assert version == 10
     assert {
         "network_observations",
         "asset_events",
@@ -151,6 +151,8 @@ def test_database_schema_is_upgraded_for_change_tracking(monkeypatch, tmp_path):
         "intelligence_events",
         "intelligence_daily_usage",
         "service_findings",
+        "enterprise_outbox",
+        "enterprise_jobs",
     }.issubset(tables)
 
 

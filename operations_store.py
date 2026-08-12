@@ -17,6 +17,7 @@ from config import (
     SCAN_POLICY_MAX_INTERVAL_MINUTES,
     SCAN_POLICY_MIN_INTERVAL_MINUTES,
 )
+from enterprise_store import enqueue_outbox_event, enterprise_queue_status
 from notifications import (
     NotificationResult,
     enqueue_alert_notification,
@@ -752,6 +753,32 @@ def _send_alert_notification_safely(
         return None
 
 
+def _record_alert_outbox_event(conn: sqlite3.Connection, alert: dict[str, Any]) -> None:
+    alert_id = int(alert.get("id", 0))
+    event_type = "alert_created"
+    enqueue_outbox_event(
+        conn,
+        topic="operations.alerts",
+        event_type=event_type,
+        aggregate_id=f"alert:{alert_id}",
+        dedupe_key=f"alert-created:{alert_id}",
+        tenant_id="default",
+        payload={
+            "alert_id": alert_id,
+            "severity": str(alert.get("severity", "Low")),
+            "category": str(alert.get("category", "other")),
+            "status": str(alert.get("status", "open")),
+            "occurrence_count": int(alert.get("occurrence_count", 1) or 1),
+        },
+    )
+
+
+def enterprise_queue_metrics() -> dict[str, int]:
+    _, connect = _database_modules()
+    with connect() as conn:
+        return enterprise_queue_status(conn)
+
+
 def _queue_alert_notification_safely(alert: dict[str, Any], *, event: str) -> None:
     notification = {**alert, "_notification_event": event}
     try:
@@ -900,6 +927,7 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             created += int(was_created)
             refreshed += int(not was_created)
             if was_created:
+                _record_alert_outbox_event(conn, alert)
                 pending_notifications.append(alert)
 
         _prune_alerts(conn)
