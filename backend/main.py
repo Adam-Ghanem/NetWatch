@@ -68,6 +68,7 @@ from enterprise_auth import (
     oidc_settings,
     verify_oidc_token,
 )
+from enterprise_runtime import enterprise_readiness
 from export_utils import safe_csv_bytes
 from host_profiler import profile_host
 from intelligence_store import (
@@ -115,6 +116,7 @@ from operations_store import (
     create_maintenance_window,
     create_scan_policy,
     database_backup_bytes,
+    enterprise_queue_metrics,
     maintenance_windows,
     notify_overdue_alert_transitions,
     operations_metrics,
@@ -937,10 +939,20 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/enterprise/status")
+def enterprise_status(_: AuthContext = Depends(require_admin_access)) -> dict[str, Any]:
+    """Expose non-secret deployment capabilities for platform operators."""
+    return {
+        "readiness": enterprise_readiness(),
+        "queue": enterprise_queue_metrics(),
+    }
+
+
 @app.get("/api/metrics", response_class=PlainTextResponse)
 def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
     snapshot = operations_metrics()
     intelligence = intelligence_metrics()
+    queue = enterprise_queue_metrics()
     with _http_metrics_lock:
         http_snapshot = {
             "requests": _http_requests_total,
@@ -964,6 +976,10 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
         "netwatch_intelligence_failed_total": intelligence["failed"],
         "netwatch_intelligence_active_cache_entries": intelligence["active_cache"],
         "netwatch_audit_integrity_enabled": int(audit_integrity_enabled()),
+        "netwatch_outbox_pending_total": queue["outbox_pending"],
+        "netwatch_outbox_dead_letter_total": queue["outbox_dead_letter"],
+        "netwatch_jobs_active_total": queue["jobs_active"],
+        "netwatch_jobs_failed_total": queue["jobs_failed"],
         "netwatch_http_requests_total": http_snapshot["requests"],
         "netwatch_http_server_errors_total": http_snapshot["server_errors"],
         "netwatch_http_active_requests": http_snapshot["active_requests"],

@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: netwatch
+resources:
+  - kubernetes.yaml
+commonLabels:
+  netwatch.example.com/operating-model: single-tenant
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: netwatch
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/strategy/type
+        value: Recreate
+      - op: add
+        path: /spec/template/metadata/annotations/netwatch.example.com~1scale-boundary
+        value: "one-active-instance-per-database"

@@ -1200,3 +1200,35 @@ def test_service_findings_endpoint_is_authenticated_and_filterable(monkeypatch, 
     assert response.json()["count"] == 1
     assert response.json()["items"][0]["port"] == 22
     assert missing_key.status_code == 401
+
+
+def test_enterprise_status_is_admin_only_and_reports_safe_capabilities(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        admin = client.get("/api/enterprise/status", headers=API_HEADERS)
+        assert admin.status_code == 200
+        payload = admin.json()
+        assert payload["readiness"]["status"] == "ready"
+        assert payload["readiness"]["capabilities"]["mode"] == "single_tenant"
+        assert payload["readiness"]["capabilities"]["active_active_supported"] is False
+        assert payload["queue"]["outbox_total"] == 0
+
+        monkeypatch.setenv("NETWATCH_VIEWER_KEY", VIEWER_API_KEY)
+        viewer = client.get("/api/enterprise/status", headers={"X-NetWatch-Key": VIEWER_API_KEY})
+
+    assert viewer.status_code == 403
+
+
+def test_shared_service_mode_fails_closed_until_adapters_are_validated(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        monkeypatch.setenv("NETWATCH_ENTERPRISE_MODE", "shared_service")
+        response = client.get("/api/enterprise/status", headers=API_HEADERS)
+
+    assert response.status_code == 200
+    payload = response.json()["readiness"]
+    assert payload["status"] == "not_ready"
+    assert payload["migration_required"] is True
+    assert payload["safe_to_run_current_process"] is False
+    assert (
+        "shared_service_requires_postgresql_redis_s3_and_external_event_sink"
+        in payload["capabilities"]["blockers"]
+    )

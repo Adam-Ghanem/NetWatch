@@ -81,10 +81,11 @@ NetWatch runs on a trusted operator machine connected to an authorized network. 
 - Audit records can contain individual actor, role, authentication method, request ID, action, target, outcome, and short details but never raw keys or bearer tokens.
 - New audit records use a separate server-only HMAC key, chained hashes, and a keyed head checkpoint. Readiness and privileged operations verify every retained protected row and pause on changes, broken links, unprotected suffixes, or protected-tail deletion. Pre-v1.6 rows remain explicit legacy evidence.
 - Individual audit identities are Admin-only; generated reports use identity-redacted audit rows.
-- Existing databases migrate in place at schema version 9, adding the bounded service-findings table alongside the prior device-identity fields without rewriting historical evidence.
+- Existing databases migrate in place at schema version 10, adding bounded service findings plus enterprise outbox/job tables without rewriting historical evidence.
 - Transition-derived cases have bounded retention, deduplicate unresolved repeats, calculate local SLA state, and retain assignment/acknowledgement/resolution evidence.
 - A resolution note is required before a case can be closed; later recurrence creates a new open case.
 - Authenticated operational metrics use fixed numeric series and do not contain target or user-provided labels.
+- Enterprise backend probes fail closed when PostgreSQL, Redis, S3-compatible storage, event-sink configuration, or optional dependencies are missing; selecting `shared_service` alone never enables active-active execution.
 - Not-observed severity uses business criticality but still avoids claiming confirmed downtime.
 - Admin snapshots use SQLite's online backup API; no destructive restore API is exposed.
 - Missing ICMP replies preserve the last confirmed sighting and use `Not observed` rather than a definitive offline claim.

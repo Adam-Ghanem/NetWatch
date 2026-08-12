@@ -59,7 +59,7 @@ v1.6 adds an optional enterprise identity boundary. A reviewed OIDC-aware revers
 
 Every protected audit event can now carry an individual actor, authentication method, and request ID inside a separate-key HMAC chain with a keyed head checkpoint. Fresh full retained-chain verification gates every privileged operation; the public readiness probe reuses a result for at most five seconds to bound its cost. NetWatch also exposes separate liveness/readiness probes, low-cardinality HTTP metrics, safe correlation logs, and stricter browser headers. See the [enterprise deployment guide](docs/enterprise-deployment.md) and [Kubernetes template](deploy/kubernetes.yaml).
 
-These controls make NetWatch suitable for a reviewed internal deployment foundation; they do not turn the current SQLite and in-process scheduler design into multi-replica HA. Large deployments still need the external controls and scale-out work listed in the enterprise guide.
+These controls make NetWatch suitable for a reviewed internal deployment foundation; they do not turn the current SQLite and in-process scheduler design into multi-replica HA. Large deployments still need the external controls and scale-out work listed in the enterprise guide. The staged ABC plan is documented in [enterprise ABC architecture](docs/enterprise-abc-architecture.md): SQLite remains the safe default, compatibility mode adds durable seams, and shared-service mode fails closed until PostgreSQL/Redis/object-storage adapters and migration checks are validated.
 
 ## Highlights
 
@@ -83,6 +83,8 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Separate-key HMAC audit chain, keyed head checkpoint, and privileged-operation fail-closed behavior
 - Approved scan policies with immutable private CIDR scope and 15-minute minimum intervals
 - Opt-in single-process scheduler using the existing scan concurrency limit
+- ABC enterprise path with explicit single-tenant, compatibility, and shared-service modes
+- Durable transactional outbox and idempotent job/lease primitives for future worker and event-bus adapters
 - Deduplicated operational alert cases for new, returned, and not-observed assets
 - Optional HTTPS webhook/Slack alert delivery with de-identified payloads, debounce, retry bounds, and circuit breaking
 - Criticality-aware severity, local SLA due times, assignment, acknowledgement, and evidence-backed resolution
@@ -540,6 +542,17 @@ docker compose --profile legacy up -d streamlit
 | `NETWATCH_ALLOWED_HOSTS` | `127.0.0.1,localhost` | Accepted HTTP Host headers |
 | `NETWATCH_ALLOWED_ORIGINS` | localhost port 8000 | Browser CORS allowlist |
 | `NETWATCH_API_DOCS` | `false` | Enables FastAPI docs for local development |
+| `NETWATCH_ENTERPRISE_MODE` | `single_tenant` | `single_tenant`, `compatibility`, or fail-closed `shared_service` operating mode |
+| `NETWATCH_DATABASE_BACKEND` | `sqlite` | Local SQLite or explicitly validated PostgreSQL backend |
+| `NETWATCH_COORDINATION_BACKEND` | `local` | Local leases or explicitly validated Redis coordination backend |
+| `NETWATCH_OBJECT_STORAGE_BACKEND` | `local` | Local files or explicitly validated S3-compatible object storage |
+| `NETWATCH_EVENT_SINK` | `local_outbox` | Durable local outbox, HTTPS sink, or approved Pub/Sub sink |
+| `NETWATCH_DATABASE_URL` | empty | Server-only PostgreSQL URL; required only for selected shared-service mode |
+| `NETWATCH_REDIS_URL` | empty | Server-only Redis URL; required only for selected shared-service mode |
+| `NETWATCH_S3_BUCKET` | empty | Managed object-storage bucket; required only for selected shared-service mode |
+| `NETWATCH_S3_ENDPOINT` | empty | Optional S3-compatible endpoint; never returned by the API |
+| `NETWATCH_EVENT_SINK_URL` | empty | HTTPS event sink URL; redirects and unsafe URLs are rejected |
+| `NETWATCH_PUBSUB_TOPIC` | empty | Deployment-owned Pub/Sub topic identifier when that adapter is selected |
 | `NETWATCH_MAX_CONCURRENT_SCANS` | `1` | Simultaneous scan limit |
 | `NETWATCH_MAX_CONCURRENT_CAPTURES` | `1` | Simultaneous metadata-capture limit, bounded to at most 2 |
 | `NETWATCH_RATE_LIMIT_REQUESTS` | `30` | Requests per endpoint/window |
@@ -586,8 +599,10 @@ The database uses WAL mode, busy timeout, UTC timestamps, and indexes. Docker Co
 - `service_findings`: bounded per-scan service metadata including IP, port, protocol, service, status, risk, and response timing; no payload data
 - `maintenance_windows`: bounded global or policy-specific execution pauses with UTC schedule and change reason
 - `intelligence_events`: bounded provider-call metadata, safe error codes, token counts, and de-identified structured brief cache; prompts, snapshots, keys, and raw network evidence are not stored
+- `enterprise_outbox`: idempotent tenant-scoped event records with claim leases, attempts, delivery state, and bounded error details
+- `enterprise_jobs`: idempotent tenant-scoped job records with claim leases, retry limits, terminal failure, and completion state
 
-Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50,000 service findings, 50 scan policies, 100 maintenance windows, and 1,000 intelligence events so a long-running local installation does not grow without limit.
+Change history is bounded to 5,000 events, 50,000 network observations, 10,000 audit records, 5,000 alerts, 50,000 service findings, 50 scan policies, 100 maintenance windows, and 1,000 intelligence events. Enterprise outbox and job retention is managed by the worker/event-sink policy; dead-letter and failed-job counts are exposed to Admins through `/api/enterprise/status`.
 
 The older CSV history remains only for compatibility with the optional Streamlit interface.
 
