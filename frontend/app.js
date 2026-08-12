@@ -481,6 +481,8 @@ function applyRoleAccess() {
   $('#triage-alert-id').disabled = false;
   $('#policy-run-authorized').disabled = !canScan;
   $('#database-backup').disabled = !Boolean(state.capabilities.backup);
+  $('#retention-refresh').disabled = !Boolean(state.capabilities.manage_operations);
+  $('#retention-cleanup').disabled = !Boolean(state.capabilities.manage_operations);
   $('#nav [data-view="audit"]').hidden = !Boolean(state.capabilities.view_audit_identity);
   $('#metrics-download').disabled = !Boolean(state.capabilities.read);
   $('#intelligence-generate').disabled = !Boolean(
@@ -1001,10 +1003,11 @@ async function loadOperations() {
   const alertPath = filter
     ? `/api/alerts?status=${encodeURIComponent(filter)}&limit=200`
     : '/api/alerts?limit=200';
-  const [policyPayload, alertPayload, maintenancePayload] = await Promise.all([
+  const [policyPayload, alertPayload, maintenancePayload, retentionPayload] = await Promise.all([
     apiJson('/api/scan-policies'),
     apiJson(alertPath),
     apiJson('/api/maintenance-windows'),
+    state.capabilities.manage_operations ? apiJson('/api/retention/status') : Promise.resolve(null),
   ]);
   const policies = policyPayload.items || [];
   const alerts = alertPayload.items || [];
@@ -1024,6 +1027,11 @@ async function loadOperations() {
     { label: 'Scheduler', value: schedulerEnabled ? 'On' : 'Off', note: 'Deployment setting' },
   ]);
   $('#maintenance-active-count').textContent = `${maintenancePayload.active_count || 0} active`;
+  if (retentionPayload) {
+    const tracked = (retentionPayload.tables || []).filter((item) => item.table !== 'audit_log');
+    const rows = tracked.reduce((total, item) => total + Number(item.count || 0), 0);
+    $('#retention-status').textContent = `${tracked.length} operational tables · ${rows} retained rows · audit chain protected`;
+  }
   renderPolicies(policies);
   populateMaintenancePolicies(policies);
   renderMaintenanceWindows(windows);
@@ -1307,7 +1315,7 @@ async function downloadApiFile(path, filename, button, successMessage) {
 }
 
 async function downloadReport(type, button) {
-  const extension = type === 'html' ? 'html' : 'md';
+  const extension = type === 'html' ? 'html' : (type === 'pdf' ? 'pdf' : 'md');
   return downloadApiFile(
     `/api/reports/${type}`,
     `netwatch-report.${extension}`,
@@ -1728,6 +1736,43 @@ $('#maintenance-results').addEventListener('click', async (event) => {
   } finally {
     setBusy(button, false);
   }
+});
+
+async function previewRetention() {
+  const payload = await apiJson('/api/retention/cleanup', {
+    method: 'POST',
+    body: JSON.stringify({ dry_run: true }),
+  });
+  const eligible = Object.entries(payload.eligible || {}).filter(([, count]) => Number(count) > 0);
+  const total = eligible.reduce((sum, [, count]) => sum + Number(count), 0);
+  $('#retention-status').textContent = total
+    ? `Preview: ${total} row(s) eligible before ${payload.cutoff}. Review before confirming.`
+    : `Preview: no eligible operational rows before ${payload.cutoff}.`;
+  return payload;
+}
+
+$('#retention-refresh').addEventListener('click', async (event) => {
+  setBusy(event.currentTarget, true, 'Previewing…');
+  try { await previewRetention(); showToast('Retention preview refreshed.'); }
+  catch (error) { $('#retention-status').textContent = error.message; showToast(error.message, 'error'); }
+  finally { setBusy(event.currentTarget, false); }
+});
+
+$('#retention-cleanup').addEventListener('click', async (event) => {
+  if (!window.confirm('Run the bounded retention cleanup after reviewing the preview?')) return;
+  setBusy(event.currentTarget, true, 'Cleaning…');
+  try {
+    const payload = await apiJson('/api/retention/cleanup', {
+      method: 'POST',
+      body: JSON.stringify({ dry_run: false, confirmed: true }),
+    });
+    $('#retention-status').textContent = `Cleanup complete: ${payload.total || 0} row(s) removed; audit chain protected.`;
+    showToast('Retention cleanup completed.');
+    await loadOperations();
+  } catch (error) {
+    $('#retention-status').textContent = error.message;
+    showToast(error.message, 'error');
+  } finally { setBusy(event.currentTarget, false); }
 });
 
 $('#operations-refresh').addEventListener('click', async (event) => {

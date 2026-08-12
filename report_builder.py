@@ -282,3 +282,137 @@ th {{ color:#7dd3fc; background:#111827; }}
 </main>
 </body>
 </html>"""
+
+
+def build_pdf_report(
+    hosts_df: pd.DataFrame,
+    ports_df: pd.DataFrame,
+    changes_df: pd.DataFrame | None = None,
+    audit_df: pd.DataFrame | None = None,
+    alerts_df: pd.DataFrame | None = None,
+    policies_df: pd.DataFrame | None = None,
+    maintenance_df: pd.DataFrame | None = None,
+) -> bytes:
+    """Render a bounded PDF hand-off report from the same redacted report inputs."""
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (
+            Paragraph,
+            SimpleDocTemplate,
+            Spacer,
+            Table,
+            TableStyle,
+        )
+    except ImportError as exc:  # pragma: no cover - exercised in minimal deployments
+        raise RuntimeError("PDF report rendering is not installed.") from exc
+
+    from io import BytesIO
+
+    exposure = (
+        summarize_exposure(ports_df.to_dict("records"))
+        if not ports_df.empty
+        else summarize_exposure([])
+    )
+    sections = (
+        ("Asset inventory", hosts_df),
+        ("Port assessment", ports_df),
+        ("Recent asset changes", _event_view(changes_df)),
+        ("Operations audit log", _audit_view(audit_df)),
+        ("Operational alerts", _alert_view(alerts_df)),
+        ("Approved scan policies", _policy_view(policies_df)),
+        ("Maintenance windows", _maintenance_view(maintenance_df)),
+    )
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title="NetWatch Report",
+        author="NetWatch",
+    )
+    styles = getSampleStyleSheet()
+    styles["Title"].alignment = TA_CENTER
+    story = [
+        Paragraph("NetWatch Report", styles["Title"]),
+        Paragraph(
+            f"Generated {escape(datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC'))}. "
+            "This report contains authorized local evidence and requires controlled handling.",
+            styles["Normal"],
+        ),
+        Spacer(1, 8),
+    ]
+    summary_rows = [
+        ["Assets", "Open ports", "High risk", "Exposure score", "Exposure level"],
+        [
+            str(len(hosts_df) if not hosts_df.empty else 0),
+            str(exposure.open_ports),
+            str(exposure.high),
+            str(exposure.score),
+            str(exposure.level),
+        ],
+    ]
+    summary = Table(summary_rows, repeatRows=1)
+    summary.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#e0f2fe")),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#94a3b8")),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.extend([summary, Spacer(1, 10)])
+
+    for title, frame in sections:
+        story.append(Paragraph(title, styles["Heading2"]))
+        if frame is None or frame.empty:
+            story.append(Paragraph("No data.", styles["Normal"]))
+            story.append(Spacer(1, 5))
+            continue
+        limited = frame.head(100).fillna("")
+        headers = [str(column)[:80] for column in limited.columns]
+        rows = [headers]
+        for _, row in limited.iterrows():
+            rows.append([str(row[column])[:240] for column in limited.columns])
+        table = Table(rows, repeatRows=1)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0f172a")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("GRID", (0, 0), (-1, -1), 0.2, colors.HexColor("#cbd5e1")),
+                    ("FONTSIZE", (0, 0), (-1, -1), 6),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#f8fafc")],
+                    ),
+                ]
+            )
+        )
+        story.extend([table, Spacer(1, 8)])
+        if len(frame) > 100:
+            story.append(
+                Paragraph(
+                    "Only the first 100 rows are included in this bounded export.", styles["Normal"]
+                )
+            )
+            story.append(Spacer(1, 5))
+
+    document.build(story)
+    return buffer.getvalue()

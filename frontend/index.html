@@ -440,6 +440,19 @@
             <button id="database-backup" class="button primary" type="button">Download database backup</button>
           </div>
         </article>
+
+        <article class="panel backup-panel">
+          <div>
+            <p class="eyebrow">Data lifecycle governance</p>
+            <h3>Retention status</h3>
+            <p class="muted">Preview eligible operational-history cleanup before an Admin confirms it. Audit-chain evidence is never removed by this control.</p>
+            <p id="retention-status" class="form-status">Admin access is required to inspect retention.</p>
+          </div>
+          <div class="button-row">
+            <button id="retention-refresh" class="button ghost" type="button">Preview retention</button>
+            <button id="retention-cleanup" class="button primary" type="button">Run confirmed cleanup</button>
+          </div>
+        </article>
       </section>
 
       <section id="view-advisor" class="view">
@@ -497,6 +510,7 @@
         <div class="report-grid">
           <article class="panel report-card"><div class="file-icon">MD</div><div><p class="eyebrow">Portable evidence</p><h3>Markdown report</h3><p class="muted">Human-readable inventory, changes, findings, and operations log for handover documentation.</p></div><button data-report="markdown" class="button primary">Download .md</button></article>
           <article class="panel report-card"><div class="file-icon">HTML</div><div><p class="eyebrow">Shareable report</p><h3>HTML report</h3><p class="muted">Standalone styled report with business context, findings, recommendations, and audit evidence.</p></div><button data-report="html" class="button primary">Download .html</button></article>
+          <article class="panel report-card"><div class="file-icon">PDF</div><div><p class="eyebrow">Executive hand-off</p><h3>PDF report</h3><p class="muted">Bounded portable report for review and handover, using the same redacted local evidence.</p></div><button data-report="pdf" class="button primary">Download .pdf</button></article>
         </div>
         <article class="panel safety-note"><p class="eyebrow">Interpretation</p><h3>Use results as evidence, not absolute truth.</h3><p>Firewalls, blocked ICMP, NAT, transient services, and local policy can affect what NetWatch observes. Validate important findings with the system owner.</p></article>
       </section>
