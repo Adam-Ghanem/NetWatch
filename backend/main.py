@@ -128,6 +128,7 @@ from operations_store import (
     update_scan_policy,
 )
 from port_scanner import scan_ports
+from readiness_store import readiness_center
 from report_builder import build_html_report, build_markdown_report, build_pdf_report
 from retention_store import cleanup_retention, retention_status
 from risk_engine import summarize_exposure, top_recommendations
@@ -954,6 +955,11 @@ def enterprise_status(_: AuthContext = Depends(require_admin_access)) -> dict[st
         "readiness": enterprise_readiness(),
         "queue": enterprise_queue_metrics(),
     }
+
+
+@app.get("/api/readiness")
+def readiness_center_endpoint(_: AuthContext = Depends(require_admin_access)) -> dict[str, Any]:
+    return readiness_center()
 
 
 @app.get("/api/retention/status")

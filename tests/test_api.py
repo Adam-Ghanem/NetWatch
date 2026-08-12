@@ -1265,3 +1265,27 @@ def test_retention_controls_are_admin_only_and_dry_run_first(monkeypatch, tmp_pa
     assert preview.json()["dry_run"] is True
     assert blocked.status_code == 400
     assert missing.status_code == 401
+
+
+def test_readiness_center_is_admin_only_and_fail_closed(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        missing = client.get("/api/readiness")
+        admin = client.get("/api/readiness", headers=API_HEADERS)
+
+    assert missing.status_code == 401
+    assert admin.status_code == 200
+    assert admin.json()["status"] == "evidence_pending"
+    assert admin.json()["score"] == 0
+    assert admin.json()["active_track"] == "A_single_tenant"
+
+
+def test_readiness_center_frontend_is_present(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        dashboard = client.get("/")
+        frontend = client.get("/app.js")
+
+    assert dashboard.status_code == 200
+    assert "Readiness Center" in dashboard.text
+    assert frontend.status_code == 200
+    assert "/api/readiness" in frontend.text
+    assert "renderReadiness" in frontend.text
