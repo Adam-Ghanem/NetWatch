@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 import tempfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +17,12 @@ from config import (
     SCAN_POLICY_MAX_INTERVAL_MINUTES,
     SCAN_POLICY_MIN_INTERVAL_MINUTES,
 )
+from notifications import (
+    NotificationResult,
+    enqueue_alert_notification,
+    notifications_enabled,
+    send_alert_notification,
+)
 
 if TYPE_CHECKING:
     from inventory_store import NetworkChangeSummary
@@ -22,6 +30,9 @@ if TYPE_CHECKING:
 ALERT_SEVERITIES = ("Low", "Medium", "High", "Critical")
 ALERT_STATUSES = ("open", "acknowledged", "resolved")
 ALERT_SLA_HOURS = {"Critical": 4, "High": 24, "Medium": 72, "Low": 168}
+LOGGER = logging.getLogger(__name__)
+_sla_notification_lock = threading.Lock()
+_sla_notified_alert_ids: set[int] = set()
 
 
 @dataclass(frozen=True)
@@ -652,7 +663,7 @@ def _upsert_alert(
     target: str,
     details: str,
     scan_run_id: int | None,
-) -> bool:
+) -> tuple[bool, dict[str, Any]]:
     if severity not in ALERT_SEVERITIES:
         raise ValueError(f"Unsupported alert severity: {severity}")
     normalized_category = _clean(category, 80)
@@ -695,9 +706,14 @@ def _upsert_alert(
                 existing["id"],
             ),
         )
-        return False
+        row = conn.execute(
+            "SELECT * FROM operation_alerts WHERE id = ?", (existing["id"],)
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("The alert was refreshed but could not be reloaded.")
+        return False, dict(row)
 
-    conn.execute(
+    cursor = conn.execute(
         """
         INSERT INTO operation_alerts (
             created_at, updated_at, last_seen_at, severity, category, title,
@@ -717,7 +733,82 @@ def _upsert_alert(
             _alert_due_at(severity, now),
         ),
     )
+    row = conn.execute(
+        "SELECT * FROM operation_alerts WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("The alert was created but could not be reloaded.")
+    return True, dict(row)
+
+
+def _send_alert_notification_safely(
+    alert: dict[str, Any], *, event: str
+) -> NotificationResult | None:
+    notification = {**alert, "_notification_event": event}
+    try:
+        return send_alert_notification(notification)
+    except Exception:  # pragma: no cover - notification module also fails safely
+        LOGGER.error("notification_dispatch_failed_safely event=%s", event)
+        return None
+
+
+def _queue_alert_notification_safely(alert: dict[str, Any], *, event: str) -> None:
+    notification = {**alert, "_notification_event": event}
+    try:
+        enqueue_alert_notification(notification)
+    except Exception:  # pragma: no cover - queueing also fails safely
+        LOGGER.error("notification_queue_failed_safely event=%s", event)
+
+
+def _claim_sla_notification(alert_id: int) -> bool:
+    with _sla_notification_lock:
+        if alert_id in _sla_notified_alert_ids:
+            return False
+        if len(_sla_notified_alert_ids) >= max(100, MAX_OPERATION_ALERTS * 2):
+            _sla_notified_alert_ids.remove(min(_sla_notified_alert_ids))
+        _sla_notified_alert_ids.add(alert_id)
     return True
+
+
+def _release_sla_notification(alert_id: int) -> None:
+    with _sla_notification_lock:
+        _sla_notified_alert_ids.discard(alert_id)
+
+
+def notify_overdue_alert_transitions(*, now: str | None = None) -> int:
+    """Attempt one notification when an unresolved alert first crosses its SLA."""
+    if not notifications_enabled():
+        return 0
+    _, connect = _database_modules()
+    current_time = _iso_utc(now, field="SLA check time") if now is not None else _utc_now()
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM operation_alerts
+            WHERE status != 'resolved' AND due_at != '' AND due_at < ?
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (current_time, MAX_OPERATION_ALERTS),
+        ).fetchall()
+
+    attempted = 0
+    for row in rows:
+        alert_id = int(row["id"])
+        if not _claim_sla_notification(alert_id):
+            continue
+        alert = _alert_record(row, now=current_time)
+        result = _send_alert_notification_safely(alert, event="sla_breached")
+        if result is None or result.reason in {
+            "debounced",
+            "circuit_open",
+            "disabled",
+            "internal_error",
+        }:
+            _release_sla_notification(alert_id)
+            continue
+        attempted += int(result.attempted > 0)
+    return attempted
 
 
 def _prune_alerts(conn: sqlite3.Connection) -> None:
@@ -753,9 +844,10 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
     _, connect = _database_modules()
     created = 0
     refreshed = 0
+    pending_notifications: list[dict[str, Any]] = []
     with connect() as conn:
         for ip_address in changes.new_assets:
-            was_created = _upsert_alert(
+            was_created, alert = _upsert_alert(
                 conn,
                 severity="Medium",
                 category="new_asset",
@@ -768,9 +860,11 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             )
             created += int(was_created)
             refreshed += int(not was_created)
+            if was_created:
+                pending_notifications.append(alert)
 
         for ip_address in changes.returned_assets:
-            was_created = _upsert_alert(
+            was_created, alert = _upsert_alert(
                 conn,
                 severity="Low",
                 category="asset_returned",
@@ -781,6 +875,8 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             )
             created += int(was_created)
             refreshed += int(not was_created)
+            if was_created:
+                pending_notifications.append(alert)
 
         for ip_address in changes.not_observed_assets:
             asset = conn.execute(
@@ -789,7 +885,7 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             criticality = asset["criticality"] if asset else "Medium"
             severity = criticality if criticality in {"High", "Critical"} else "Medium"
             owner = asset["owner"] if asset and asset["owner"] else "unassigned owner"
-            was_created = _upsert_alert(
+            was_created, alert = _upsert_alert(
                 conn,
                 severity=severity,
                 category="asset_not_observed",
@@ -803,8 +899,12 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             )
             created += int(was_created)
             refreshed += int(not was_created)
+            if was_created:
+                pending_notifications.append(alert)
 
         _prune_alerts(conn)
+    for alert in pending_notifications:
+        _queue_alert_notification_safely(alert, event="alert_created")
     return AlertChangeSummary(created=created, refreshed=refreshed)
 
 
@@ -828,11 +928,12 @@ def recent_alerts(
     overdue_only: bool = False,
     limit: int = 200,
 ) -> list[dict[str, Any]]:
-    _, connect = _database_modules()
     if status is not None and status not in ALERT_STATUSES:
         raise ValueError("Alert status must be open, acknowledged, or resolved.")
     if severity is not None and severity not in ALERT_SEVERITIES:
         raise ValueError("Unsupported alert severity.")
+    notify_overdue_alert_transitions()
+    _, connect = _database_modules()
     safe_limit = max(1, min(int(limit), 1_000))
     now = _utc_now()
     with connect() as conn:
@@ -868,6 +969,7 @@ def recent_alerts(
 
 
 def alert_counts() -> dict[str, int]:
+    notify_overdue_alert_transitions()
     _, connect = _database_modules()
     counts = {
         "open": 0,
@@ -973,6 +1075,8 @@ def update_operation_alert(
         ).fetchone()
     if row is None:
         raise RuntimeError("The alert was updated but could not be reloaded.")
+    if next_status == "resolved" or str(current["status"]) == "resolved":
+        _release_sla_notification(alert_id)
     return _alert_record(row, now=now)
 
 

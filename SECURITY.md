@@ -78,6 +78,14 @@ End users call the protected NetWatch intelligence endpoint and never receive th
 
 Wildcard-only Host or CORS allowlists are ignored. Keep the explicit localhost defaults unless a reviewed deployment requires additional names or origins.
 
+## Notifications
+
+Outbound alert delivery is disabled until `NETWATCH_WEBHOOK_URL` or `NETWATCH_SLACK_WEBHOOK_URL` is explicitly configured. Every configured endpoint must use HTTPS and cannot contain embedded credentials, a query string, or a fragment. NetWatch does not follow redirects, uses bounded five-second requests and response reads, limits retry attempts with exponential backoff, and opens a circuit breaker after repeated delivery failures.
+
+Notification payloads are de-identified by default and contain only an alert reference, severity, status, category, occurrence count, and SLA state. Raw targets are excluded unless an administrator explicitly sets `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`. Free-text evidence, owners, assignment details, and resolution notes are never included in outbound payloads.
+
+Webhook URLs, including secret-bearing Slack paths, are never logged or returned by the API. The Admin-only notification status endpoint exposes only each channel kind and whether it is safely enabled. Store webhook URLs in managed secret storage, rotate them after suspected exposure, and keep the default 15-minute debounce unless a reviewed operational need requires a bounded change.
+
 ## Local data
 
 NetWatch stores operational information in SQLite and may create logs or exported reports. These can contain private IP addresses, hostnames, MAC/manufacturer/device-identity evidence, service exposure, and internal network structure. Traffic capture metadata is returned to the authorized browser session rather than written to SQLite, but remains sensitive internal evidence.
