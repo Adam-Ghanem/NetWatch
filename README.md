@@ -1,3 +1,5 @@
+<p align="center"><img src="frontend/assets/netwatch-logo.svg" alt="NetWatch" width="170" /></p>
+
 # NetWatch
 
 **See what changed on your authorized local network—without sending its inventory to a SaaS.**
