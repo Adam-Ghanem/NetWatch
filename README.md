@@ -1,24 +1,56 @@
-<p align="center">
-  <img src="frontend/assets/netwatch-logo.svg" alt="NetWatch" width="270" />
-</p>
+# NetWatch
 
-<h1 align="center">NetWatch</h1>
+**See what changed on your authorized local network—without sending its inventory to a SaaS.**
 
-<p align="center">
-  Local-first network visibility and defensive review for authorized environments.
-</p>
+NetWatch gives IT admins, homelab operators, and small security teams one **local-first dashboard** to discover assets, track meaningful change, review common TCP exposure, and keep business context close to the evidence.
 
-<p align="center">
+<p align="left">
   <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml"><img alt="Python CI" src="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml/badge.svg" /></a>
   <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/security-ci.yml"><img alt="Security CI" src="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/security-ci.yml/badge.svg" /></a>
-  <a href="https://codecov.io/gh/Adam-Ghanem/NetWatch"><img alt="Coverage" src="https://codecov.io/gh/Adam-Ghanem/NetWatch/graph/badge.svg" /></a>
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" />
+  <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml"><img alt="235 of 235 tests passing" src="https://img.shields.io/badge/tests-235%2F235%20passing-2ea44f?logo=pytest&logoColor=white" /></a>
+  <a href="https://codecov.io/gh/Adam-Ghanem/NetWatch"><img alt="Coverage 77.4 percent" src="https://img.shields.io/badge/coverage-77.4%25-2ea44f" /></a>
+  <img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" />
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-2c0f50.svg" /></a>
 </p>
 
-NetWatch is a Python, FastAPI, SQLite, and browser-based dashboard for local network visibility. It helps authorized teams discover local hosts, identify devices from hostname and MAC/OUI evidence, review bounded live traffic metadata, track what changed between scans, profile devices, review common TCP services, assign asset ownership and business criticality, schedule pre-approved private ranges, pause work during maintenance, manage deduplicated alert cases against local SLAs, export bounded monitoring metrics, create consistent backups, generate evidence-backed reports, and request optional server-side intelligence briefs from de-identified operational evidence.
+> Use NetWatch only on networks and devices you own or are explicitly authorized to assess. It is a defensive visibility tool, not an exploitation or credential-testing tool.
 
-> Use NetWatch only on networks and devices you own or are explicitly authorized to assess.
+## See it in action
+
+> **Live demo placeholder.** A short, sanitized recording is being prepared. Until it is committed, this marked placeholder shows exactly where the real demonstration will appear.
+
+![NetWatch demo recording placeholder](docs/screenshots/demo-placeholder.svg)
+
+### Record and replace the demo GIF
+
+1. Start NetWatch with a disposable test database and use only private RFC1918 sample addresses.
+2. Record a 15–20 second flow: open the dashboard, acknowledge the authorization boundary, run one small authorized scan, then show the change or port-review result.
+3. Remove hostnames, usernames, employer, school, customer, and home-network identifiers; do not show any key from `.env`.
+4. Export a compressed GIF as `docs/screenshots/netwatch-demo.gif`, replace the placeholder image above with the GIF, and keep this source SVG as recording guidance.
+
+## Quickstart
+
+NetWatch needs Git, Python 3.10+, Docker Engine or Docker Desktop, and Docker Compose. The first container build can take longer on an empty Docker cache; after that, these two commands bring up the local dashboard:
+
+```bash
+git clone https://github.com/Adam-Ghanem/NetWatch.git && cd NetWatch
+python scripts/start.py
+```
+
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000), then copy `NETWATCH_API_KEY` from the private `.env` file into the local Admin-key prompt. The launcher creates `.env`, generates server-side secrets, builds the container, and publishes NetWatch only on localhost by default.
+
+## Why NetWatch?
+
+NetWatch is deliberately opinionated: it helps a small authorized team turn local discovery and review into a repeatable, evidence-backed workflow. It does **not** try to replace a specialist scanner, a full traffic/flow-analysis platform, a SIEM, or a multi-replica network-management system.
+
+| If you need | NetWatch is a strong fit when | Choose something else when |
+| --- | --- | --- |
+| Local asset awareness | You want a local dashboard that combines discovery, device-identity evidence, scan history, ownership, criticality, and change review. | You only need fast, low-level discovery or highly configurable scan techniques; [Nmap][1] is purpose-built for network discovery and security auditing. |
+| Defensive service review | You need a bounded review of common TCP services, clear open/closed/filtered states, and an operator-friendly next step. | You need broad protocol enumeration, an advanced scanner scripting ecosystem, or offensive workflows. |
+| Short traffic context | You want an explicitly authorized, payload-free metadata view with strict 15-second/1,000-frame limits. | You need continuous high-volume traffic, full flow analytics, mirror/TAP collection, or long-term traffic history; [ntopng][2] is designed for that scope. |
+| Deployment model | You value local ownership, localhost-only default publishing, a protected FastAPI API, and a single-instance SQLite foundation. | You need multi-replica HA, distributed monitoring, or a shared-service enterprise NMS today. |
+
+The practical difference is **workflow**, not “more scanning”: NetWatch keeps discovery, cautious identity evidence, business context, review decisions, and reports together while preserving explicit authorization boundaries.
 
 ## Product preview
 
@@ -109,35 +141,11 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - One-command secure launcher
 - Automated Python, frontend, API, Compose, Docker, and coverage validation
 
-## Start NetWatch
+## Detailed setup notes
 
-### Requirements
+The two-command Quickstart above is the recommended local path. The launcher creates a private `.env` file, generates the local Admin key, creates a separate server-only audit HMAC key and AI safety identity, builds the container, and starts the dashboard on `127.0.0.1:8000`.
 
-- Git
-- Python 3.10+
-- Docker Desktop or Docker Engine with Docker Compose
-
-### Clone and launch
-
-```bash
-git clone https://github.com/Adam-Ghanem/NetWatch.git
-cd NetWatch
-python scripts/start.py
-```
-
-The launcher automatically:
-
-1. Creates a local `.env` file.
-2. Generates a strong random Admin key.
-3. Generates a separate audit HMAC key without printing it.
-4. Generates an independent AI safety secret and opaque deployment subject without printing them.
-5. Builds the NetWatch container.
-6. Starts it on `127.0.0.1:8000`.
-7. Prints the dashboard URL without exposing any credential in terminal history.
-
-Open the displayed URL and enter the displayed key. The browser stores the key only in session storage, so closing the tab clears it.
-
-The launcher leaves the optional Operator and Viewer keys blank. Configure them in `.env` only when separate team access is needed, and use a different 32+ character random secret for every enabled role.
+The launcher intentionally keeps the Admin key in `.env` rather than printing it. Enter that value in the browser only for the current session; closing the tab clears the session-stored key. Optional Operator and Viewer keys remain blank until you configure them in `.env`, and every enabled role should have its own random 32+ character secret.
 
 ## Manual Docker deployment
 
@@ -732,6 +740,11 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. The pro
 ## License
 
 NetWatch is released under the [MIT License](LICENSE).
+
+## References
+
+[1]: https://nmap.org/ "Nmap: the Network Mapper — network discovery and security auditing"
+[2]: https://www.ntop.org/products/traffic-analysis/ntopng/ "ntopng — network traffic visibility and analysis"
 
 ## Disclaimer
 
