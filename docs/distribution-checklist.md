@@ -50,3 +50,9 @@ Use a canonical link to the GitHub repository, add descriptive tags such as `pyt
 ## After publishing
 
 Respond to substantive comments, record recurring onboarding questions, and convert repeated friction into documentation issues. Track repository visits, unique referrers, stars, forks, issue starts, and contributor pull requests over a simple weekly window. Optimize the next post around the strongest technical question, not around posting frequency.
+
+## Social-preview brand note
+
+The repository’s authentic NetWatch logo is `frontend/assets/netwatch-logo.svg`: a purple shield, eye, and network-pulse mark with the NETWATCH wordmark. Any social-preview replacement should use this exact logo rather than a generic substitute.
+
+The refined social-preview candidate was visually validated at 1280×640. It prominently renders the authentic purple shield-eye NetWatch wordmark on a light brand card, with a restrained dark-navy layout and the clear product message “Know what changed on your local network.”
