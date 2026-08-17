@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Upgraded `cryptography` to 50.0.0 to resolve the dependency vulnerability identified by the security audit.
+- Added a protected per-asset evidence timeline API and Inventory dashboard panel combining discovery changes, direct checks, and network observations with IPv4 validation and bounded limits.
+- Added storage and API regression coverage for timeline scoping, bounded results, authentication, and invalid targets.
+
 - Added a free local k3d deployment path with a single-node overlay, local image import workflow, NodePort/port-forward access, and a runbook that preserves the SQLite single-instance boundary. This does not claim HA, GKE readiness, or shared-service production.
 
 - Added bounded PDF report export and Admin-only retention status, dry-run preview, and confirmed operational cleanup. Cleanup excludes audit-chain evidence and is capped by configured row limits.

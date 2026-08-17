@@ -95,6 +95,23 @@ def test_network_scans_record_new_missing_and_returned_assets(monkeypatch, tmp_p
     assert len(inventory_store.recent_network_observations(100)) == 8
 
 
+def test_asset_timeline_merges_bounded_asset_evidence(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+
+    inventory_store.record_network_scan(
+        "192.168.1.0/30",
+        [{"IP Address": "192.168.1.1", "Status": "Online", "Details": "reply"}],
+    )
+    inventory_store.add_scan_run("host_profile", "192.168.1.1", "Host check completed")
+
+    timeline = inventory_store.asset_timeline("192.168.1.1", limit=3)
+
+    assert len(timeline) == 3
+    assert {item["kind"] for item in timeline} == {"asset_event", "scan_run", "observation"}
+    assert all(item["target"] == "192.168.1.1" for item in timeline)
+    assert inventory_store.asset_timeline("not-an-ip") == []
+
+
 def test_repeated_missing_result_does_not_duplicate_change_event(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     inventory_store.record_network_scan(

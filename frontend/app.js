@@ -620,7 +620,10 @@ async function loadInventory() {
     { key: 'status', label: 'Status', chip: true },
   ], 'No history recorded yet.');
   populateAssetOptions();
-  fillAssetContext($('#asset-ip').value);
+  const selectedAsset = $('#asset-ip').value.trim() || state.assets[0]?.ip_address || '';
+  if (selectedAsset && !$('#asset-ip').value.trim()) $('#asset-ip').value = selectedAsset;
+  fillAssetContext(selectedAsset);
+  await loadAssetTimeline(selectedAsset);
   markDataUpdated();
 }
 
@@ -765,6 +768,30 @@ function fillAssetContext(ipAddress) {
   } else {
     setFormStatus('context-status', 'Admin access is required to edit asset context.');
   }
+}
+
+async function loadAssetTimeline(ipAddress) {
+  const target = String(ipAddress || '').trim();
+  const badge = $('#timeline-asset');
+  const container = $('#asset-timeline-results');
+  if (!target) {
+    badge.textContent = 'Select an asset';
+    renderTable(container, [], [], 'Select a saved asset to load its activity timeline.');
+    return;
+  }
+
+  const payload = await apiJson(`/api/assets/${encodeURIComponent(target)}/timeline?limit=100`);
+  const asset = payload.asset;
+  badge.textContent = `${target} · ${payload.count || 0} events`;
+  renderTable(container, payload.items || [], [
+    { key: 'created_at', label: 'Time', format: (value) => localTimestamp(value) },
+    { key: 'event_label', label: 'Evidence', chip: true },
+    { key: 'kind', label: 'Source', format: (value) => String(value || '').replaceAll('_', ' ') },
+    { key: 'status', label: 'Status', chip: true },
+    { key: 'details', label: 'Details' },
+  ], asset
+    ? 'No retained activity for this asset yet.'
+    : 'This IPv4 address is valid but is not saved in inventory and has no retained activity.');
 }
 
 async function loadAudit() {
@@ -1613,7 +1640,10 @@ $('#inventory-export').addEventListener('click', (event) => downloadApiFile(
   'Inventory CSV downloaded.',
 ));
 
-$('#asset-ip').addEventListener('change', (event) => fillAssetContext(event.currentTarget.value));
+$('#asset-ip').addEventListener('change', (event) => {
+  fillAssetContext(event.currentTarget.value);
+  loadAssetTimeline(event.currentTarget.value).catch((error) => showToast(error.message, 'error'));
+});
 
 $('#asset-context-form').addEventListener('submit', async (event) => {
   event.preventDefault();

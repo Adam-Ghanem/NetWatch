@@ -84,6 +84,7 @@ from inventory_store import (
     add_scan_run,
     asset_inventory,
     asset_port_findings,
+    asset_timeline,
     audit_integrity_enabled,
     audit_integrity_is_ready,
     database_is_ready,
@@ -1267,6 +1268,28 @@ def save_asset_context(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"asset": asset}
+
+
+@app.get("/api/assets/{ip_address}/timeline")
+def asset_timeline_endpoint(
+    ip_address: str,
+    limit: int = Query(default=100, ge=1, le=200),
+    _: AuthContext = Depends(require_api_access),
+) -> dict[str, Any]:
+    validation = validate_target_ip(ip_address)
+    if not validation.ok:
+        raise HTTPException(status_code=400, detail=validation.error)
+    target = validation.value or ip_address
+    asset = next(
+        (
+            item
+            for item in asset_inventory(limit=MAX_INVENTORY_ROWS)
+            if item["ip_address"] == target
+        ),
+        None,
+    )
+    items = asset_timeline(target, limit=limit)
+    return {"asset": asset, "count": len(items), "items": items}
 
 
 @app.get("/api/scan-policies")

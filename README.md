@@ -109,6 +109,7 @@ These controls make NetWatch suitable for a reviewed internal deployment foundat
 - Bounded Wireshark-style live header analysis with protocol, conversation, endpoint, TCP-flag, VLAN, and frame-size views
 - Explicit no-payload retention, 15-second/1,000-frame limits, and one capture at a time by default
 - Historical scan snapshots with new, returned, and not-observed asset detection
+- Protected per-asset evidence timelines combining changes, direct checks, and network observations
 - Single-host latency, TTL, hostname, and cautious OS hints
 - Bounded concurrent common-port audit
 - Clear Open, Closed, and Filtered/Unreachable states
@@ -238,7 +239,9 @@ NetWatch never returns or stores payload bytes. A normal switched interface gene
 
 Stores local assets, first and last confirmed sightings, status, hostname/MAC/manufacturer/device-identity evidence, open-service findings, exposure score, recent scan runs, normalized observations, and change events in SQLite. Admins can assign an owner, department, location, business criticality, and operational notes. Viewer and Operator roles can read this context but cannot edit it.
 
-Inventory can be exported as formula-safe CSV for an approved internal workflow.
+Select an asset in the Inventory view to review its bounded evidence timeline. The protected `/api/assets/{ip_address}/timeline` endpoint validates the IPv4 target and combines discovery changes, direct host/port checks, and network observations without exposing unrelated assets. Inventory can also be exported as formula-safe CSV for an approved internal workflow.
+
+The v1.6.1 patch also pins `cryptography==50.0.0`, resolving the dependency vulnerability identified during the release security audit.
 
 ### Operations audit log
 

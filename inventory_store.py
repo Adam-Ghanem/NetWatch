@@ -1197,6 +1197,84 @@ def recent_asset_events(limit: int = 30) -> list[dict]:
     return events
 
 
+def asset_timeline(ip_address: str, limit: int = 100) -> list[dict]:
+    """Return bounded, normalized evidence for one saved or observed IPv4 asset."""
+    normalized_ip = _normalize_ipv4(ip_address)
+    if normalized_ip is None:
+        return []
+
+    init_db()
+    safe_limit = max(1, min(int(limit), 200))
+    with _connect() as conn:
+        event_rows = conn.execute(
+            """
+            SELECT
+                created_at,
+                'asset_event' AS kind,
+                event_type,
+                details,
+                scan_run_id,
+                '' AS status,
+                ip_address AS target
+            FROM asset_events
+            WHERE ip_address = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (normalized_ip, safe_limit),
+        ).fetchall()
+        scan_rows = conn.execute(
+            """
+            SELECT
+                created_at,
+                'scan_run' AS kind,
+                scan_type AS event_type,
+                summary AS details,
+                id AS scan_run_id,
+                status,
+                target
+            FROM scan_runs
+            WHERE target = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (normalized_ip, safe_limit),
+        ).fetchall()
+        observation_rows = conn.execute(
+            """
+            SELECT
+                runs.created_at,
+                'observation' AS kind,
+                'network_observation' AS event_type,
+                observations.details,
+                observations.scan_run_id,
+                observations.status,
+                observations.ip_address AS target
+            FROM network_observations AS observations
+            JOIN scan_runs AS runs ON runs.id = observations.scan_run_id
+            WHERE observations.ip_address = ?
+            ORDER BY observations.id DESC
+            LIMIT ?
+            """,
+            (normalized_ip, safe_limit),
+        ).fetchall()
+
+    items: list[dict] = []
+    for row in (*event_rows, *scan_rows, *observation_rows):
+        item = dict(row)
+        if item["kind"] == "asset_event":
+            label = EVENT_LABELS.get(item["event_type"], item["event_type"])
+        elif item["kind"] == "observation":
+            label = "Network observation"
+        else:
+            label = str(item["event_type"]).replace("_", " ").title()
+        item["event_label"] = label
+        items.append(item)
+
+    items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    return items[:safe_limit]
+
+
 def recent_network_observations(limit: int = 100) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 1_000))
