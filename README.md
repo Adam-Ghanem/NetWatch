@@ -69,17 +69,18 @@ The previews below use sample data and do not contain real network identifiers.
 
 <p align="center"><strong>Overview</strong></p>
 
-<p align="center">
-  <img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" width="96%">
-</p>
-
-<p align="center"><strong>Port audit</strong></p>
-
-<p align="center">
-  <img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" width="96%">
-</p>
-
-<p align="center"><strong>Risk advisor</strong></p>
+<table align="center">
+<tr>
+<td width="50%" align="center">
+  <img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" width="100%">
+  <br><strong>Risk advisor</strong>
+</td>
+<td width="50%" align="center">
+  <img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" width="100%">
+  <br><strong>Port audit</strong>
+</td>
+</tr>
+</table>
 
 ## AI
 
