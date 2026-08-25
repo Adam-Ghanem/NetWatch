@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from ai_client import OpenAIClient
+from ai_provider import AIProvider
 
 
 @dataclass(frozen=True)
@@ -16,14 +16,20 @@ class AgentTool:
 class NetWatchAIAgent:
     """Tool-using defensive agent over already-collected NetWatch evidence."""
 
-    def __init__(self, client: OpenAIClient, tools: list[AgentTool] | None = None):
+    def __init__(self, client: AIProvider, tools: list[AgentTool] | None = None):
         self.client = client
         self.tools = {tool.name: tool for tool in (tools or [])}
 
-    def build_context(self, asset: dict[str, Any], findings: list[dict[str, Any]]) -> dict[str, Any]:
-        return {"asset": asset, "findings": findings, "available_tools": [
-            {"name": t.name, "description": t.description} for t in self.tools.values()
-        ]}
+    def build_context(
+        self, asset: dict[str, Any], findings: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return {
+            "asset": asset,
+            "findings": findings,
+            "available_tools": [
+                {"name": t.name, "description": t.description} for t in self.tools.values()
+            ],
+        }
 
     def analyze(self, asset: dict[str, Any], findings: list[dict[str, Any]]) -> str:
         context = self.build_context(asset, findings)

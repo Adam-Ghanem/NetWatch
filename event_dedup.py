@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 import hashlib
 import json
+from collections.abc import Iterable, Mapping
 
 
 def event_fingerprint(event: Mapping[str, object]) -> str:

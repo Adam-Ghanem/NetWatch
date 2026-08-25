@@ -1,8 +1,13 @@
-from behavior_engine import AssetObservation, build_baseline, detect_behavior_changes, evaluate_observations
+from behavior_engine import (
+    AssetObservation,
+    build_baseline,
+    detect_behavior_changes,
+    evaluate_observations,
+)
 
 
-def observation(**overrides):
-    value = {
+def observation(**overrides: object) -> AssetObservation:
+    value: dict[str, object] = {
         "observed_at": "2026-08-25T10:00:00+00:00",
         "hostname": "server-01",
         "mac_address": "aa:bb:cc:dd:ee:ff",
@@ -14,7 +19,7 @@ def observation(**overrides):
         "exposure_score": 20,
     }
     value.update(overrides)
-    return AssetObservation(**value)
+    return AssetObservation.from_mapping(value)
 
 
 def test_baseline_requires_minimum_history():

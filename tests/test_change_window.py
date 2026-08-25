@@ -1,10 +1,16 @@
+from collections.abc import Mapping
+
 import pytest
 
 from change_window import changes_in_window
 
 
 def test_window_is_inclusive_and_preserves_event_data():
-    events = [{"timestamp": 10, "kind": "open"}, {"timestamp": 20, "kind": "close"}, {"timestamp": 30}]
+    events: list[Mapping[str, object]] = [
+        {"timestamp": 10, "kind": "open"},
+        {"timestamp": 20, "kind": "close"},
+        {"timestamp": 30},
+    ]
     assert changes_in_window(events, start=10, end=20) == events[:2]
 
 

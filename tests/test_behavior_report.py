@@ -2,11 +2,13 @@ from behavior_report import summarize_behavior
 
 
 def test_summary_groups_findings_and_caps_risk():
-    result = summarize_behavior([
-        {"kind": "new_port", "severity": "high"},
-        {"kind": "new_port", "severity": "medium"},
-        {"kind": "identity_changed", "severity": "critical"},
-    ])
+    result = summarize_behavior(
+        [
+            {"kind": "new_port", "severity": "high"},
+            {"kind": "new_port", "severity": "medium"},
+            {"kind": "identity_changed", "severity": "critical"},
+        ]
+    )
     assert result["total"] == 3
     assert result["severity"]["critical"] == 1
     assert result["severity"]["high"] == 1

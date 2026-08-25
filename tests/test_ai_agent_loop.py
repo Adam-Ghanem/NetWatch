@@ -12,7 +12,9 @@ def test_agent_loop_executes_registered_tool_then_finishes():
             return {"tool_calls": [{"name": "asset_history", "arguments": {"id": "a1"}}]}
         return {"answer": "history reviewed"}
 
-    result = run_agent_loop(model, {"asset": "a1"}, {"asset_history": lambda args: {"id": args["id"], "events": []}})
+    result = run_agent_loop(
+        model, {"asset": "a1"}, {"asset_history": lambda args: {"id": args["id"], "events": []}}
+    )
     assert result["answer"] == "history reviewed"
     assert len(calls) == 2
 

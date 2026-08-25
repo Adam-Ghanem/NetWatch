@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 
 def asset_confidence(*, fingerprint_score: int, evidence_count: int, behavior_findings: int) -> int:
     """Return a bounded confidence indicator for an asset snapshot."""

@@ -30,7 +30,11 @@ def run_responses_agent(
     )
 
     for _ in range(max_rounds):
-        calls = [item for item in getattr(response, "output", []) or [] if getattr(item, "type", None) == "function_call"]
+        calls = [
+            item
+            for item in getattr(response, "output", []) or []
+            if getattr(item, "type", None) == "function_call"
+        ]
         if not calls:
             return getattr(response, "output_text", "")
 
@@ -41,15 +45,19 @@ def run_responses_agent(
                 raise KeyError(f"AI requested unregistered tool: {name}")
             arguments = json.loads(getattr(call, "arguments", "{}"))
             result = tools[name](arguments)
-            outputs.append({
-                "type": "function_call_output",
-                "call_id": getattr(call, "call_id", ""),
-                "output": json.dumps(dict(result), ensure_ascii=False),
-            })
+            outputs.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": getattr(call, "call_id", ""),
+                    "output": json.dumps(dict(result), ensure_ascii=False),
+                }
+            )
 
         response = client.responses.create(
             model=model,
-            instructions="Continue the defensive investigation using only the tool results provided.",
+            instructions=(
+                "Continue the defensive investigation using only the tool results provided."
+            ),
             previous_response_id=getattr(response, "id", None),
             input=outputs,
             tools=tool_specs,

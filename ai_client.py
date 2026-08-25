@@ -8,7 +8,7 @@ from typing import Any
 try:
     from openai import OpenAI
 except ImportError:  # optional dependency
-    OpenAI = None  # type: ignore[assignment,misc]
+    OpenAI = None
 
 
 class AIConfigurationError(RuntimeError):

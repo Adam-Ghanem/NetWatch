@@ -11,10 +11,14 @@ def test_tool_specs_are_strict_and_closed():
 
 
 def test_function_calls_are_normalized():
-    response = SimpleNamespace(output=[
-        SimpleNamespace(type="message"),
-        SimpleNamespace(type="function_call", name="asset_snapshot", call_id="c1", arguments='{"id":"a1"}'),
-    ])
-    assert extract_function_calls(response) == [{
-        "name": "asset_snapshot", "call_id": "c1", "arguments": '{"id":"a1"}'
-    }]
+    response = SimpleNamespace(
+        output=[
+            SimpleNamespace(type="message"),
+            SimpleNamespace(
+                type="function_call", name="asset_snapshot", call_id="c1", arguments='{"id":"a1"}'
+            ),
+        ]
+    )
+    assert extract_function_calls(response) == [
+        {"name": "asset_snapshot", "call_id": "c1", "arguments": '{"id":"a1"}'}
+    ]

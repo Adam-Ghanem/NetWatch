@@ -9,9 +9,12 @@ def test_lifecycle_states():
 
 
 def test_lifecycle_summary():
-    result = lifecycle_summary([
-        {"last_seen": 99},
-        {"last_seen": 0},
-        {},
-    ], now=100)
+    result = lifecycle_summary(
+        [
+            {"last_seen": 99},
+            {"last_seen": 0},
+            {},
+        ],
+        now=86400,
+    )
     assert result == {"new": 1, "active": 1, "stale": 1, "retired": 0}

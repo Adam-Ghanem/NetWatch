@@ -8,10 +8,11 @@ explainable anomaly candidates. Callers decide how/where observations are stored
 and whether a finding should become an alert.
 """
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Iterable, Mapping, Sequence
+from typing import TypeVar
 
+StableValue = TypeVar("StableValue", str, int)
 
 DEFAULT_MIN_BASELINE_OBSERVATIONS = 3
 DEFAULT_MAX_BASELINE_OBSERVATIONS = 30
@@ -35,10 +36,25 @@ class AssetObservation:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, object]) -> "AssetObservation":
+        def _as_int(raw: object, default: int = 0) -> int:
+            if isinstance(raw, bool):
+                return int(raw)
+            if isinstance(raw, int):
+                return raw
+            if isinstance(raw, float):
+                return int(raw)
+            if isinstance(raw, str):
+                try:
+                    return int(raw.strip())
+                except ValueError:
+                    return default
+            return default
+
         def _ports(raw: object) -> tuple[int, ...]:
             if not isinstance(raw, (list, tuple, set)):
                 return ()
-            return tuple(sorted({int(p) for p in raw if str(p).isdigit() and 1 <= int(p) <= 65535}))
+            ports = {_as_int(port, default=-1) for port in raw}
+            return tuple(sorted(port for port in ports if 1 <= port <= 65535))
 
         def _strings(raw: object) -> tuple[str, ...]:
             if not isinstance(raw, (list, tuple, set)):
@@ -54,7 +70,7 @@ class AssetObservation:
             open_ports=_ports(value.get("open_ports", ())),
             services=_strings(value.get("services", ())),
             criticality=str(value.get("criticality", "Medium")),
-            exposure_score=max(0, min(100, int(value.get("exposure_score", 0) or 0))),
+            exposure_score=max(0, min(100, _as_int(value.get("exposure_score", 0)))),
         )
 
 
@@ -125,8 +141,8 @@ def build_baseline(
     if len(items) < min_observations:
         return None
 
-    def stable(values: Iterable[Iterable[object]]) -> tuple:
-        buckets: dict[object, int] = {}
+    def stable(values: Iterable[Iterable[StableValue]]) -> tuple[StableValue, ...]:
+        buckets: dict[StableValue, int] = {}
         for row in values:
             for value in row:
                 buckets[value] = buckets.get(value, 0) + 1
@@ -148,7 +164,10 @@ def build_baseline(
 
 
 def _severity(kind: str, observation: AssetObservation) -> str:
-    if kind in {"identity_changed", "new_service", "new_port"} and observation.criticality == "Critical":
+    if (
+        kind in {"identity_changed", "new_service", "new_port"}
+        and observation.criticality == "Critical"
+    ):
         return "High"
     if kind in {"identity_changed", "new_service", "new_port", "exposure_shift"}:
         return "Medium"
@@ -178,7 +197,10 @@ def detect_behavior_changes(
                 severity=_severity("new_port", observation),
                 confidence="High" if baseline.observations >= 5 else "Medium",
                 summary=f"{len(new_ports)} port(s) are new relative to the asset baseline.",
-                evidence=(f"new_ports={','.join(map(str, new_ports))}", f"baseline_observations={baseline.observations}"),
+                evidence=(
+                    f"new_ports={','.join(map(str, new_ports))}",
+                    f"baseline_observations={baseline.observations}",
+                ),
             )
         )
 
@@ -192,7 +214,10 @@ def detect_behavior_changes(
                 severity=_severity("new_service", observation),
                 confidence="High" if baseline.observations >= 5 else "Medium",
                 summary=f"{len(new_services)} service(s) are new relative to the asset baseline.",
-                evidence=(f"new_services={','.join(new_services)}", f"baseline_observations={baseline.observations}"),
+                evidence=(
+                    f"new_services={','.join(new_services)}",
+                    f"baseline_observations={baseline.observations}",
+                ),
             )
         )
 
@@ -211,7 +236,11 @@ def detect_behavior_changes(
             )
         )
 
-    if baseline.device_families and observation.device_family and observation.device_family not in baseline.device_families:
+    if (
+        baseline.device_families
+        and observation.device_family
+        and observation.device_family not in baseline.device_families
+    ):
         findings.append(
             BehaviorFinding(
                 kind="device_family_changed",

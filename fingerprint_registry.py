@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,9 @@ DEFAULT_RULES: tuple[FingerprintRule, ...] = (
 )
 
 
-def matching_rules(value: object, rules: tuple[FingerprintRule, ...] = DEFAULT_RULES) -> tuple[FingerprintRule, ...]:
+def matching_rules(
+    value: object, rules: tuple[FingerprintRule, ...] = DEFAULT_RULES
+) -> tuple[FingerprintRule, ...]:
     text = str(value or "").strip().lower()
     if not text:
         return ()

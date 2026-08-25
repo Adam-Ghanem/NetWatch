@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Protocol
+from collections.abc import Mapping
+from typing import Protocol
 
 
 class AIProvider(Protocol):

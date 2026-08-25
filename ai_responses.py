@@ -27,9 +27,11 @@ def extract_function_calls(response: Any) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
     for item in getattr(response, "output", []) or []:
         if getattr(item, "type", None) == "function_call":
-            calls.append({
-                "name": getattr(item, "name", ""),
-                "call_id": getattr(item, "call_id", ""),
-                "arguments": getattr(item, "arguments", "{}"),
-            })
+            calls.append(
+                {
+                    "name": getattr(item, "name", ""),
+                    "call_id": getattr(item, "call_id", ""),
+                    "arguments": getattr(item, "arguments", "{}"),
+                }
+            )
     return calls

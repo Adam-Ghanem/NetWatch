@@ -2,7 +2,9 @@ from os_fingerprint import fingerprint_os
 
 
 def test_android_from_device_identity():
-    result = fingerprint_os(hostname="Adam-Pixel-8", manufacturer="Google", device_family="Google Pixel")
+    result = fingerprint_os(
+        hostname="Adam-Pixel-8", manufacturer="Google", device_family="Google Pixel"
+    )
     assert result.platform == "Android"
     assert result.confidence == "High"
     assert "Android/mobile identity evidence" in result.evidence
@@ -21,7 +23,9 @@ def test_linux_from_hostname_and_service():
 
 
 def test_windows_from_identity():
-    result = fingerprint_os(hostname="WIN-PC", manufacturer="Microsoft", device_type="Windows computer")
+    result = fingerprint_os(
+        hostname="WIN-PC", manufacturer="Microsoft", device_type="Windows computer"
+    )
     assert result.platform == "Windows"
 
 

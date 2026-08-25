@@ -4,7 +4,10 @@ from ai_analyst import assess_asset
 def test_analyst_prioritizes_highest_severity():
     result = assess_asset(
         {"fingerprint": {"platform": "Android", "confidence": "High"}},
-        [{"kind": "new_port", "severity": "medium"}, {"kind": "identity_changed", "severity": "high"}],
+        [
+            {"kind": "new_port", "severity": "medium"},
+            {"kind": "identity_changed", "severity": "high"},
+        ],
     )
     assert result.risk == "High"
     assert result.confidence == "High"

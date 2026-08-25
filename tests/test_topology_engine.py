@@ -7,9 +7,7 @@ def test_build_topology_uses_explicit_gateway_evidence():
             {"ip_address": "192.168.1.10", "hostname": "workstation", "device_type": "Computer"},
             {"ip_address": "192.168.1.1", "hostname": "router", "device_type": "Network gateway"},
         ],
-        [
-            {"ip_address": "192.168.1.10", "gateway_ip": "192.168.1.1", "interface": "eth0"}
-        ],
+        [{"ip_address": "192.168.1.10", "gateway_ip": "192.168.1.1", "interface": "eth0"}],
     )
 
     assert {node["id"] for node in graph["nodes"]} == {"192.168.1.1", "192.168.1.10"}

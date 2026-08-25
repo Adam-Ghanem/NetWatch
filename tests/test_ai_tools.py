@@ -2,7 +2,9 @@ from ai_tools import asset_snapshot_tool, findings_tool
 
 
 def test_asset_snapshot_is_allowlisted():
-    result = asset_snapshot_tool({"id": "a1", "ip": "192.0.2.1", "secret": "never", "services": [22]})
+    result = asset_snapshot_tool(
+        {"id": "a1", "ip": "192.0.2.1", "secret": "never", "services": [22]}
+    )
     assert result == {"id": "a1", "ip": "192.0.2.1", "services": [22]}
     assert "secret" not in result
 

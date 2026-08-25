@@ -12,7 +12,17 @@ class FakeResponses:
     def create(self, **kwargs):
         self.round += 1
         if self.round == 1:
-            return SimpleNamespace(id="r1", output=[SimpleNamespace(type="function_call", name="asset_snapshot", call_id="c1", arguments='{"id":"a1"}')])
+            return SimpleNamespace(
+                id="r1",
+                output=[
+                    SimpleNamespace(
+                        type="function_call",
+                        name="asset_snapshot",
+                        call_id="c1",
+                        arguments='{"id":"a1"}',
+                    )
+                ],
+            )
         return SimpleNamespace(id="r2", output=[], output_text="final investigation")
 
 
@@ -37,7 +47,14 @@ def test_runner_executes_tool_and_returns_final_text():
 def test_runner_rejects_unregistered_tool():
     class BadResponses:
         def create(self, **kwargs):
-            return SimpleNamespace(id="r1", output=[SimpleNamespace(type="function_call", name="shell", call_id="c1", arguments="{}")])
+            return SimpleNamespace(
+                id="r1",
+                output=[
+                    SimpleNamespace(
+                        type="function_call", name="shell", call_id="c1", arguments="{}"
+                    )
+                ],
+            )
 
     client = SimpleNamespace(responses=BadResponses())
     with pytest.raises(KeyError):

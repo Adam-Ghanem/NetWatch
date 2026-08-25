@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,9 @@ class AnalystAssessment:
         }
 
 
-def assess_asset(asset: Mapping[str, object], findings: Sequence[Mapping[str, object]] = ()) -> AnalystAssessment:
+def assess_asset(
+    asset: Mapping[str, object], findings: Sequence[Mapping[str, object]] = ()
+) -> AnalystAssessment:
     """Produce a deterministic analyst assessment; no network/model calls are made here."""
     fingerprint = asset.get("fingerprint")
     fp = fingerprint if isinstance(fingerprint, Mapping) else {}
@@ -42,12 +44,17 @@ def assess_asset(asset: Mapping[str, object], findings: Sequence[Mapping[str, ob
     else:
         risk = "Informational"
 
-    evidence = tuple(str(item.get("kind", item.get("type", "behavior change"))) for item in items[:8])
+    evidence = tuple(
+        str(item.get("kind", item.get("type", "behavior change"))) for item in items[:8]
+    )
     if not items:
         summary = f"No behavioral findings were supplied for this {platform} asset."
         action = "Continue monitoring and establish a baseline."
     else:
-        summary = f"Observed {len(items)} behavioral finding(s) on a {platform} asset; review the supplied evidence before taking action."
+        summary = (
+            f"Observed {len(items)} behavioral finding(s) on a {platform} asset; "
+            "review the supplied evidence before taking action."
+        )
         action = "Validate whether the observed changes were intentional before remediation."
 
     return AnalystAssessment(risk, confidence, summary, evidence, action)

@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Mapping, TypedDict
+
+
+class OSFingerprintDict(TypedDict):
+    platform: str
+    family: str
+    confidence: str
+    score: int
+    evidence: list[str]
 
 
 @dataclass(frozen=True)
@@ -12,7 +20,7 @@ class OSFingerprint:
     score: int
     evidence: tuple[str, ...]
 
-    def as_dict(self) -> dict[str, object]:
+    def as_dict(self) -> OSFingerprintDict:
         return {
             "platform": self.platform,
             "family": self.family,
@@ -51,7 +59,10 @@ def fingerprint_os(
 
     if any(x in text for x in ("iphone", "ipad", "ios", "apple iphone", "apple ipad")):
         add("iOS/iPadOS", 90, "Apple mobile identity evidence")
-    if any(x in text for x in ("android", "pixel", "galaxy", "redmi", "xiaomi", "oneplus", "oppo", "realme")):
+    if any(
+        x in text
+        for x in ("android", "pixel", "galaxy", "redmi", "xiaomi", "oneplus", "oppo", "realme")
+    ):
         add("Android", 88, "Android/mobile identity evidence")
     if "mac" in text or "macbook" in text or "imac" in text:
         add("macOS", 82, "Apple computer identity evidence")
@@ -59,7 +70,10 @@ def fingerprint_os(
         add("Windows", 82, "Windows identity evidence")
     if any(x in text for x in ("linux", "ubuntu", "debian", "fedora", "arch", "raspberry pi")):
         add("Linux", 84, "Linux identity evidence")
-    if any(x in text for x in ("openwrt", "router", "gateway", "tp-link", "ubiquiti", "mikrotik", "zte")):
+    if any(
+        x in text
+        for x in ("openwrt", "router", "gateway", "tp-link", "ubiquiti", "mikrotik", "zte")
+    ):
         add("Embedded Linux", 72, "network-device identity evidence")
     if any(x in text for x in ("freebsd", "free bsd")):
         add("FreeBSD", 86, "FreeBSD identity evidence")

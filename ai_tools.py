@@ -14,12 +14,18 @@ def findings_tool(findings: list[dict[str, Any]], limit: int = 20) -> dict[str, 
     return {"count": len(findings), "findings": findings[:limit]}
 
 
-def register_default_tools(agent: Any, assets: dict[str, dict[str, Any]], findings: list[dict[str, Any]]) -> None:
+def register_default_tools(
+    agent: Any, assets: dict[str, dict[str, Any]], findings: list[dict[str, Any]]
+) -> None:
     from ai_agent import AgentTool
 
     agent.tools["asset_snapshot"] = AgentTool(
-        "asset_snapshot", "Read already-collected asset evidence", lambda args: asset_snapshot_tool(assets[args["id"]])
+        "asset_snapshot",
+        "Read already-collected asset evidence",
+        lambda args: asset_snapshot_tool(assets[args["id"]]),
     )
     agent.tools["findings"] = AgentTool(
-        "findings", "Read bounded collected behavioral findings", lambda args: findings_tool(findings, args.get("limit", 20))
+        "findings",
+        "Read bounded collected behavioral findings",
+        lambda args: findings_tool(findings, args.get("limit", 20)),
     )
