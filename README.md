@@ -63,20 +63,23 @@ The goal is simple: **make network changes understandable without turning the to
 
 The previews below use sample data and do not contain real network identifiers.
 
-### Overview
+<p align="center">
+  <img src="docs/screenshots/overview.svg" alt="NetWatch overview dashboard" width="96%">
+</p>
 
-![NetWatch overview dashboard](docs/screenshots/overview.svg)
+<p align="center"><strong>Overview</strong></p>
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" /></td>
-    <td width="50%"><img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" /></td>
-  </tr>
-  <tr>
-    <td align="center"><strong>Port audit</strong></td>
-    <td align="center"><strong>Risk advisor</strong></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" width="96%">
+</p>
+
+<p align="center"><strong>Port audit</strong></p>
+
+<p align="center">
+  <img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" width="96%">
+</p>
+
+<p align="center"><strong>Risk advisor</strong></p>
 
 ## AI
 
