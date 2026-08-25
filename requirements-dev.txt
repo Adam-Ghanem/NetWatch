@@ -1,5 +1,5 @@
 -r requirements.txt
-black>=24.10,<27
+black==25.1.0
 bandit==1.9.4
 flake8>=7.1,<8
 httpx2==2.5.0
