@@ -59,6 +59,25 @@ Authorized network
 
 The goal is simple: **make network changes understandable without turning the tool into an offensive scanner.**
 
+## Screenshots
+
+The previews below use sample data and do not contain real network identifiers.
+
+### Overview
+
+![NetWatch overview dashboard](docs/screenshots/overview.svg)
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/port-audit.svg" alt="NetWatch port audit preview" /></td>
+    <td width="50%"><img src="docs/screenshots/risk-advisor.svg" alt="NetWatch risk advisor preview" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Port audit</strong></td>
+    <td align="center"><strong>Risk advisor</strong></td>
+  </tr>
+</table>
+
 ## AI
 
 AI is optional. NetWatch does not ship with a shared API key.
