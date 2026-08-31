@@ -82,5 +82,8 @@ def query_flows(
     selected = query or FlowQuery()
     selected.validate()
     matches = [dict(flow) for flow in flows if _matches(flow, selected)]
-    matches.sort(key=lambda flow: _sort_key(flow, selected.sort_by), reverse=selected.sort_by == "recent")
+    matches.sort(
+        key=lambda flow: _sort_key(flow, selected.sort_by),
+        reverse=selected.sort_by == "recent",
+    )
     return matches[: selected.limit]
