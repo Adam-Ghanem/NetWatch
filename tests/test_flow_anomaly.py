@@ -4,7 +4,6 @@ import pytest
 
 import flow_anomaly
 
-
 def _flow(
     flow_id: str,
     source: str,
