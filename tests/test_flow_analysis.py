@@ -44,6 +44,7 @@ def test_bidirectional_packets_are_merged_and_directional_stats_preserved():
     assert {flow["a_to_b_packets"], flow["b_to_a_packets"]} == {1, 2}
     assert flow["duration_ms"] == 40
     assert flow["tcp_state"] == "established"
+    assert isinstance(flow["flow_id"], str)
     assert len(flow["flow_id"]) == 16
 
 
