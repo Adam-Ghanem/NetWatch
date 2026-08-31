@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from config import MAX_CAPTURE_PACKETS, MAX_CAPTURE_SECONDS
 from device_identity import infer_device_identity, normalize_mac
+from flow_analysis import summarize_flows
 
 CAPTURE_PROTOCOLS = ("all", "tcp", "udp", "icmp", "arp")
 SYS_CLASS_NET = Path("/sys/class/net")
@@ -371,6 +372,7 @@ def summarize_capture(
 ) -> dict[str, Any]:
     protocol_counts = Counter(str(record["protocol"]) for record in records)
     total_bytes = sum(_int_value(record["length_bytes"]) for record in records)
+    flows = summarize_flows(records, limit=100)
     return {
         "interface": interface,
         "duration_seconds": duration_seconds,
@@ -388,6 +390,8 @@ def summarize_capture(
                 protocol_counts.items(), key=lambda item: (-item[1], item[0])
             )
         ],
+        "flow_count": len(flows),
+        "flows": flows,
         "conversations": _conversation_rows(records),
         "devices": _device_rows(records),
         "packets": records,
