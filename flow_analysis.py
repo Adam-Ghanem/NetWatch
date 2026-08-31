@@ -77,7 +77,9 @@ def summarize_flows(
     for record in records:
         protocol = str(record.get("protocol") or "Unknown").upper()
         source = _endpoint(record.get("source_ip"), record.get("source_port"))
-        destination = _endpoint(record.get("destination_ip"), record.get("destination_port"))
+        destination = _endpoint(
+            record.get("destination_ip"), record.get("destination_port")
+        )
         left, right = sorted((source, destination))
         key = (protocol, left, right)
         timestamp = _timestamp(record.get("captured_at"))
