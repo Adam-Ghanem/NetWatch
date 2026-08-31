@@ -48,6 +48,70 @@ def test_bidirectional_packets_are_merged_and_directional_stats_preserved():
     assert len(flow["flow_id"]) == 16
 
 
+def test_flow_reports_originator_responder_and_service_hint():
+    records = [
+        {
+            "captured_at": "2026-08-31T03:10:00+00:00",
+            "protocol": "TCP",
+            "source_ip": "10.0.0.25",
+            "destination_ip": "10.0.0.5",
+            "source_port": 54000,
+            "destination_port": 443,
+            "tcp_flags": "SYN",
+            "length_bytes": 60,
+        },
+        {
+            "captured_at": "2026-08-31T03:10:00.015+00:00",
+            "protocol": "TCP",
+            "source_ip": "10.0.0.5",
+            "destination_ip": "10.0.0.25",
+            "source_port": 443,
+            "destination_port": 54000,
+            "tcp_flags": "ACK,SYN",
+            "length_bytes": 60,
+        },
+        {
+            "captured_at": "2026-08-31T03:10:00.030+00:00",
+            "protocol": "TCP",
+            "source_ip": "10.0.0.25",
+            "destination_ip": "10.0.0.5",
+            "source_port": 54000,
+            "destination_port": 443,
+            "tcp_flags": "ACK",
+            "length_bytes": 52,
+        },
+    ]
+
+    flow = summarize_flows(records)[0]
+
+    assert flow["originator"] == {"ip": "10.0.0.25", "port": 54000}
+    assert flow["responder"] == {"ip": "10.0.0.5", "port": 443}
+    assert flow["originator_packets"] == 2
+    assert flow["originator_bytes"] == 112
+    assert flow["responder_packets"] == 1
+    assert flow["responder_bytes"] == 60
+    assert flow["service"] == "https"
+
+
+def test_udp_service_hint_uses_destination_well_known_port():
+    flow = summarize_flows(
+        [
+            {
+                "protocol": "UDP",
+                "source_ip": "192.168.1.20",
+                "destination_ip": "192.168.1.1",
+                "source_port": 53000,
+                "destination_port": 53,
+                "length_bytes": 74,
+            }
+        ]
+    )[0]
+
+    assert flow["originator"] == {"ip": "192.168.1.20", "port": 53000}
+    assert flow["responder"] == {"ip": "192.168.1.1", "port": 53}
+    assert flow["service"] == "dns"
+
+
 def test_ports_separate_flows_and_rst_wins_state():
     records = [
         {
