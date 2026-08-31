@@ -2,6 +2,7 @@ name: Python CI
 
 on:
   push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -32,7 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --diff --check .
+          black --check .
           isort --check-only .
 
       - name: Lint and type-check
