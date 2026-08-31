@@ -4,7 +4,6 @@ import hashlib
 from datetime import datetime
 from typing import Iterable
 
-
 _SERVICE_PORTS = {
     ("TCP", 22): "ssh",
     ("TCP", 25): "smtp",
