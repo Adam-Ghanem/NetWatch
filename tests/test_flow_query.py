@@ -2,7 +2,6 @@ import pytest
 
 from flow_query import FlowQuery, query_flows
 
-
 FLOWS = [
     {
         "flow_id": "https-flow",
