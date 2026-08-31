@@ -5,6 +5,26 @@ from datetime import datetime
 from typing import Iterable
 
 
+_SERVICE_PORTS = {
+    ("TCP", 22): "ssh",
+    ("TCP", 25): "smtp",
+    ("TCP", 53): "dns",
+    ("UDP", 53): "dns",
+    ("UDP", 67): "dhcp",
+    ("UDP", 68): "dhcp",
+    ("TCP", 80): "http",
+    ("TCP", 110): "pop3",
+    ("UDP", 123): "ntp",
+    ("TCP", 143): "imap",
+    ("TCP", 389): "ldap",
+    ("UDP", 389): "ldap",
+    ("TCP", 443): "https",
+    ("UDP", 443): "quic",
+    ("TCP", 445): "smb",
+    ("UDP", 5353): "mdns",
+}
+
+
 def _int(value: object) -> int:
     try:
         return int(str(value or 0))
@@ -25,9 +45,17 @@ def _endpoint(ip: object, port: object) -> tuple[str, int]:
     return str(ip or "-"), _int(port)
 
 
+def _endpoint_dict(endpoint: tuple[str, int]) -> dict[str, object]:
+    return {"ip": endpoint[0], "port": endpoint[1] or None}
+
+
 def _flow_id(protocol: str, left: tuple[str, int], right: tuple[str, int]) -> str:
     raw = f"{protocol}|{left[0]}|{left[1]}|{right[0]}|{right[1]}".encode()
     return hashlib.blake2s(raw, digest_size=8).hexdigest()
+
+
+def _service(protocol: str, responder: tuple[str, int]) -> str:
+    return _SERVICE_PORTS.get((protocol, responder[1]), "-")
 
 
 def summarize_flows(
@@ -37,7 +65,10 @@ def summarize_flows(
     """Build bidirectional, metadata-only flow summaries from packet records.
 
     Endpoints are canonicalized so both directions of the same TCP/UDP 5-tuple are
-    merged. No packet payload is retained or reconstructed.
+    merged. The first observed sender is treated as the originator and the first
+    observed destination as the responder. Service hints are conservative and are
+    derived only from a small set of well-known responder ports. No packet payload
+    is retained or reconstructed.
     """
     if limit < 1 or limit > 1000:
         raise ValueError("Flow limit must be between 1 and 1000.")
@@ -57,14 +88,21 @@ def summarize_flows(
             {
                 "flow_id": _flow_id(protocol, left, right),
                 "protocol": protocol,
-                "endpoint_a": {"ip": left[0], "port": left[1] or None},
-                "endpoint_b": {"ip": right[0], "port": right[1] or None},
+                "endpoint_a": _endpoint_dict(left),
+                "endpoint_b": _endpoint_dict(right),
+                "originator": _endpoint_dict(source),
+                "responder": _endpoint_dict(destination),
+                "service": _service(protocol, destination),
                 "packets": 0,
                 "bytes": 0,
                 "a_to_b_packets": 0,
                 "a_to_b_bytes": 0,
                 "b_to_a_packets": 0,
                 "b_to_a_bytes": 0,
+                "originator_packets": 0,
+                "originator_bytes": 0,
+                "responder_packets": 0,
+                "responder_bytes": 0,
                 "first_seen": None,
                 "last_seen": None,
                 "duration_ms": 0,
@@ -76,6 +114,17 @@ def summarize_flows(
         direction = "a_to_b" if source == left else "b_to_a"
         flow[f"{direction}_packets"] = _int(flow[f"{direction}_packets"]) + 1
         flow[f"{direction}_bytes"] = _int(flow[f"{direction}_bytes"]) + size
+
+        originator = flow["originator"]
+        if isinstance(originator, dict) and source == (
+            str(originator.get("ip") or "-"),
+            _int(originator.get("port")),
+        ):
+            flow["originator_packets"] = _int(flow["originator_packets"]) + 1
+            flow["originator_bytes"] = _int(flow["originator_bytes"]) + size
+        else:
+            flow["responder_packets"] = _int(flow["responder_packets"]) + 1
+            flow["responder_bytes"] = _int(flow["responder_bytes"]) + size
 
         if timestamp is not None:
             iso = timestamp.isoformat(timespec="milliseconds")
