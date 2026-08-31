@@ -7,7 +7,7 @@ FLOWS = [
         "flow_id": "https-flow",
         "protocol": "TCP",
         "service": "https",
-        "state": "established",
+        "tcp_state": "established",
         "bytes": 1200,
         "packets": 12,
         "duration_ms": 500,
@@ -19,7 +19,7 @@ FLOWS = [
         "flow_id": "dns-flow",
         "protocol": "UDP",
         "service": "dns",
-        "state": "datagram",
+        "tcp_state": "-",
         "bytes": 300,
         "packets": 4,
         "duration_ms": 30,
@@ -31,7 +31,7 @@ FLOWS = [
         "flow_id": "ssh-flow",
         "protocol": "TCP",
         "service": "ssh",
-        "state": "opening",
+        "tcp_state": "opening",
         "bytes": 120,
         "packets": 2,
         "duration_ms": 5,
@@ -53,6 +53,14 @@ def test_filters_by_endpoint_protocol_service_state_and_minimum_bytes():
             min_bytes=1000,
         ),
     )
+
+    assert [flow["flow_id"] for flow in result] == ["https-flow"]
+
+
+def test_state_filter_accepts_legacy_state_field_for_compatibility():
+    legacy = [{**FLOWS[0], "tcp_state": "", "state": "established"}]
+
+    result = query_flows(legacy, FlowQuery(state="established"))
 
     assert [flow["flow_id"] for flow in result] == ["https-flow"]
 
