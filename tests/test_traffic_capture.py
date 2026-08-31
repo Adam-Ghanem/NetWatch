@@ -157,6 +157,33 @@ def test_capture_summary_includes_protocols_conversations_and_device_hints():
     assert devices["28:6C:07:00:00:01"]["device_name"] == "Xiaomi / Redmi device"
 
 
+def test_capture_summary_exposes_canonical_flow_records():
+    tcp = parse_ethernet_frame(
+        _tcp_frame(),
+        1,
+        captured_at=datetime(2026, 8, 31, tzinfo=timezone.utc),
+    )
+    assert tcp is not None
+
+    summary = summarize_capture(
+        [tcp],
+        interface="eth0",
+        duration_seconds=5,
+        capture_filter=CaptureFilter(),
+    )
+
+    assert summary["flow_count"] == 1
+    flow = summary["flows"][0]
+    assert flow["protocol"] == "TCP"
+    assert flow["service"] == "https"
+    assert flow["originator"] == {"ip": "192.168.1.10", "port": 51_515}
+    assert flow["responder"] == {"ip": "192.168.1.20", "port": 443}
+    assert flow["tcp_state"] == "establishing"
+    assert flow["packets"] == 1
+    assert flow["bytes"] == len(_tcp_frame())
+    assert "payload" not in flow
+
+
 def test_interface_selection_only_accepts_reported_interfaces(monkeypatch):
     monkeypatch.setattr(
         traffic_capture,
