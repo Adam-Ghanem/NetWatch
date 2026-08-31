@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import flow_analysis
 
 
@@ -42,14 +44,16 @@ def test_conversation_stats_aggregate_endpoints_and_directional_totals():
     ]
 
     result = flow_analysis.summarize_conversations(flows)
+    conversations = cast(list[dict[str, object]], result["conversations"])
+    endpoints = cast(list[dict[str, object]], result["endpoints"])
 
     assert result["conversation_count"] == 2
     assert result["endpoint_count"] == 3
     assert result["totals"] == {"packets": 10, "bytes": 1820}
-    assert result["conversations"][0]["flow_id"] == "flow-https"
-    assert result["conversations"][0]["source_to_destination_bytes"] == 900
-    assert result["conversations"][0]["destination_to_source_bytes"] == 700
-    assert result["endpoints"][0] == {
+    assert conversations[0]["flow_id"] == "flow-https"
+    assert conversations[0]["source_to_destination_bytes"] == 900
+    assert conversations[0]["destination_to_source_bytes"] == 700
+    assert endpoints[0] == {
         "ip": "192.168.1.10",
         "packets": 10,
         "bytes": 1820,
@@ -84,9 +88,11 @@ def test_conversation_stats_are_bounded_and_reject_invalid_limits():
     ]
 
     result = flow_analysis.summarize_conversations(flows, conversation_limit=2, endpoint_limit=2)
+    conversations = cast(list[dict[str, object]], result["conversations"])
+    endpoints = cast(list[dict[str, object]], result["endpoints"])
 
-    assert [item["flow_id"] for item in result["conversations"]] == ["flow-4", "flow-3"]
-    assert len(result["endpoints"]) == 2
+    assert [item["flow_id"] for item in conversations] == ["flow-4", "flow-3"]
+    assert len(endpoints) == 2
 
     for invalid in (0, 1001):
         try:
