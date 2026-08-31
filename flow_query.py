@@ -50,6 +50,11 @@ def _endpoint_ips(flow: dict[str, object]) -> set[str]:
     return values
 
 
+def _flow_state(flow: dict[str, object]) -> str:
+    """Return the canonical flow state with legacy-record compatibility."""
+    return _text(flow.get("tcp_state") or flow.get("state"))
+
+
 def _matches(flow: dict[str, object], query: FlowQuery) -> bool:
     if query.ip_address and query.ip_address not in _endpoint_ips(flow):
         return False
@@ -57,7 +62,7 @@ def _matches(flow: dict[str, object], query: FlowQuery) -> bool:
         return False
     if query.service and _text(flow.get("service")) != _text(query.service):
         return False
-    if query.state and _text(flow.get("state")) != _text(query.state):
+    if query.state and _flow_state(flow) != _text(query.state):
         return False
     if _int(flow.get("bytes")) < query.min_bytes:
         return False
