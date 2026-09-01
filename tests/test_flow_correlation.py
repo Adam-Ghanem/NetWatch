@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from flow_correlation import CorrelationPolicy, correlate_flow_events
@@ -24,8 +26,16 @@ FLOWS = [
 ]
 
 
+def _protocol_events(flow: dict[str, object]) -> list[dict[str, object]]:
+    return cast(list[dict[str, object]], flow["protocol_events"])
+
+
+def _metadata(event: dict[str, object]) -> dict[str, object]:
+    return cast(dict[str, object], event["metadata"])
+
+
 def test_correlates_supported_protocol_metadata_by_flow_id_without_sensitive_fields():
-    events = [
+    events: list[dict[str, object]] = [
         {
             "flow_id": "flow-dns",
             "event_type": "dns",
@@ -78,15 +88,17 @@ def test_correlates_supported_protocol_metadata_by_flow_id_without_sensitive_fie
     assert result["event_count"] == 3
     dns = next(item for item in result["flows"] if item["flow_id"] == "flow-dns")
     web = next(item for item in result["flows"] if item["flow_id"] == "flow-web")
+    dns_events = _protocol_events(dns)
+    web_events = _protocol_events(web)
     assert dns["protocol_event_count"] == 1
-    assert dns["protocol_events"][0]["metadata"] == {
+    assert _metadata(dns_events[0]) == {
         "answers": ["203.0.113.10"],
         "qtype": "A",
         "query": "example.org",
         "rcode": "NOERROR",
     }
-    assert [event["event_type"] for event in web["protocol_events"]] == ["tls", "http"]
-    assert web["protocol_events"][1]["metadata"] == {
+    assert [event["event_type"] for event in web_events] == ["tls", "http"]
+    assert _metadata(web_events[1]) == {
         "content_type": "text/html",
         "host": "example.org",
         "method": "GET",
@@ -113,7 +125,7 @@ def test_correlation_is_bounded_and_rejects_invalid_policy():
 
 
 def test_per_flow_event_limit_is_deterministic_and_supported_types_only():
-    events = [
+    events: list[dict[str, object]] = [
         {
             "flow_id": "flow-web",
             "event_type": "http",
@@ -137,9 +149,10 @@ def test_per_flow_event_limit_is_deterministic_and_supported_types_only():
         policy=CorrelationPolicy(max_events_per_flow=2),
     )
     web = next(item for item in result["flows"] if item["flow_id"] == "flow-web")
+    web_events = _protocol_events(web)
 
     assert web["protocol_event_count"] == 2
-    assert [event["metadata"]["host"] for event in web["protocol_events"]] == [
+    assert [_metadata(event)["host"] for event in web_events] == [
         "0.example.org",
         "1.example.org",
     ]
