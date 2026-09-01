@@ -4,6 +4,7 @@ import pytest
 
 import flow_anomaly
 
+
 def _flow(
     flow_id: str,
     source: str,
@@ -27,8 +28,7 @@ def _flow(
 
 def test_detects_explainable_fanout_and_reset_burst_signals():
     flows = [
-        _flow(f"fanout-{index}", "192.168.1.20", f"192.168.2.{index + 1}")
-        for index in range(4)
+        _flow(f"fanout-{index}", "192.168.1.20", f"192.168.2.{index + 1}") for index in range(4)
     ]
     flows.extend(
         _flow(
