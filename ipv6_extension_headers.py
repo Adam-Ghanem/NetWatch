@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 MAX_EXTENSION_HEADERS = 8
 MAX_EXTENSION_BYTES = 256
 
