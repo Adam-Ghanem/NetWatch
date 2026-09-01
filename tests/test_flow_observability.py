@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from flow_observability import FlowObservabilityError, build_flow_observability_records
+from flow_observability import (
+    FlowObservabilityError,
+    build_flow_observability_records,
+)
 
 
 def _flow(
