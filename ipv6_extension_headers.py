@@ -91,7 +91,10 @@ def locate_ipv6_transport(
                     False,
                     False,
                 )
-            fragment_field = int.from_bytes(packet[offset + 2 : offset + 4], "big")
+            fragment_field = int.from_bytes(
+                packet[offset + 2 : offset + 4],
+                "big",
+            )
             fragment_offset = (fragment_field >> 3) & 0x1FFF
             fragmented = True
             first_fragment = fragment_offset == 0
