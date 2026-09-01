@@ -4,7 +4,7 @@ import pytest
 
 from flow_timeline import TimelinePolicy, build_flow_timeline
 
-FLOWS = [
+FLOWS: list[dict[str, object]] = [
     {
         "flow_id": "dns-1",
         "protocol": "UDP",
@@ -35,7 +35,7 @@ FLOWS = [
     },
 ]
 
-EVENTS = [
+EVENTS: list[dict[str, object]] = [
     {
         "flow_id": "https-1",
         "event_type": "http",
