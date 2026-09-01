@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# isort: skip_file
-
 import pytest
 
 from flow_display_filter import FlowDisplayFilterError
