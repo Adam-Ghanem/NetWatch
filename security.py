@@ -51,8 +51,7 @@ def validate_target_ip(target: str) -> ValidationResult:
         return ValidationResult(
             False,
             error=(
-                "Use a valid literal IPv4 or IPv6 address, for example "
-                "192.168.1.1 or fd00::1"
+                "Use a valid literal IPv4 or IPv6 address, for example " "192.168.1.1 or fd00::1"
             ),
         )
 
