@@ -33,9 +33,7 @@ class TimelinePolicy:
         if self.max_entries < 1 or self.max_entries > 50_000:
             raise ValueError("Timeline entry limit must be between 1 and 50000.")
         if self.max_events_per_flow < 1 or self.max_events_per_flow > 1_000:
-            raise ValueError(
-                "Timeline per-flow event limit must be between 1 and 1000."
-            )
+            raise ValueError("Timeline per-flow event limit must be between 1 and 1000.")
 
 
 def _text(value: object) -> str:
