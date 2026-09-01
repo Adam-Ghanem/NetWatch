@@ -33,7 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --diff tests/test_flow_topology.py
+          black --diff tests/test_flow_topology.py flow_topology.py
           black --check .
           isort --check-only .
 
