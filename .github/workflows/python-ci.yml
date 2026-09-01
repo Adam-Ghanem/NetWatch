@@ -33,8 +33,9 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --check .
-          isort --check-only .
+          black .
+          git diff -- ipv6_extension_headers.py tests/test_ipv6_extension_headers.py
+          exit 1
 
       - name: Lint and type-check
         run: |
