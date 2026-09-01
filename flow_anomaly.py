@@ -114,7 +114,7 @@ def analyze_flow_anomalies(
                     "observed": count,
                     "threshold": selected.high_fanout_threshold,
                     "explanation": (
-                        "One originator contacted many distinct responders in the observed flow window; "
+                        "One originator contacted many responders in this flow window; "
                         "validate expected discovery, orchestration, or scanning activity."
                     ),
                 }
@@ -132,8 +132,8 @@ def analyze_flow_anomalies(
                     "observed": count,
                     "threshold": selected.reset_burst_threshold,
                     "explanation": (
-                        "One originator produced repeated reset-state flows; validate service health, "
-                        "policy rejection, or authorized probing."
+                        "One originator produced repeated reset-state flows; "
+                        "validate service health, policy rejection, or authorized probing."
                     ),
                 }
             )
