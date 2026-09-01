@@ -7,7 +7,7 @@ from typing import TypedDict
 from flow_analysis import summarize_conversations
 from flow_correlation import CorrelationPolicy, correlate_flow_events
 from flow_query import FlowQuery, query_flows
-from flow_topology import TopologyLimits, build_flow_topology
+from flow_topology import TopologyLimits, TopologyResult, build_flow_topology
 
 
 class InvestigationResult(TypedDict):
@@ -16,7 +16,7 @@ class InvestigationResult(TypedDict):
     event_count: int
     flows: list[dict[str, object]]
     conversations: dict[str, object]
-    topology: dict[str, object]
+    topology: TopologyResult
 
 
 @dataclass(frozen=True)
