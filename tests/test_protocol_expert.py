@@ -55,27 +55,22 @@ def test_flags_deprecated_tls_without_copying_sensitive_metadata() -> None:
 
 
 def test_flags_dns_and_http_failure_bursts_per_flow() -> None:
-    flows = [
-        _flow(
-            "flow-errors",
-            [
-                *[
-                    {
-                        "event_type": "dns",
-                        "metadata": {"rcode": "NXDOMAIN", "query": f"missing-{index}.example"},
-                    }
-                    for index in range(3)
-                ],
-                *[
-                    {
-                        "event_type": "http",
-                        "metadata": {"status_code": 503, "host": "service.example"},
-                    }
-                    for _ in range(4)
-                ],
-            ],
-        )
-    ]
+    events: list[dict[str, object]] = []
+    events.extend(
+        {
+            "event_type": "dns",
+            "metadata": {"rcode": "NXDOMAIN", "query": f"missing-{index}.example"},
+        }
+        for index in range(3)
+    )
+    events.extend(
+        {
+            "event_type": "http",
+            "metadata": {"status_code": 503, "host": "service.example"},
+        }
+        for _ in range(4)
+    )
+    flows = [_flow("flow-errors", events)]
 
     findings = analyze_protocol_expert_findings(flows)
 
