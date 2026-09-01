@@ -94,7 +94,14 @@ def test_correlates_supported_protocol_metadata_by_flow_id_without_sensitive_fie
         "status_code": 200,
     }
     serialized = repr(result).lower()
-    for forbidden in ("authorization", "cookie", "payload", "body", "token=secret", "raw"):
+    for forbidden in (
+        "authorization",
+        "cookie",
+        "payload",
+        "body",
+        "token=secret",
+        "raw",
+    ):
         assert forbidden not in serialized
 
 
@@ -102,7 +109,9 @@ def test_correlation_is_bounded_and_rejects_invalid_policy():
     with pytest.raises(ValueError, match="Flow correlation accepts at most 1 flows"):
         correlate_flow_events(FLOWS, [], policy=CorrelationPolicy(max_flows=1))
 
-    with pytest.raises(ValueError, match="Protocol event limit must be between 1 and 50000"):
+    with pytest.raises(
+        ValueError, match="Protocol event limit must be between 1 and 50000"
+    ):
         CorrelationPolicy(max_events=0).validate()
 
 
