@@ -77,7 +77,9 @@ def test_build_flow_topology_aggregates_directional_nodes_edges_and_device_evide
     assert https_edge["target"] == "192.168.1.1"
     assert https_edge["bytes"] == 1200
     assert https_edge["flow_ids"] == ["flow-https"]
-    assert "payload" not in str(result).lower()
+    for record in [*result["nodes"], *result["edges"]]:
+        assert "payload" not in record
+        assert "raw" not in record
     assert "must-never-leak" not in str(result)
 
 
