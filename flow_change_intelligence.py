@@ -12,9 +12,9 @@ class FlowChangePolicy:
     max_findings: int = 500
 
     def validate(self) -> None:
-        if self.max_flows_per_snapshot < 1 or self.max_flows_per_snapshot > 5_000:
+        if not 1 <= self.max_flows_per_snapshot <= 5_000:
             raise ValueError("Flow snapshot bound must be between 1 and 5000.")
-        if self.max_findings < 1 or self.max_findings > 1_000:
+        if not 1 <= self.max_findings <= 1_000:
             raise ValueError("Flow change finding limit must be between 1 and 1000.")
 
 
@@ -86,8 +86,14 @@ def compare_flow_snapshots(
     """Report deterministic baseline deltas without inspecting packet payloads."""
     selected = policy or FlowChangePolicy()
     selected.validate()
-    previous_flows = _bounded_flows(previous, maximum=selected.max_flows_per_snapshot)
-    current_flows = _bounded_flows(current, maximum=selected.max_flows_per_snapshot)
+    previous_flows = _bounded_flows(
+        previous,
+        maximum=selected.max_flows_per_snapshot,
+    )
+    current_flows = _bounded_flows(
+        current,
+        maximum=selected.max_flows_per_snapshot,
+    )
 
     previous_ips = _endpoint_ips(previous_flows)
     current_ips = _endpoint_ips(current_flows)
