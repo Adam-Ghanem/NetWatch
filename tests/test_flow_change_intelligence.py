@@ -94,9 +94,7 @@ def test_comparison_is_bounded_and_never_retains_payloads():
     with pytest.raises(ValueError, match="at most 1 flow"):
         flow_change_intelligence.compare_flow_snapshots([], flows, policy=policy)
 
-    findings = flow_change_intelligence.compare_flow_snapshots(
-        [], flows[:1], policy=policy
-    )
+    findings = flow_change_intelligence.compare_flow_snapshots([], flows[:1], policy=policy)
     assert findings
     assert "payload" not in repr(findings).lower()
 
