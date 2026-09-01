@@ -47,10 +47,7 @@ def test_detects_explainable_fanout_and_reset_burst_signals():
     )
     findings = flow_anomaly.analyze_flow_anomalies(flows, policy=policy)
 
-    assert [finding["signal"] for finding in findings] == [
-        "high_fanout",
-        "reset_burst",
-    ]
+    assert [finding["signal"] for finding in findings] == ["high_fanout", "reset_burst"]
     assert findings[0]["entity"] == "192.168.1.20"
     assert findings[0]["observed"] == 4
     assert findings[0]["threshold"] == 4
