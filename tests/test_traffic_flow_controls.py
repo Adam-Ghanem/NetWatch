@@ -67,10 +67,14 @@ def test_controls_compose_filter_query_sort_and_scrubbing():
     )
 
     result = apply_traffic_flow_controls(CAPTURE_RESULT, controls)
+    flows = result["flows"]
 
     assert result["flow_count"] == 1
-    assert [flow["flow_id"] for flow in result["flows"]] == ["flow-https"]
-    assert "payload" not in result["flows"][0]
+    assert isinstance(flows, list)
+    assert len(flows) == 1
+    assert isinstance(flows[0], dict)
+    assert flows[0]["flow_id"] == "flow-https"
+    assert "payload" not in flows[0]
     assert result["conversations"] == [{"legacy": True}]
     assert result["flow_analysis"] == {
         "applied": True,
