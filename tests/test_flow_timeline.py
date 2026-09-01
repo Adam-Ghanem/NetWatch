@@ -4,7 +4,6 @@ import pytest
 
 from flow_timeline import TimelinePolicy, build_flow_timeline
 
-
 FLOWS = [
     {
         "flow_id": "dns-1",
