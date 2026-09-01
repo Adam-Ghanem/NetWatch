@@ -58,8 +58,7 @@ def test_default_controls_preserve_capture_response_compatibility():
     assert result is not CAPTURE_RESULT
 
 
-def test_controls_compose_display_filter_query_sort_and_metadata_scrubbing(
-):
+def test_controls_compose_filter_query_sort_and_scrubbing():
     controls = TrafficFlowControls(
         display_filter="protocol == tcp and bytes >= 400",
         ip_address="10.0.0.10",
