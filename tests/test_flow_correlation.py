@@ -86,6 +86,7 @@ def test_correlates_supported_protocol_metadata_by_flow_id_without_sensitive_fie
 
     assert result["flow_count"] == 2
     assert result["event_count"] == 3
+    assert result["payload_retained"] is False
     dns = next(item for item in result["flows"] if item["flow_id"] == "flow-dns")
     web = next(item for item in result["flows"] if item["flow_id"] == "flow-web")
     dns_events = _protocol_events(dns)
@@ -104,16 +105,19 @@ def test_correlates_supported_protocol_metadata_by_flow_id_without_sensitive_fie
         "method": "GET",
         "status_code": 200,
     }
+
+    forbidden_fields = {"authorization", "body", "cookie", "path", "payload", "raw"}
+    for event in dns_events + web_events:
+        assert forbidden_fields.isdisjoint(_metadata(event))
+
     serialized = repr(result).lower()
-    for forbidden in (
-        "authorization",
-        "cookie",
-        "payload",
-        "body",
+    for secret in (
+        "must-not-survive",
         "token=secret",
-        "raw",
+        "bearer secret",
+        "session=secret",
     ):
-        assert forbidden not in serialized
+        assert secret not in serialized
 
 
 def test_correlation_is_bounded_and_rejects_invalid_policy():
