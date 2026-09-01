@@ -18,12 +18,7 @@ ALLOWED_IPV4_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
     )
 )
 ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
-    ipaddress.IPv6Network(cidr)
-    for cidr in (
-        "fc00::/7",
-        "fe80::/10",
-        "::1/128",
-    )
+    ipaddress.IPv6Network(cidr) for cidr in ("fc00::/7", "fe80::/10", "::1/128")
 )
 
 
