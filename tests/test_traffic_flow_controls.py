@@ -5,7 +5,6 @@ import pytest
 from flow_display_filter import FlowDisplayFilterError
 from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
 
-
 CAPTURE_RESULT = {
     "interface": "eth0",
     "captured_packets": 12,
