@@ -30,7 +30,11 @@ _FORBIDDEN_KEY_MARKERS = (
     "authorization",
     "cookie",
 )
-_TOKEN_RE = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|>=|<=|==|!=|>|<|\(|\)|[^\s()<>!=]+')
+_TOKEN_RE = re.compile(
+    r'"[^"\\]*(?:\\.[^"\\]*)*"|'
+    r"'[^'\\]*(?:\\.[^'\\]*)*'|"
+    r">=|<=|==|!=|>|<|\(|\)|[^\s()<>!=]+"
+)
 
 
 def _tokenize(expression: str) -> list[str]:
@@ -108,7 +112,9 @@ def _comparison(field: str, operator: str, raw_value: str) -> FlowPredicate:
         return numeric
 
     if operator not in {"==", "!="}:
-        raise FlowDisplayFilterError(f"Field {field} supports only == and != comparisons.")
+        raise FlowDisplayFilterError(
+            f"Field {field} supports only == and != comparisons."
+        )
 
     expected_text = _text(value)
 
@@ -136,7 +142,9 @@ class _Parser:
     def consume(self) -> str:
         token = self.current()
         if token is None:
-            raise FlowDisplayFilterError("Unexpected end of flow display-filter expression.")
+            raise FlowDisplayFilterError(
+                "Unexpected end of flow display-filter expression."
+            )
         self.index += 1
         return token
 
@@ -154,7 +162,10 @@ class _Parser:
             self.consume()
             right = self.parse_and()
             previous = left
-            left = lambda flow, previous=previous, right=right: previous(flow) or right(flow)
+            left = (
+                lambda flow, previous=previous, right=right: previous(flow)
+                or right(flow)
+            )
         return left
 
     def parse_and(self) -> FlowPredicate:
@@ -163,7 +174,10 @@ class _Parser:
             self.consume()
             right = self.parse_not()
             previous = left
-            left = lambda flow, previous=previous, right=right: previous(flow) and right(flow)
+            left = (
+                lambda flow, previous=previous, right=right: previous(flow)
+                and right(flow)
+            )
         return left
 
     def parse_not(self) -> FlowPredicate:
@@ -183,7 +197,9 @@ class _Parser:
         field = _text(self.consume())
         operator = self.consume()
         if operator not in {"==", "!=", ">", ">=", "<", "<="}:
-            raise FlowDisplayFilterError(f"Unsupported comparison operator: {operator}.")
+            raise FlowDisplayFilterError(
+                f"Unsupported comparison operator: {operator}."
+            )
         value = self.consume()
         return _comparison(field, operator, value)
 
@@ -198,7 +214,9 @@ def _sanitized(value: object) -> object:
         return {
             key: _sanitized(item)
             for key, item in value.items()
-            if not any(marker in str(key).lower() for marker in _FORBIDDEN_KEY_MARKERS)
+            if not any(
+                marker in str(key).lower() for marker in _FORBIDDEN_KEY_MARKERS
+            )
         }
     if isinstance(value, list):
         return [_sanitized(item) for item in value]
