@@ -108,9 +108,7 @@ def test_correlation_is_bounded_and_rejects_invalid_policy():
     with pytest.raises(ValueError, match="Flow correlation accepts at most 1 flows"):
         correlate_flow_events(FLOWS, [], policy=CorrelationPolicy(max_flows=1))
 
-    with pytest.raises(
-        ValueError, match="Protocol event limit must be between 1 and 50000"
-    ):
+    with pytest.raises(ValueError, match="Protocol event limit must be between 1 and 50000"):
         CorrelationPolicy(max_events=0).validate()
 
 
