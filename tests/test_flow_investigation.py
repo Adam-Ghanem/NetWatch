@@ -72,7 +72,12 @@ def test_investigation_scopes_all_views_to_flow_query() -> None:
     assert [flow["flow_id"] for flow in result["flows"]] == ["dns-1"]
     assert result["conversations"]["conversation_count"] == 1
     assert result["topology"]["edge_count"] == 1
-    metadata = result["flows"][0]["protocol_events"][0]["metadata"]
+    protocol_events = result["flows"][0]["protocol_events"]
+    assert isinstance(protocol_events, list)
+    first_event = protocol_events[0]
+    assert isinstance(first_event, dict)
+    metadata = first_event["metadata"]
+    assert isinstance(metadata, dict)
     assert metadata["query"] == "example.org"
     assert "payload" not in metadata
     assert result["payload_retained"] is False
