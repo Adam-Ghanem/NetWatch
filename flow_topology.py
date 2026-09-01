@@ -196,9 +196,7 @@ def _touch_node(
         node.protocols.add(protocol)
 
 
-def _node_payload(
-    node: _NodeState, device_map: dict[str, DeviceEvidence]
-) -> TopologyNode:
+def _node_payload(node: _NodeState, device_map: dict[str, DeviceEvidence]) -> TopologyNode:
     address = ipaddress.ip_address(node.ip_address)
     packets = node.sent_packets + node.received_packets
     bytes_count = node.sent_bytes + node.received_bytes
@@ -245,9 +243,7 @@ def build_flow_topology(
     policy = limits or TopologyLimits()
     policy.validate()
 
-    selected_flows, input_count, flow_truncated = _bounded_flows(
-        flows, policy.max_flows
-    )
+    selected_flows, input_count, flow_truncated = _bounded_flows(flows, policy.max_flows)
     device_map = _device_index(devices)
     nodes: dict[str, _NodeState] = {}
     edges: dict[tuple[str, str], _EdgeState] = {}
