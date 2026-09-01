@@ -4,7 +4,6 @@ import pytest
 
 from flow_correlation import CorrelationPolicy, correlate_flow_events
 
-
 FLOWS = [
     {
         "flow_id": "flow-dns",
