@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from flow_display_filter import FlowDisplayFilterError
-from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
+from traffic_flow_controls import (  # isort: skip
+    TrafficFlowControls,
+    apply_traffic_flow_controls,
+)
 
 CAPTURE_RESULT = {
     "interface": "eth0",
