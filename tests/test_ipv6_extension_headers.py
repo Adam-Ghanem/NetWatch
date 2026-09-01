@@ -65,11 +65,7 @@ def test_initial_fragment_can_reach_upper_layer_header():
 
 def test_non_initial_fragment_never_claims_transport_header():
     fragment_offset_one = 1 << 3
-    fragment = (
-        bytes([6, 0])
-        + fragment_offset_one.to_bytes(2, "big")
-        + (99).to_bytes(4, "big")
-    )
+    fragment = bytes([6, 0]) + fragment_offset_one.to_bytes(2, "big") + (99).to_bytes(4, "big")
     packet = _ipv6_packet(44, fragment + b"not-a-tcp-header")
 
     location = locate_ipv6_transport(packet, ipv6_offset=0, next_header=44)
