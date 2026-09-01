@@ -55,9 +55,7 @@ def test_build_flow_topology_aggregates_directional_nodes_edges_and_device_evide
     assert result["node_count"] == 3
     assert result["edge_count"] == 2
 
-    laptop = next(
-        node for node in result["nodes"] if node["ip_address"] == "192.168.1.10"
-    )
+    laptop = next(node for node in result["nodes"] if node["ip_address"] == "192.168.1.10")
     assert laptop["sent_bytes"] == 770
     assert laptop["received_bytes"] == 610
     assert laptop["conversation_count"] == 2
@@ -70,17 +68,11 @@ def test_build_flow_topology_aggregates_directional_nodes_edges_and_device_evide
         "source": "arp+oui",
     }
 
-    ipv6 = next(
-        node
-        for node in result["nodes"]
-        if node["ip_address"] == "2001:4860:4860::8888"
-    )
+    ipv6 = next(node for node in result["nodes"] if node["ip_address"] == "2001:4860:4860::8888")
     assert ipv6["ip_version"] == 6
     assert ipv6["is_private"] is False
 
-    https_edge = next(
-        edge for edge in result["edges"] if edge["services"] == ["https"]
-    )
+    https_edge = next(edge for edge in result["edges"] if edge["services"] == ["https"])
     assert https_edge["source"] == "192.168.1.10"
     assert https_edge["target"] == "192.168.1.1"
     assert https_edge["bytes"] == 1200
