@@ -1,7 +1,6 @@
 from flow_investigation import InvestigationLimits, build_flow_investigation
 from flow_query import FlowQuery
 
-
 FLOWS = [
     {
         "flow_id": "dns-1",
