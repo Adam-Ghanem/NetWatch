@@ -108,7 +108,8 @@ def compare_flow_snapshots(
                 "severity": "info",
                 "entity": ip_address,
                 "explanation": (
-                    f"Endpoint {ip_address} appears in the current flow snapshot but not the baseline."
+                    f"Endpoint {ip_address} appears in the current flow snapshot "
+                    "but not the baseline."
                 ),
             }
         )
