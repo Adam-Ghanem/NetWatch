@@ -117,9 +117,20 @@ def test_timeline_is_bounded_and_validates_policy():
         policy=TimelinePolicy(max_flows=2, max_events=3, max_entries=2),
     )
     assert result["entry_count"] == 2
-    assert [entry["event_type"] for entry in result["entries"]] == ["flow", "dns"]
+    assert [entry["event_type"] for entry in result["entries"]] == [
+        "flow",
+        "dns",
+    ]
 
     with pytest.raises(ValueError, match="Timeline flow limit"):
-        build_flow_timeline(FLOWS, EVENTS, policy=TimelinePolicy(max_flows=0))
+        build_flow_timeline(
+            FLOWS,
+            EVENTS,
+            policy=TimelinePolicy(max_flows=0),
+        )
     with pytest.raises(ValueError, match="at most 1 flows"):
-        build_flow_timeline(FLOWS, EVENTS, policy=TimelinePolicy(max_flows=1))
+        build_flow_timeline(
+            FLOWS,
+            EVENTS,
+            policy=TimelinePolicy(max_flows=1),
+        )
