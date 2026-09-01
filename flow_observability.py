@@ -19,6 +19,8 @@ def _text(value: object) -> str:
 def _count(value: object) -> int:
     if isinstance(value, bool):
         return 0
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return 0
     try:
         return max(int(value), 0)
     except (TypeError, ValueError):
