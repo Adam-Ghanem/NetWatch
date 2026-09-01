@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import ipaddress
 import math
 import socket
 import time
@@ -24,16 +25,28 @@ _FILTERED_CODES = {
 }
 
 
+def _socket_target(target: str, port: int) -> tuple[int, tuple[object, ...]]:
+    host, separator, scope = target.partition("%")
+    address = ipaddress.ip_address(host)
+    if isinstance(address, ipaddress.IPv6Address):
+        scope_id = 0
+        if separator:
+            scope_id = int(scope) if scope.isdigit() else socket.if_nametoindex(scope)
+        return socket.AF_INET6, (host, port, 0, scope_id)
+    return socket.AF_INET, (host, port)
+
+
 def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict:
     is_open = False
     status = "Closed/Unknown"
     response_time: float | None = None
     started = time.perf_counter()
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(timeout)
-        try:
-            code = sock.connect_ex((target, port))
+    try:
+        family, socket_address = _socket_target(target, port)
+        with socket.socket(family, socket.SOCK_STREAM) as sock:
+            sock.settimeout(timeout)
+            code = sock.connect_ex(socket_address)
             response_time = (time.perf_counter() - started) * 1000
             if code == 0:
                 is_open = True
@@ -44,10 +57,10 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
                 status = "Filtered/Unreachable"
             else:
                 status = "Closed/Unknown"
-        except socket.timeout:
-            status = "Filtered/Timeout"
-        except OSError:
-            status = "Filtered/Unknown"
+    except socket.timeout:
+        status = "Filtered/Timeout"
+    except OSError:
+        status = "Filtered/Unknown"
 
     details = service_info(port)
     return {
@@ -64,7 +77,7 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
 
 
 def scan_ports(ip: str, timeout: float = DEFAULT_TIMEOUT) -> List[dict]:
-    """Scan a conservative list of common TCP ports on an authorized local target."""
+    """Scan conservative common TCP ports on an authorized local IPv4/IPv6 target."""
     if not math.isfinite(timeout) or timeout <= 0 or timeout > 10:
         raise ValueError("Timeout must be greater than zero and no more than 10 seconds.")
 
