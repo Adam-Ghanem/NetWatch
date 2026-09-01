@@ -24,7 +24,18 @@ def _ipv6_packet(next_header: int, payload: bytes) -> bytes:
 def test_walks_options_and_routing_headers_to_tcp():
     hop_by_hop = bytes([43, 0]) + bytes(6)
     routing = bytes([6, 0]) + bytes(6)
-    tcp = struct.pack("!HHLLBBHHH", 50_000, 443, 0, 0, 0x50, 0x02, 65_535, 0, 0)
+    tcp = struct.pack(
+        "!HHLLBBHHH",
+        50_000,
+        443,
+        0,
+        0,
+        0x50,
+        0x02,
+        65_535,
+        0,
+        0,
+    )
     packet = _ipv6_packet(0, hop_by_hop + routing + tcp)
 
     location = locate_ipv6_transport(packet, ipv6_offset=0, next_header=0)
@@ -54,7 +65,11 @@ def test_initial_fragment_can_reach_upper_layer_header():
 
 def test_non_initial_fragment_never_claims_transport_header():
     fragment_offset_one = 1 << 3
-    fragment = bytes([6, 0]) + fragment_offset_one.to_bytes(2, "big") + (99).to_bytes(4, "big")
+    fragment = (
+        bytes([6, 0])
+        + fragment_offset_one.to_bytes(2, "big")
+        + (99).to_bytes(4, "big")
+    )
     packet = _ipv6_packet(44, fragment + b"not-a-tcp-header")
 
     location = locate_ipv6_transport(packet, ipv6_offset=0, next_header=44)
@@ -90,8 +105,16 @@ def test_extension_chain_limits_prevent_pathological_walks():
 
 
 def test_esp_and_no_next_header_are_explicitly_opaque_or_terminal():
-    esp = locate_ipv6_transport(_ipv6_packet(50, b"opaque"), ipv6_offset=0, next_header=50)
-    no_next = locate_ipv6_transport(_ipv6_packet(59, b""), ipv6_offset=0, next_header=59)
+    esp = locate_ipv6_transport(
+        _ipv6_packet(50, b"opaque"),
+        ipv6_offset=0,
+        next_header=50,
+    )
+    no_next = locate_ipv6_transport(
+        _ipv6_packet(59, b""),
+        ipv6_offset=0,
+        next_header=59,
+    )
 
     assert esp.complete is False
     assert no_next.complete is False
@@ -101,6 +124,16 @@ def test_invalid_bounds_and_short_base_header_are_rejected():
     with pytest.raises(ValueError, match="complete IPv6 base header"):
         locate_ipv6_transport(b"short", ipv6_offset=0, next_header=6)
     with pytest.raises(ValueError, match="max_extension_headers"):
-        locate_ipv6_transport(_ipv6_packet(6, b""), ipv6_offset=0, next_header=6, max_extension_headers=33)
+        locate_ipv6_transport(
+            _ipv6_packet(6, b""),
+            ipv6_offset=0,
+            next_header=6,
+            max_extension_headers=33,
+        )
     with pytest.raises(ValueError, match="max_extension_bytes"):
-        locate_ipv6_transport(_ipv6_packet(6, b""), ipv6_offset=0, next_header=6, max_extension_bytes=4097)
+        locate_ipv6_transport(
+            _ipv6_packet(6, b""),
+            ipv6_offset=0,
+            next_header=6,
+            max_extension_bytes=4097,
+        )
