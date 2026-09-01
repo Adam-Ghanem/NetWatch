@@ -4,7 +4,6 @@ import pytest
 
 from flow_topology import TopologyLimits, build_flow_topology
 
-
 FLOWS = [
     {
         "flow_id": "flow-https",
