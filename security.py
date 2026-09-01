@@ -82,8 +82,10 @@ def validate_target_ip(target: str) -> ValidationResult:
 
     if "%" in value:
         host, scope = value.split("%", 1)
-        if not scope or len(scope) > 64 or any(
-            not (character.isalnum() or character in "_.:-") for character in scope
+        if (
+            not scope
+            or len(scope) > 64
+            or any(not (character.isalnum() or character in "_.:-") for character in scope)
         ):
             return ValidationResult(
                 False,
