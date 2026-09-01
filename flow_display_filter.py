@@ -58,7 +58,8 @@ def _number(value: object) -> int:
 
 
 def _unquote(token: str) -> str:
-    if len(token) >= 2 and token[0] == token[-1] and token[0] in {"'", '"'}:
+    quoted = len(token) >= 2 and token[0] == token[-1]
+    if quoted and token[0] in {"'", '"'}:
         return token[1:-1]
     return token
 
@@ -82,6 +83,50 @@ def _field_value(flow: dict[str, object], field: str) -> object:
     return flow.get(field, "")
 
 
+def _numeric_predicate(
+    field: str,
+    operator: str,
+    expected: int,
+) -> FlowPredicate:
+    def predicate(flow: dict[str, object]) -> bool:
+        observed = _number(_field_value(flow, field))
+        if operator == "==":
+            return observed == expected
+        if operator == "!=":
+            return observed != expected
+        if operator == ">":
+            return observed > expected
+        if operator == ">=":
+            return observed >= expected
+        if operator == "<":
+            return observed < expected
+        if operator == "<=":
+            return observed <= expected
+        return False
+
+    return predicate
+
+
+def _text_predicate(
+    field: str,
+    operator: str,
+    value: str,
+) -> FlowPredicate:
+    expected = _text(value)
+
+    def predicate(flow: dict[str, object]) -> bool:
+        observed = _field_value(flow, field)
+        if field == "ip" and isinstance(observed, set):
+            matched = value in observed
+        else:
+            matched = _text(observed) == expected
+        if operator == "==":
+            return matched
+        return not matched
+
+    return predicate
+
+
 def _comparison(field: str, operator: str, raw_value: str) -> FlowPredicate:
     if field not in _ALLOWED_FIELDS:
         raise FlowDisplayFilterError(f"Unsupported field: {field}.")
@@ -91,42 +136,35 @@ def _comparison(field: str, operator: str, raw_value: str) -> FlowPredicate:
         try:
             expected = int(value)
         except ValueError as exc:
-            raise FlowDisplayFilterError(f"{field} requires an integer value.") from exc
-
-        def numeric(flow: dict[str, object]) -> bool:
-            observed = _number(_field_value(flow, field))
-            if operator == "==":
-                return observed == expected
-            if operator == "!=":
-                return observed != expected
-            if operator == ">":
-                return observed > expected
-            if operator == ">=":
-                return observed >= expected
-            if operator == "<":
-                return observed < expected
-            if operator == "<=":
-                return observed <= expected
-            return False
-
-        return numeric
+            message = f"{field} requires an integer value."
+            raise FlowDisplayFilterError(message) from exc
+        return _numeric_predicate(field, operator, expected)
 
     if operator not in {"==", "!="}:
-        raise FlowDisplayFilterError(
-            f"Field {field} supports only == and != comparisons."
-        )
+        message = f"Field {field} supports only == and != comparisons."
+        raise FlowDisplayFilterError(message)
+    return _text_predicate(field, operator, value)
 
-    expected_text = _text(value)
 
-    def textual(flow: dict[str, object]) -> bool:
-        observed = _field_value(flow, field)
-        if field == "ip" and isinstance(observed, set):
-            matched = value in observed
-        else:
-            matched = _text(observed) == expected_text
-        return matched if operator == "==" else not matched
+def _combine_or(left: FlowPredicate, right: FlowPredicate) -> FlowPredicate:
+    def predicate(flow: dict[str, object]) -> bool:
+        return left(flow) or right(flow)
 
-    return textual
+    return predicate
+
+
+def _combine_and(left: FlowPredicate, right: FlowPredicate) -> FlowPredicate:
+    def predicate(flow: dict[str, object]) -> bool:
+        return left(flow) and right(flow)
+
+    return predicate
+
+
+def _negate(predicate: FlowPredicate) -> FlowPredicate:
+    def negated(flow: dict[str, object]) -> bool:
+        return not predicate(flow)
+
+    return negated
 
 
 class _Parser:
@@ -142,15 +180,14 @@ class _Parser:
     def consume(self) -> str:
         token = self.current()
         if token is None:
-            raise FlowDisplayFilterError(
-                "Unexpected end of flow display-filter expression."
-            )
+            message = "Unexpected end of flow display-filter expression."
+            raise FlowDisplayFilterError(message)
         self.index += 1
         return token
 
     def parse(self) -> FlowPredicate:
         if not self.tokens:
-            return lambda _: True
+            return _always_true
         predicate = self.parse_or()
         if self.current() is not None:
             raise FlowDisplayFilterError(f"Unexpected token: {self.current()}.")
@@ -160,31 +197,20 @@ class _Parser:
         left = self.parse_and()
         while _text(self.current()) == "or":
             self.consume()
-            right = self.parse_and()
-            previous = left
-            left = (
-                lambda flow, previous=previous, right=right: previous(flow)
-                or right(flow)
-            )
+            left = _combine_or(left, self.parse_and())
         return left
 
     def parse_and(self) -> FlowPredicate:
         left = self.parse_not()
         while _text(self.current()) == "and":
             self.consume()
-            right = self.parse_not()
-            previous = left
-            left = (
-                lambda flow, previous=previous, right=right: previous(flow)
-                and right(flow)
-            )
+            left = _combine_and(left, self.parse_not())
         return left
 
     def parse_not(self) -> FlowPredicate:
         if _text(self.current()) == "not":
             self.consume()
-            predicate = self.parse_not()
-            return lambda flow: not predicate(flow)
+            return _negate(self.parse_not())
         return self.parse_primary()
 
     def parse_primary(self) -> FlowPredicate:
@@ -194,32 +220,45 @@ class _Parser:
             if self.consume() != ")":
                 raise FlowDisplayFilterError("Missing closing parenthesis.")
             return predicate
+
         field = _text(self.consume())
         operator = self.consume()
         if operator not in {"==", "!=", ">", ">=", "<", "<="}:
-            raise FlowDisplayFilterError(
-                f"Unsupported comparison operator: {operator}."
-            )
-        value = self.consume()
-        return _comparison(field, operator, value)
+            message = f"Unsupported comparison operator: {operator}."
+            raise FlowDisplayFilterError(message)
+        return _comparison(field, operator, self.consume())
+
+
+def _always_true(_: dict[str, object]) -> bool:
+    return True
 
 
 def compile_flow_filter(expression: str) -> FlowPredicate:
     """Compile a bounded metadata-only display-filter expression into a predicate."""
-    return _Parser(_tokenize(str(expression or "").strip())).parse()
+    normalized = str(expression or "").strip()
+    return _Parser(_tokenize(normalized)).parse()
 
 
-def _sanitized(value: object) -> object:
+def _sanitize_mapping(value: dict[str, object]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        lowered = str(key).lower()
+        if any(marker in lowered for marker in _FORBIDDEN_KEY_MARKERS):
+            continue
+        if isinstance(item, dict):
+            result[key] = _sanitize_mapping(item)
+        elif isinstance(item, list):
+            result[key] = [_sanitize_value(element) for element in item]
+        else:
+            result[key] = item
+    return result
+
+
+def _sanitize_value(value: object) -> object:
     if isinstance(value, dict):
-        return {
-            key: _sanitized(item)
-            for key, item in value.items()
-            if not any(
-                marker in str(key).lower() for marker in _FORBIDDEN_KEY_MARKERS
-            )
-        }
+        return _sanitize_mapping(value)
     if isinstance(value, list):
-        return [_sanitized(item) for item in value]
+        return [_sanitize_value(item) for item in value]
     return value
 
 
@@ -231,19 +270,19 @@ def filter_flows(
 ) -> list[dict[str, object]]:
     """Return bounded flow records matching an analyst display filter.
 
-    The language deliberately supports only a small allowlisted metadata schema and
-    never evaluates Python or arbitrary code. Returned records are copied and scrubbed
-    of payload/raw/body/credential-like fields.
+    Only an allowlisted metadata schema is queryable. Python or arbitrary code is
+    never evaluated, and returned records are scrubbed of payload/raw/body and
+    credential-like fields.
     """
     if not 1 <= limit <= 1000:
         raise ValueError("Flow display-filter limit must be between 1 and 1000.")
+
     predicate = compile_flow_filter(expression)
     matches: list[dict[str, object]] = []
     for flow in flows:
-        if predicate(flow):
-            cleaned = _sanitized(flow)
-            if isinstance(cleaned, dict):
-                matches.append(cleaned)
-            if len(matches) >= limit:
-                break
+        if not predicate(flow):
+            continue
+        matches.append(_sanitize_mapping(flow))
+        if len(matches) >= limit:
+            break
     return matches
