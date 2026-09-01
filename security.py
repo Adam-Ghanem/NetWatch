@@ -17,6 +17,9 @@ ALLOWED_IPV4_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
         "169.254.0.0/16",
     )
 )
+ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
+    ipaddress.IPv6Network(cidr) for cidr in ("fc00::/7", "fe80::/10", "::1/128")
+)
 
 
 @dataclass(frozen=True)
@@ -34,21 +37,60 @@ def _is_allowed_ipv4_network(network: ipaddress.IPv4Network) -> bool:
     return any(network.subnet_of(allowed) for allowed in ALLOWED_IPV4_NETWORKS)
 
 
+def _is_allowed_ipv6(ip: ipaddress.IPv6Address) -> bool:
+    return any(ip in network for network in ALLOWED_IPV6_NETWORKS)
+
+
 def validate_target_ip(target: str) -> ValidationResult:
-    """Validate one explicitly allowed IPv4 lab/local target."""
+    """Validate one explicitly allowed IPv4 or IPv6 lab/local target."""
+    value = target.strip()
+    address = value.split("%", 1)[0]
     try:
-        ip = ipaddress.ip_address(target.strip())
+        ip = ipaddress.ip_address(address)
     except ValueError:
-        return ValidationResult(False, error="Use a valid IPv4 address, for example 192.168.1.1")
-
-    if not isinstance(ip, ipaddress.IPv4Address):
-        return ValidationResult(False, error="IPv6 scanning is not supported in this version.")
-
-    if not _is_allowed_ipv4(ip):
         return ValidationResult(
             False,
-            error="For safety, NetWatch only scans approved local IPv4 ranges.",
+            error=(
+                "Use a valid literal IPv4 or IPv6 address, for example " "192.168.1.1 or fd00::1"
+            ),
         )
+
+    if isinstance(ip, ipaddress.IPv4Address):
+        if "%" in value:
+            return ValidationResult(
+                False,
+                error="IPv4 addresses cannot include an interface scope.",
+            )
+        if not _is_allowed_ipv4(ip):
+            return ValidationResult(
+                False,
+                error="For safety, NetWatch only scans approved local IPv4 ranges.",
+            )
+        return ValidationResult(True, value=str(ip))
+
+    if not _is_allowed_ipv6(ip):
+        return ValidationResult(
+            False,
+            error="For safety, NetWatch only scans approved local IPv6 ranges.",
+        )
+
+    if "%" in value:
+        host, scope = value.split("%", 1)
+        if (
+            not scope
+            or len(scope) > 64
+            or any(not (character.isalnum() or character in "_.:-") for character in scope)
+        ):
+            return ValidationResult(
+                False,
+                error="Invalid IPv6 interface scope identifier.",
+            )
+        if not ip.is_link_local:
+            return ValidationResult(
+                False,
+                error="IPv6 interface scopes are only accepted for link-local targets.",
+            )
+        return ValidationResult(True, value=f"{host.lower()}%{scope}")
 
     return ValidationResult(True, value=str(ip))
 

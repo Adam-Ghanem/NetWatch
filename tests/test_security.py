@@ -12,10 +12,26 @@ def test_public_ip_blocked():
     assert not result.ok
 
 
-def test_ipv6_is_rejected_until_supported():
-    result = validate_target_ip("fd00::1")
+def test_local_ipv6_targets_allowed():
+    ula = validate_target_ip("fd00::1")
+    loopback = validate_target_ip("::1")
+    link_local = validate_target_ip("fe80::10%eth0")
+
+    assert ula.ok and ula.value == "fd00::1"
+    assert loopback.ok and loopback.value == "::1"
+    assert link_local.ok and link_local.value == "fe80::10%eth0"
+
+
+def test_public_ipv6_target_blocked():
+    result = validate_target_ip("2001:4860:4860::8888")
     assert not result.ok
-    assert "IPv6" in (result.error or "")
+    assert "local IPv6" in (result.error or "")
+
+
+def test_ipv6_scope_restricted_to_link_local_targets():
+    result = validate_target_ip("fd00::1%eth0")
+    assert not result.ok
+    assert "link-local" in (result.error or "")
 
 
 def test_private_cidr_allowed():
