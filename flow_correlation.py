@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Literal, TypedDict
 
 _SUPPORTED_EVENT_FIELDS: dict[str, tuple[str, ...]] = {
     "dns": ("answers", "qtype", "query", "rcode"),
@@ -10,6 +10,13 @@ _SUPPORTED_EVENT_FIELDS: dict[str, tuple[str, ...]] = {
 }
 _MAX_TEXT_LENGTH = 512
 _MAX_DNS_ANSWERS = 20
+
+
+class CorrelationResult(TypedDict):
+    flow_count: int
+    event_count: int
+    payload_retained: Literal[False]
+    flows: list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -66,7 +73,7 @@ def correlate_flow_events(
     events: Iterable[dict[str, object]],
     *,
     policy: CorrelationPolicy | None = None,
-) -> dict[str, object]:
+) -> CorrelationResult:
     """Attach bounded DNS/TLS/HTTP metadata events to canonical flow records.
 
     Correlation is performed only with existing ``flow_id`` values. Event fields are
@@ -102,11 +109,11 @@ def correlate_flow_events(
         event_type = _bounded_text(event.get("event_type")).lower()
         if not flow_id or event_type not in _SUPPORTED_EVENT_FIELDS:
             continue
-        flow = by_id.get(flow_id)
-        if flow is None:
+        matched_flow = by_id.get(flow_id)
+        if matched_flow is None:
             continue
 
-        protocol_events = flow["protocol_events"]
+        protocol_events = matched_flow["protocol_events"]
         if not isinstance(protocol_events, list):
             continue
         if len(protocol_events) >= selected.max_events_per_flow:
@@ -119,7 +126,7 @@ def correlate_flow_events(
                 "metadata": _safe_metadata(event_type, event.get("metadata")),
             }
         )
-        flow["protocol_event_count"] = len(protocol_events)
+        matched_flow["protocol_event_count"] = len(protocol_events)
         accepted_events += 1
 
     return {
