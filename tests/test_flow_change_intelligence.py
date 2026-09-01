@@ -43,7 +43,10 @@ def test_detects_new_endpoint_and_new_service_exposure():
 
     findings = flow_change_intelligence.compare_flow_snapshots(previous, current)
 
-    assert [finding["change"] for finding in findings] == ["new_endpoint", "new_service"]
+    assert [finding["change"] for finding in findings] == [
+        "new_endpoint",
+        "new_service",
+    ]
     assert findings[0]["entity"] == "192.168.1.30"
     assert findings[1]["entity"] == "192.168.1.30:22/tcp"
     assert findings[1]["service"] == "ssh"
@@ -53,10 +56,24 @@ def test_detects_new_endpoint_and_new_service_exposure():
 
 def test_service_identity_includes_port_and_protocol():
     previous = [
-        _flow("old-dns", "192.168.1.10", "192.168.1.53", destination_port=53, service="dns", protocol="UDP")
+        _flow(
+            "old-dns",
+            "192.168.1.10",
+            "192.168.1.53",
+            destination_port=53,
+            service="dns",
+            protocol="UDP",
+        )
     ]
     current = [
-        _flow("new-dns", "192.168.1.10", "192.168.1.53", destination_port=5353, service="dns", protocol="UDP")
+        _flow(
+            "new-dns",
+            "192.168.1.10",
+            "192.168.1.53",
+            destination_port=5353,
+            service="dns",
+            protocol="UDP",
+        )
     ]
 
     findings = flow_change_intelligence.compare_flow_snapshots(previous, current)
@@ -77,7 +94,9 @@ def test_comparison_is_bounded_and_never_retains_payloads():
     with pytest.raises(ValueError, match="at most 1 flow"):
         flow_change_intelligence.compare_flow_snapshots([], flows, policy=policy)
 
-    findings = flow_change_intelligence.compare_flow_snapshots([], flows[:1], policy=policy)
+    findings = flow_change_intelligence.compare_flow_snapshots(
+        [], flows[:1], policy=policy
+    )
     assert findings
     assert "payload" not in repr(findings).lower()
 
