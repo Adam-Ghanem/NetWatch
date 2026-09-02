@@ -3,6 +3,7 @@ import io
 import json
 
 import pytest
+
 from flow_report_export import export_flows_csv, export_flows_json
 
 
