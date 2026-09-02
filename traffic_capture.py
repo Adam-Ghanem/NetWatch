@@ -243,6 +243,7 @@ def parse_ethernet_frame(
             return None
         source_ip = socket.inet_ntop(socket.AF_INET6, frame[offset + 8 : offset + 24])
         destination_ip = socket.inet_ntop(socket.AF_INET6, frame[offset + 24 : offset + 40])
+        protocol = "IPv6"
         location = locate_ipv6_transport(
             frame,
             ipv6_offset=offset,
@@ -253,12 +254,12 @@ def parse_ethernet_frame(
         ipv6_first_fragment = location.first_fragment
         ipv6_transport_complete = location.complete
         if location.complete and (not location.fragmented or location.first_fragment):
-            protocol, source_port, destination_port, tcp_flags = _transport_metadata(
+            transport_protocol, source_port, destination_port, tcp_flags = _transport_metadata(
                 frame,
                 offset=location.transport_offset,
                 protocol_number=location.protocol_number,
             )
-        protocol = protocol or "IPv6"
+            protocol = transport_protocol or protocol
 
     timestamp = captured_at or datetime.now(timezone.utc)
     source_endpoint = source_ip
