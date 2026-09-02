@@ -234,7 +234,9 @@ def import_pcapng_bytes(
             interface = interfaces[0]
             if interface.link_type != LINKTYPE_ETHERNET:
                 raise ValueError("Only Ethernet PCAPNG interfaces are supported.")
-            original_length = struct.unpack(f"{endian}I", data[offset + 8 : offset + 12])[0]
+            original_length = struct.unpack(
+                f"{endian}I", data[offset + 8 : offset + 12]
+            )[0]
             captured_length = (
                 original_length
                 if interface.snap_length == 0
@@ -245,7 +247,9 @@ def import_pcapng_bytes(
             padded_length = (captured_length + 3) & ~3
             expected_total_length = 16 + padded_length
             if total_length != expected_total_length:
-                raise ValueError("PCAPNG simple packet block length does not match interface SnapLen.")
+                raise ValueError(
+                    "PCAPNG simple packet block length does not match interface SnapLen."
+                )
             frame = data[offset + 12 : offset + 12 + captured_length]
             _append_packet_record(
                 records,
