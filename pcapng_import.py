@@ -5,8 +5,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from pcap_import import MAX_CAPTURED_FRAME_BYTES, MAX_PCAP_BYTES, MAX_PCAP_PACKETS
-from traffic_capture import CaptureFilter, parse_ethernet_frame, summarize_capture
+from pcap_import import (
+    MAX_CAPTURED_FRAME_BYTES,
+    MAX_PCAP_BYTES,
+    MAX_PCAP_PACKETS,
+)
+from traffic_capture import (
+    CaptureFilter,
+    packet_matches,
+    parse_ethernet_frame,
+    summarize_capture,
+)
 
 SECTION_HEADER_BLOCK = 0x0A0D0D0A
 INTERFACE_DESCRIPTION_BLOCK = 0x00000001
@@ -136,9 +145,13 @@ def import_pcapng_bytes(
         elif block_type == ENHANCED_PACKET_BLOCK:
             if total_length < 32:
                 raise ValueError("PCAPNG enhanced packet block is truncated.")
-            interface_id, ts_high, ts_low, captured_length, _original_length = struct.unpack(
-                f"{endian}IIIII", data[offset + 8 : offset + 28]
-            )
+            (
+                interface_id,
+                ts_high,
+                ts_low,
+                captured_length,
+                _original_length,
+            ) = struct.unpack(f"{endian}IIIII", data[offset + 8 : offset + 28])
             if interface_id >= len(interfaces):
                 raise ValueError("PCAPNG packet references an unknown interface.")
             interface = interfaces[interface_id]
@@ -161,11 +174,8 @@ def import_pcapng_bytes(
                 len(records) + 1,
                 captured_at=captured_at,
             )
-            if record is not None:
-                from traffic_capture import packet_matches
-
-                if packet_matches(record, selected_filter):
-                    records.append(record)
+            if record is not None and packet_matches(record, selected_filter):
+                records.append(record)
 
         offset = block_end
 
