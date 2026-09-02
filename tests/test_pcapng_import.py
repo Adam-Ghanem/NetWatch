@@ -61,14 +61,17 @@ def _enhanced_packet(
     interface_id: int = 0,
     endian: str = "<",
 ) -> bytes:
-    body = struct.pack(
-        f"{endian}IIIII",
-        interface_id,
-        timestamp_units >> 32,
-        timestamp_units & 0xFFFFFFFF,
-        len(frame),
-        len(frame),
-    ) + frame
+    body = (
+        struct.pack(
+            f"{endian}IIIII",
+            interface_id,
+            timestamp_units >> 32,
+            timestamp_units & 0xFFFFFFFF,
+            len(frame),
+            len(frame),
+        )
+        + frame
+    )
     return _block(6, body, endian=endian)
 
 
@@ -86,6 +89,7 @@ def test_imports_ethernet_enhanced_packet_as_metadata_only() -> None:
     assert result["capture_format"] == "pcapng"
     assert result["payload_retained"] is False
     assert result["captured_packets"] == 1
+    assert result["processed_packets"] == 1
     assert result["section_count"] == 1
     assert result["interface_count"] == 1
     packet = result["packets"][0]
@@ -123,6 +127,24 @@ def test_supports_big_endian_section() -> None:
 
     assert result["captured_packets"] == 1
     assert str(result["packets"][0]["captured_at"]).startswith("1970-01-01T00:00:01")
+
+
+def test_counts_interfaces_across_sections() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    data = (
+        _section_header()
+        + _interface_block()
+        + _enhanced_packet(frame, timestamp_units=1)
+        + _section_header(endian=">")
+        + _interface_block(endian=">")
+        + _enhanced_packet(frame, timestamp_units=1, endian=">")
+    )
+
+    result = import_pcapng_bytes(data)
+
+    assert result["section_count"] == 2
+    assert result["interface_count"] == 2
+    assert result["processed_packets"] == 2
 
 
 def test_rejects_unknown_interface_reference() -> None:
