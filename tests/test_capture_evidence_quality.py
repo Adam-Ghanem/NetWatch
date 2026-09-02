@@ -61,7 +61,10 @@ def test_capture_evidence_quality_uses_latest_statistics_per_interface() -> None
 
     assert result["status"] == "no_loss_reported"
     assert result["interfaces_reporting"] == 1
-    row = result["latest_interface_statistics"][0]
+    rows = result["latest_interface_statistics"]
+    assert isinstance(rows, list)
+    row = rows[0]
+    assert isinstance(row, dict)
     assert row["received_packets"] == 90
     assert row["dropped_packets"] == 0
 
