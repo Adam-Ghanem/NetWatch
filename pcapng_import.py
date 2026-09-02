@@ -227,8 +227,10 @@ def import_pcapng_bytes(
             simple_packet_count += 1
             if total_length < 16:
                 raise ValueError("PCAPNG simple packet block is truncated.")
-            if not interfaces:
-                raise ValueError("PCAPNG simple packet block requires interface 0.")
+            if len(interfaces) != 1:
+                raise ValueError(
+                    "PCAPNG simple packet block requires exactly one interface in its section."
+                )
             interface = interfaces[0]
             if interface.link_type != LINKTYPE_ETHERNET:
                 raise ValueError("Only Ethernet PCAPNG interfaces are supported.")
