@@ -50,7 +50,12 @@ def _simple_packet() -> bytes:
 
 
 def test_simple_packet_rejects_multi_interface_section() -> None:
-    data = _section_header() + _interface_block() + _interface_block() + _simple_packet()
+    data = (
+        _section_header()
+        + _interface_block()
+        + _interface_block()
+        + _simple_packet()
+    )
 
     with pytest.raises(ValueError, match="exactly one interface"):
         import_pcapng_bytes(data)
