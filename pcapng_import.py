@@ -19,6 +19,7 @@ from traffic_capture import (
 
 SECTION_HEADER_BLOCK = 0x0A0D0D0A
 INTERFACE_DESCRIPTION_BLOCK = 0x00000001
+SIMPLE_PACKET_BLOCK = 0x00000003
 ENHANCED_PACKET_BLOCK = 0x00000006
 LINKTYPE_ETHERNET = 1
 IF_TSRESOL_OPTION = 9
@@ -30,6 +31,7 @@ MIN_BLOCK_BYTES = 12
 @dataclass(frozen=True)
 class _Interface:
     link_type: int
+    snap_length: int
     timestamp_resolution: float
     timestamp_offset_seconds: int
 
@@ -89,6 +91,28 @@ def _decode_section_header(data: bytes, offset: int) -> tuple[str, int]:
     return endian, total_length
 
 
+def _append_packet_record(
+    records: list[dict[str, object]],
+    *,
+    frame: bytes,
+    selected_filter: CaptureFilter,
+    captured_at: datetime | None,
+    timestamp_available: bool,
+) -> None:
+    record = parse_ethernet_frame(
+        frame,
+        len(records) + 1,
+        captured_at=captured_at,
+    )
+    if record is None:
+        return
+    if not timestamp_available:
+        record["captured_at"] = None
+    record["timestamp_available"] = timestamp_available
+    if packet_matches(record, selected_filter):
+        records.append(record)
+
+
 def import_pcapng_bytes(
     data: bytes,
     *,
@@ -112,6 +136,8 @@ def import_pcapng_bytes(
     sections = 0
     total_interfaces = 0
     processed_packets = 0
+    enhanced_packet_count = 0
+    simple_packet_count = 0
 
     while offset < len(data) and processed_packets < packet_limit:
         if offset + MIN_BLOCK_BYTES > len(data):
@@ -141,7 +167,10 @@ def import_pcapng_bytes(
         if block_type == INTERFACE_DESCRIPTION_BLOCK:
             if total_length < 20:
                 raise ValueError("PCAPNG interface description block is truncated.")
-            link_type = struct.unpack(f"{endian}H", data[offset + 8 : offset + 10])[0]
+            link_type, _reserved, snap_length = struct.unpack(
+                f"{endian}HHI",
+                data[offset + 8 : offset + 16],
+            )
             options = data[offset + 16 : block_end - 4]
             timestamp_resolution, timestamp_offset_seconds = _parse_idb_options(
                 options,
@@ -150,6 +179,7 @@ def import_pcapng_bytes(
             interfaces.append(
                 _Interface(
                     link_type=link_type,
+                    snap_length=snap_length,
                     timestamp_resolution=timestamp_resolution,
                     timestamp_offset_seconds=timestamp_offset_seconds,
                 )
@@ -157,6 +187,7 @@ def import_pcapng_bytes(
             total_interfaces += 1
         elif block_type == ENHANCED_PACKET_BLOCK:
             processed_packets += 1
+            enhanced_packet_count += 1
             if total_length < 32:
                 raise ValueError("PCAPNG enhanced packet block is truncated.")
             (
@@ -184,13 +215,43 @@ def import_pcapng_bytes(
                 + interface.timestamp_offset_seconds,
                 tz=timezone.utc,
             )
-            record = parse_ethernet_frame(
-                frame,
-                len(records) + 1,
+            _append_packet_record(
+                records,
+                frame=frame,
+                selected_filter=selected_filter,
                 captured_at=captured_at,
+                timestamp_available=True,
             )
-            if record is not None and packet_matches(record, selected_filter):
-                records.append(record)
+        elif block_type == SIMPLE_PACKET_BLOCK:
+            processed_packets += 1
+            simple_packet_count += 1
+            if total_length < 16:
+                raise ValueError("PCAPNG simple packet block is truncated.")
+            if not interfaces:
+                raise ValueError("PCAPNG simple packet block requires interface 0.")
+            interface = interfaces[0]
+            if interface.link_type != LINKTYPE_ETHERNET:
+                raise ValueError("Only Ethernet PCAPNG interfaces are supported.")
+            original_length = struct.unpack(f"{endian}I", data[offset + 8 : offset + 12])[0]
+            captured_length = (
+                original_length
+                if interface.snap_length == 0
+                else min(original_length, interface.snap_length)
+            )
+            if captured_length > MAX_CAPTURED_FRAME_BYTES:
+                raise ValueError("PCAPNG captured frame exceeds the per-frame safety limit.")
+            padded_length = (captured_length + 3) & ~3
+            expected_total_length = 16 + padded_length
+            if total_length != expected_total_length:
+                raise ValueError("PCAPNG simple packet block length does not match interface SnapLen.")
+            frame = data[offset + 12 : offset + 12 + captured_length]
+            _append_packet_record(
+                records,
+                frame=frame,
+                selected_filter=selected_filter,
+                captured_at=None,
+                timestamp_available=False,
+            )
 
         offset = block_end
 
@@ -206,6 +267,9 @@ def import_pcapng_bytes(
             "section_count": sections,
             "interface_count": total_interfaces,
             "processed_packets": processed_packets,
+            "enhanced_packet_count": enhanced_packet_count,
+            "simple_packet_count": simple_packet_count,
+            "untimestamped_packets": simple_packet_count,
             "payload_retained": False,
         }
     )
