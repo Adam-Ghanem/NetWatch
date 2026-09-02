@@ -49,10 +49,11 @@ def _section_header(*, endian: str = "<") -> bytes:
 def _interface_block(
     *,
     endian: str = "<",
+    snap_length: int = 65_535,
     tsresol: int | None = None,
     tsoffset: int | None = None,
 ) -> bytes:
-    body = struct.pack(f"{endian}HHI", 1, 0, 65_535)
+    body = struct.pack(f"{endian}HHI", 1, 0, snap_length)
     if tsresol is not None:
         body += struct.pack(f"{endian}HHB3x", 9, 1, tsresol)
     if tsoffset is not None:
@@ -83,6 +84,16 @@ def _enhanced_packet(
     return _block(6, body, endian=endian)
 
 
+def _simple_packet(
+    frame: bytes,
+    *,
+    original_length: int | None = None,
+    endian: str = "<",
+) -> bytes:
+    body = struct.pack(f"{endian}I", original_length or len(frame)) + frame
+    return _block(3, body, endian=endian)
+
+
 def test_imports_ethernet_enhanced_packet_as_metadata_only() -> None:
     frame = _ethernet_ipv4_udp_frame()
     timestamp_units = 1_700_000_000 * 1_000_000
@@ -98,6 +109,9 @@ def test_imports_ethernet_enhanced_packet_as_metadata_only() -> None:
     assert result["payload_retained"] is False
     assert result["captured_packets"] == 1
     assert result["processed_packets"] == 1
+    assert result["enhanced_packet_count"] == 1
+    assert result["simple_packet_count"] == 0
+    assert result["untimestamped_packets"] == 0
     assert result["section_count"] == 1
     assert result["interface_count"] == 1
     packet = result["packets"][0]
@@ -106,8 +120,65 @@ def test_imports_ethernet_enhanced_packet_as_metadata_only() -> None:
     assert packet["destination_ip"] == "10.0.0.53"
     assert packet["source_port"] == 53000
     assert packet["destination_port"] == 53
+    assert packet["timestamp_available"] is True
     assert str(packet["captured_at"]).startswith("2023-11-14T22:13:20")
     assert frame.hex() not in str(result)
+
+
+def test_imports_simple_packet_without_inventing_timestamp() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    data = _section_header() + _interface_block() + _simple_packet(frame)
+
+    result = import_pcapng_bytes(data)
+
+    assert result["captured_packets"] == 1
+    assert result["processed_packets"] == 1
+    assert result["enhanced_packet_count"] == 0
+    assert result["simple_packet_count"] == 1
+    assert result["untimestamped_packets"] == 1
+    packet = result["packets"][0]
+    assert packet["protocol"] == "UDP"
+    assert packet["captured_at"] is None
+    assert packet["timestamp_available"] is False
+    assert result["flows"][0]["first_seen"] is None
+    assert result["flows"][0]["last_seen"] is None
+    assert frame.hex() not in str(result)
+
+
+def test_simple_packet_honors_interface_zero_snap_length() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    truncated = frame[:34]
+    data = (
+        _section_header()
+        + _interface_block(snap_length=len(truncated))
+        + _simple_packet(truncated, original_length=len(frame))
+    )
+
+    result = import_pcapng_bytes(data)
+
+    assert result["processed_packets"] == 1
+    assert result["captured_packets"] == 1
+    assert result["packets"][0]["length_bytes"] == len(truncated)
+    assert result["packets"][0]["timestamp_available"] is False
+
+
+def test_simple_packet_requires_interface_zero() -> None:
+    data = _section_header() + _simple_packet(_ethernet_ipv4_udp_frame())
+
+    with pytest.raises(ValueError, match="requires interface 0"):
+        import_pcapng_bytes(data)
+
+
+def test_simple_packet_rejects_length_that_disagrees_with_snap_length() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    data = (
+        _section_header()
+        + _interface_block(snap_length=20)
+        + _simple_packet(frame, original_length=len(frame))
+    )
+
+    with pytest.raises(ValueError, match="SnapLen"):
+        import_pcapng_bytes(data)
 
 
 def test_honors_binary_timestamp_resolution() -> None:
@@ -158,6 +229,20 @@ def test_supports_big_endian_section() -> None:
 
     assert result["captured_packets"] == 1
     assert str(result["packets"][0]["captured_at"]).startswith("1970-01-01T00:00:01")
+
+
+def test_supports_big_endian_simple_packet() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    data = (
+        _section_header(endian=">")
+        + _interface_block(endian=">")
+        + _simple_packet(frame, endian=">")
+    )
+
+    result = import_pcapng_bytes(data)
+
+    assert result["captured_packets"] == 1
+    assert result["packets"][0]["captured_at"] is None
 
 
 def test_counts_interfaces_across_sections() -> None:
