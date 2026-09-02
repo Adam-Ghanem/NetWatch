@@ -3,6 +3,7 @@ import struct
 from datetime import datetime, timezone
 
 import pytest
+
 from pcap_import import import_pcap_metadata
 
 
