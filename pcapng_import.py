@@ -35,7 +35,7 @@ class _Interface:
 def _timestamp_resolution(option_value: int) -> float:
     if option_value & 0x80:
         return 2.0 ** -(option_value & 0x7F)
-    return 10.0 ** -option_value
+    return 10.0**-option_value
 
 
 def _parse_idb_options(data: bytes, *, endian: str) -> float:
@@ -74,9 +74,9 @@ def _decode_section_header(data: bytes, offset: int) -> tuple[str, int]:
         raise ValueError("PCAPNG section header has an invalid block length.")
     if offset + total_length > len(data):
         raise ValueError("PCAPNG section header exceeds the available input.")
-    trailer = struct.unpack(
-        f"{endian}I", data[offset + total_length - 4 : offset + total_length]
-    )[0]
+    trailer = struct.unpack(f"{endian}I", data[offset + total_length - 4 : offset + total_length])[
+        0
+    ]
     if trailer != total_length:
         raise ValueError("PCAPNG section header length fields do not match.")
     return endian, total_length
@@ -103,8 +103,10 @@ def import_pcapng_bytes(
     offset = 0
     endian = "<"
     sections = 0
+    total_interfaces = 0
+    processed_packets = 0
 
-    while offset < len(data) and len(records) < packet_limit:
+    while offset < len(data) and processed_packets < packet_limit:
         if offset + MIN_BLOCK_BYTES > len(data):
             raise ValueError("PCAPNG block header is truncated.")
 
@@ -119,9 +121,7 @@ def import_pcapng_bytes(
         if sections == 0:
             raise ValueError("PCAPNG data must begin with a Section Header Block.")
 
-        block_type, total_length = struct.unpack(
-            f"{endian}II", data[offset : offset + 8]
-        )
+        block_type, total_length = struct.unpack(f"{endian}II", data[offset : offset + 8])
         if total_length < MIN_BLOCK_BYTES or total_length % 4:
             raise ValueError("PCAPNG block has an invalid total length.")
         block_end = offset + total_length
@@ -142,7 +142,9 @@ def import_pcapng_bytes(
                     timestamp_resolution=_parse_idb_options(options, endian=endian),
                 )
             )
+            total_interfaces += 1
         elif block_type == ENHANCED_PACKET_BLOCK:
+            processed_packets += 1
             if total_length < 32:
                 raise ValueError("PCAPNG enhanced packet block is truncated.")
             (
@@ -189,7 +191,8 @@ def import_pcapng_bytes(
         {
             "capture_format": "pcapng",
             "section_count": sections,
-            "interface_count": len(interfaces),
+            "interface_count": total_interfaces,
+            "processed_packets": processed_packets,
             "payload_retained": False,
         }
     )
