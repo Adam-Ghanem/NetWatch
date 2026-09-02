@@ -129,7 +129,11 @@ def test_rejects_unknown_interface_reference() -> None:
     data = (
         _section_header()
         + _interface_block()
-        + _enhanced_packet(_ethernet_ipv4_udp_frame(), timestamp_units=1, interface_id=1)
+        + _enhanced_packet(
+            _ethernet_ipv4_udp_frame(),
+            timestamp_units=1,
+            interface_id=1,
+        )
     )
 
     with pytest.raises(ValueError, match="unknown interface"):
