@@ -234,9 +234,7 @@ def import_pcapng_bytes(
             interface = interfaces[0]
             if interface.link_type != LINKTYPE_ETHERNET:
                 raise ValueError("Only Ethernet PCAPNG interfaces are supported.")
-            original_length = struct.unpack(
-                f"{endian}I", data[offset + 8 : offset + 12]
-            )[0]
+            original_length = struct.unpack(f"{endian}I", data[offset + 8 : offset + 12])[0]
             captured_length = (
                 original_length
                 if interface.snap_length == 0
