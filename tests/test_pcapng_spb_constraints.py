@@ -50,6 +50,7 @@ def _simple_packet() -> bytes:
 
 
 def test_simple_packet_rejects_multi_interface_section() -> None:
+    # SPBs have no interface ID, so multiple interfaces are ambiguous.
     data = (
         _section_header()
         + _interface_block()
