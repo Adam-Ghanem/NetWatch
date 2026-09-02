@@ -46,10 +46,18 @@ def _section_header(*, endian: str = "<") -> bytes:
     return _block(0x0A0D0D0A, body, endian=endian)
 
 
-def _interface_block(*, endian: str = "<", tsresol: int | None = None) -> bytes:
+def _interface_block(
+    *,
+    endian: str = "<",
+    tsresol: int | None = None,
+    tsoffset: int | None = None,
+) -> bytes:
     body = struct.pack(f"{endian}HHI", 1, 0, 65_535)
     if tsresol is not None:
         body += struct.pack(f"{endian}HHB3x", 9, 1, tsresol)
+    if tsoffset is not None:
+        body += struct.pack(f"{endian}HHq", 14, 8, tsoffset)
+    if tsresol is not None or tsoffset is not None:
         body += struct.pack(f"{endian}HH", 0, 0)
     return _block(1, body, endian=endian)
 
@@ -113,6 +121,29 @@ def test_honors_binary_timestamp_resolution() -> None:
     result = import_pcapng_bytes(data)
 
     assert str(result["packets"][0]["captured_at"]).startswith("1970-01-01T00:00:01")
+
+
+def test_applies_signed_interface_timestamp_offset() -> None:
+    frame = _ethernet_ipv4_udp_frame()
+    data = (
+        _section_header()
+        + _interface_block(tsresol=6, tsoffset=-3600)
+        + _enhanced_packet(frame, timestamp_units=7200 * 1_000_000)
+    )
+
+    result = import_pcapng_bytes(data)
+
+    assert str(result["packets"][0]["captured_at"]).startswith("1970-01-01T01:00:00")
+
+
+def test_rejects_malformed_timestamp_offset_option() -> None:
+    body = struct.pack("<HHI", 1, 0, 65_535)
+    body += struct.pack("<HHI", 14, 4, 1)
+    body += struct.pack("<HH", 0, 0)
+    data = _section_header() + _block(1, body)
+
+    with pytest.raises(ValueError, match="if_tsoffset"):
+        import_pcapng_bytes(data)
 
 
 def test_supports_big_endian_section() -> None:
