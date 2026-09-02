@@ -20,12 +20,21 @@ from traffic_capture import (
 SECTION_HEADER_BLOCK = 0x0A0D0D0A
 INTERFACE_DESCRIPTION_BLOCK = 0x00000001
 SIMPLE_PACKET_BLOCK = 0x00000003
+INTERFACE_STATISTICS_BLOCK = 0x00000005
 ENHANCED_PACKET_BLOCK = 0x00000006
 LINKTYPE_ETHERNET = 1
 IF_TSRESOL_OPTION = 9
 IF_TSOFFSET_OPTION = 14
 END_OF_OPTIONS = 0
+ISB_STARTTIME_OPTION = 2
+ISB_ENDTIME_OPTION = 3
+ISB_IFRECV_OPTION = 4
+ISB_IFDROP_OPTION = 5
+ISB_FILTERACCEPT_OPTION = 6
+ISB_OSDROP_OPTION = 7
+ISB_USRDELIV_OPTION = 8
 MIN_BLOCK_BYTES = 12
+MAX_INTERFACE_STATISTICS = 1_000
 
 
 @dataclass(frozen=True)
@@ -65,6 +74,53 @@ def _parse_idb_options(data: bytes, *, endian: str) -> tuple[float, int]:
             timestamp_offset_seconds = struct.unpack(f"{endian}q", value)[0]
         offset += padded_length
     return resolution, timestamp_offset_seconds
+
+
+def _parse_isb_options(data: bytes, *, endian: str) -> dict[str, int | None]:
+    values: dict[str, int | None] = {
+        "start_timestamp_units": None,
+        "end_timestamp_units": None,
+        "received_packets": None,
+        "dropped_packets": None,
+        "filter_accepted_packets": None,
+        "os_dropped_packets": None,
+        "user_delivered_packets": None,
+    }
+    option_names = {
+        ISB_STARTTIME_OPTION: "start_timestamp_units",
+        ISB_ENDTIME_OPTION: "end_timestamp_units",
+        ISB_IFRECV_OPTION: "received_packets",
+        ISB_IFDROP_OPTION: "dropped_packets",
+        ISB_FILTERACCEPT_OPTION: "filter_accepted_packets",
+        ISB_OSDROP_OPTION: "os_dropped_packets",
+        ISB_USRDELIV_OPTION: "user_delivered_packets",
+    }
+    offset = 0
+    seen: set[int] = set()
+    while offset + 4 <= len(data):
+        code, length = struct.unpack(f"{endian}HH", data[offset : offset + 4])
+        offset += 4
+        if code == END_OF_OPTIONS:
+            break
+        padded_length = (length + 3) & ~3
+        if offset + padded_length > len(data):
+            raise ValueError("PCAPNG interface statistics options are truncated.")
+        if code in option_names:
+            if code in seen:
+                raise ValueError("PCAPNG interface statistics option is duplicated.")
+            if length != 8:
+                raise ValueError("PCAPNG interface statistics values must contain eight bytes.")
+            seen.add(code)
+            values[option_names[code]] = struct.unpack(f"{endian}Q", data[offset : offset + 8])[0]
+        offset += padded_length
+    return values
+
+
+def _timestamp_from_units(units: int, interface: _Interface) -> str:
+    return datetime.fromtimestamp(
+        units * interface.timestamp_resolution + interface.timestamp_offset_seconds,
+        tz=timezone.utc,
+    ).isoformat(timespec="microseconds")
 
 
 def _decode_section_header(data: bytes, offset: int) -> tuple[str, int]:
@@ -131,6 +187,7 @@ def import_pcapng_bytes(
     selected_filter = capture_filter or CaptureFilter()
     interfaces: list[_Interface] = []
     records: list[dict[str, object]] = []
+    interface_statistics: list[dict[str, object]] = []
     offset = 0
     endian = "<"
     sections = 0
@@ -185,6 +242,34 @@ def import_pcapng_bytes(
                 )
             )
             total_interfaces += 1
+        elif block_type == INTERFACE_STATISTICS_BLOCK:
+            if total_length < 24:
+                raise ValueError("PCAPNG interface statistics block is truncated.")
+            if len(interface_statistics) >= MAX_INTERFACE_STATISTICS:
+                raise ValueError("PCAPNG interface statistics exceed the safety limit.")
+            interface_id, ts_high, ts_low = struct.unpack(
+                f"{endian}III", data[offset + 8 : offset + 20]
+            )
+            if interface_id >= len(interfaces):
+                raise ValueError("PCAPNG statistics reference an unknown interface.")
+            interface = interfaces[interface_id]
+            values = _parse_isb_options(data[offset + 20 : block_end - 4], endian=endian)
+            timestamp_units = (ts_high << 32) | ts_low
+            row: dict[str, object] = {
+                "section": sections,
+                "interface_id": interface_id,
+                "recorded_at": _timestamp_from_units(timestamp_units, interface),
+            }
+            start_units = values.pop("start_timestamp_units")
+            end_units = values.pop("end_timestamp_units")
+            row["capture_started_at"] = (
+                _timestamp_from_units(start_units, interface) if start_units is not None else None
+            )
+            row["capture_ended_at"] = (
+                _timestamp_from_units(end_units, interface) if end_units is not None else None
+            )
+            row.update(values)
+            interface_statistics.append(row)
         elif block_type == ENHANCED_PACKET_BLOCK:
             processed_packets += 1
             enhanced_packet_count += 1
@@ -276,6 +361,8 @@ def import_pcapng_bytes(
             "enhanced_packet_count": enhanced_packet_count,
             "simple_packet_count": simple_packet_count,
             "untimestamped_packets": simple_packet_count,
+            "interface_statistics_count": len(interface_statistics),
+            "interface_statistics": interface_statistics,
             "payload_retained": False,
         }
     )
