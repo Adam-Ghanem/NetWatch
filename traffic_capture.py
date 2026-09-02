@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from config import MAX_CAPTURE_PACKETS, MAX_CAPTURE_SECONDS
 from device_identity import infer_device_identity, normalize_mac
 from flow_analysis import summarize_flows
+from ipv6_extension_headers import locate_ipv6_transport
 
 CAPTURE_PROTOCOLS = ("all", "tcp", "udp", "icmp", "arp")
 SYS_CLASS_NET = Path("/sys/class/net")
@@ -210,6 +211,10 @@ def parse_ethernet_frame(
     destination_port: int | None = None
     tcp_flags = "-"
     protocol = "Ethernet"
+    ipv6_extension_headers: tuple[str, ...] = ()
+    ipv6_fragmented = False
+    ipv6_first_fragment = True
+    ipv6_transport_complete = True
 
     if ether_type == 0x0806 and len(frame) >= offset + 28:
         protocol = "ARP"
@@ -238,13 +243,23 @@ def parse_ethernet_frame(
             return None
         source_ip = socket.inet_ntop(socket.AF_INET6, frame[offset + 8 : offset + 24])
         destination_ip = socket.inet_ntop(socket.AF_INET6, frame[offset + 24 : offset + 40])
-        protocol_number = frame[offset + 6]
-        protocol, source_port, destination_port, tcp_flags = _transport_metadata(
+        protocol = "IPv6"
+        location = locate_ipv6_transport(
             frame,
-            offset=offset + 40,
-            protocol_number=protocol_number,
+            ipv6_offset=offset,
+            next_header=frame[offset + 6],
         )
-        protocol = protocol or "IPv6"
+        ipv6_extension_headers = location.extension_headers
+        ipv6_fragmented = location.fragmented
+        ipv6_first_fragment = location.first_fragment
+        ipv6_transport_complete = location.complete
+        if location.complete and (not location.fragmented or location.first_fragment):
+            transport_protocol, source_port, destination_port, tcp_flags = _transport_metadata(
+                frame,
+                offset=location.transport_offset,
+                protocol_number=location.protocol_number,
+            )
+            protocol = transport_protocol or protocol
 
     timestamp = captured_at or datetime.now(timezone.utc)
     source_endpoint = source_ip
@@ -269,6 +284,10 @@ def parse_ethernet_frame(
         "destination_port": destination_port,
         "tcp_flags": tcp_flags,
         "vlan_id": vlan_id,
+        "ipv6_extension_headers": list(ipv6_extension_headers),
+        "ipv6_fragmented": ipv6_fragmented,
+        "ipv6_first_fragment": ipv6_first_fragment,
+        "ipv6_transport_complete": ipv6_transport_complete,
         "length_bytes": len(frame),
         "summary": summary[:300],
     }
