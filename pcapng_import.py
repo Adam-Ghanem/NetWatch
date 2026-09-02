@@ -22,6 +22,7 @@ INTERFACE_DESCRIPTION_BLOCK = 0x00000001
 ENHANCED_PACKET_BLOCK = 0x00000006
 LINKTYPE_ETHERNET = 1
 IF_TSRESOL_OPTION = 9
+IF_TSOFFSET_OPTION = 14
 END_OF_OPTIONS = 0
 MIN_BLOCK_BYTES = 12
 
@@ -30,6 +31,7 @@ MIN_BLOCK_BYTES = 12
 class _Interface:
     link_type: int
     timestamp_resolution: float
+    timestamp_offset_seconds: int
 
 
 def _timestamp_resolution(option_value: int) -> float:
@@ -38,8 +40,9 @@ def _timestamp_resolution(option_value: int) -> float:
     return 10.0**-option_value
 
 
-def _parse_idb_options(data: bytes, *, endian: str) -> float:
+def _parse_idb_options(data: bytes, *, endian: str) -> tuple[float, int]:
     resolution = 1e-6
+    timestamp_offset_seconds = 0
     offset = 0
     while offset + 4 <= len(data):
         code, length = struct.unpack(f"{endian}HH", data[offset : offset + 4])
@@ -54,8 +57,12 @@ def _parse_idb_options(data: bytes, *, endian: str) -> float:
             if length != 1:
                 raise ValueError("PCAPNG if_tsresol must contain exactly one byte.")
             resolution = _timestamp_resolution(value[0])
+        elif code == IF_TSOFFSET_OPTION:
+            if length != 8:
+                raise ValueError("PCAPNG if_tsoffset must contain exactly eight bytes.")
+            timestamp_offset_seconds = struct.unpack(f"{endian}q", value)[0]
         offset += padded_length
-    return resolution
+    return resolution, timestamp_offset_seconds
 
 
 def _decode_section_header(data: bytes, offset: int) -> tuple[str, int]:
@@ -136,10 +143,15 @@ def import_pcapng_bytes(
                 raise ValueError("PCAPNG interface description block is truncated.")
             link_type = struct.unpack(f"{endian}H", data[offset + 8 : offset + 10])[0]
             options = data[offset + 16 : block_end - 4]
+            timestamp_resolution, timestamp_offset_seconds = _parse_idb_options(
+                options,
+                endian=endian,
+            )
             interfaces.append(
                 _Interface(
                     link_type=link_type,
-                    timestamp_resolution=_parse_idb_options(options, endian=endian),
+                    timestamp_resolution=timestamp_resolution,
+                    timestamp_offset_seconds=timestamp_offset_seconds,
                 )
             )
             total_interfaces += 1
@@ -168,7 +180,8 @@ def import_pcapng_bytes(
             frame = data[offset + 28 : offset + 28 + captured_length]
             timestamp_units = (ts_high << 32) | ts_low
             captured_at = datetime.fromtimestamp(
-                timestamp_units * interface.timestamp_resolution,
+                timestamp_units * interface.timestamp_resolution
+                + interface.timestamp_offset_seconds,
                 tz=timezone.utc,
             )
             record = parse_ethernet_frame(
