@@ -19,9 +19,7 @@ def test_analyze_routes_pcapng_to_bounded_importer(
 
     monkeypatch.setattr(capture_cli, "import_pcapng_bytes", fake_import)
 
-    result = capture_cli.analyze_capture_bytes(
-        b"\x0a\x0d\x0d\x0aexample", packet_limit=17
-    )
+    result = capture_cli.analyze_capture_bytes(b"\x0a\x0d\x0d\x0aexample", packet_limit=17)
 
     assert result["source"] == "pcapng"
     assert seen == {"data": b"\x0a\x0d\x0d\x0aexample", "packet_limit": 17}
@@ -39,9 +37,7 @@ def test_analyze_routes_classic_pcap_to_bounded_importer(
 
     monkeypatch.setattr(capture_cli, "import_pcap_metadata", fake_import)
 
-    result = capture_cli.analyze_capture_bytes(
-        b"\xd4\xc3\xb2\xa1example", packet_limit=23
-    )
+    result = capture_cli.analyze_capture_bytes(b"\xd4\xc3\xb2\xa1example", packet_limit=23)
 
     assert result["source"] == "pcap"
     assert seen == {"data": b"\xd4\xc3\xb2\xa1example", "max_packets": 23}
