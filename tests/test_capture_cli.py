@@ -118,6 +118,48 @@ def test_json_render_forces_payload_retention_false() -> None:
     assert payload["payload_retained"] is False
 
 
+def test_ndjson_render_emits_bounded_metadata_only_flow_records() -> None:
+    rendered = capture_cli.render_capture_result(
+        {
+            "flows": [
+                {
+                    "flow_id": "flow-1",
+                    "protocol": "TCP",
+                    "service": "https",
+                    "packets": 2,
+                    "bytes": 128,
+                    "endpoint_a": {"ip": "10.0.0.1", "port": 50000},
+                    "endpoint_b": {"ip": "10.0.0.2", "port": 443},
+                    "payload": "must-never-export",
+                },
+                {
+                    "flow_id": "flow-2",
+                    "protocol": "UDP",
+                    "service": "dns",
+                    "packets": 1,
+                    "bytes": 64,
+                },
+            ]
+        },
+        output_format="ndjson",
+        flow_limit=1,
+    )
+
+    lines = rendered.decode("utf-8").splitlines()
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event_type"] == "flow"
+    assert event["flow_id"] == "flow-1"
+    assert event["payload_retained"] is False
+    assert "payload" not in event
+
+
+def test_parser_accepts_ndjson_output_format() -> None:
+    args = capture_cli.build_parser().parse_args(["capture.pcap", "--format", "ndjson"])
+
+    assert args.output_format == "ndjson"
+
+
 def test_csv_render_reuses_formula_safe_flow_export() -> None:
     rendered = capture_cli.render_capture_result(
         {
