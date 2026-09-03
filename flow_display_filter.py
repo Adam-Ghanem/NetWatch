@@ -146,7 +146,7 @@ def _field_value(flow: dict[str, object], field: str) -> object:
 
     if field.startswith("tcp."):
         if not _transport_matches(flow, "tcp"):
-            return set() if field == "tcp.port" else 0
+            return set()
         if field == "tcp.port":
             return _endpoint_ports(flow)
         if field == "tcp.srcport":
@@ -156,7 +156,7 @@ def _field_value(flow: dict[str, object], field: str) -> object:
 
     if field.startswith("udp."):
         if not _transport_matches(flow, "udp"):
-            return set() if field == "udp.port" else 0
+            return set()
         if field == "udp.port":
             return _endpoint_ports(flow)
         if field == "udp.srcport":
@@ -192,6 +192,8 @@ def _numeric_predicate(
         observed = _field_value(flow, field)
         if isinstance(observed, set):
             values = [_number(value) for value in observed]
+            if not values:
+                return False
             if operator == "!=":
                 return all(_compare_number(value, operator, expected) for value in values)
             return any(_compare_number(value, operator, expected) for value in values)
