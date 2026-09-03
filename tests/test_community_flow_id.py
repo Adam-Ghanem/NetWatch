@@ -6,8 +6,7 @@ from flow_analysis import summarize_flows
 
 def test_matches_published_tcp_reference_vector():
     assert (
-        community_flow_id("tcp", "10.0.0.1", "10.0.0.2", 10, 20)
-        == "1:9j2Dzwrw7T9E+IZi4b4IVT66HBI="
+        community_flow_id("tcp", "10.0.0.1", "10.0.0.2", 10, 20) == "1:9j2Dzwrw7T9E+IZi4b4IVT66HBI="
     )
 
 
