@@ -33,7 +33,6 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --diff tests/test_community_flow_id.py || true
           black --check .
           isort --check-only .
 
