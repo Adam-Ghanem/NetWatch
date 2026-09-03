@@ -27,6 +27,7 @@ _ALLOWED_FIELDS = {
     "duration_ms",
     "flow_id",
     "uid",
+    "community_id",
     "tcp.port",
     "tcp.srcport",
     "tcp.dstport",
