@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from flow_export import export_flows_csv, export_flows_json
+from flow_export import export_flows_csv, export_flows_json, export_flows_ndjson
 
 
 def _flow(flow_id: str = "flow-1", *, service: str = "https") -> dict[str, object]:
@@ -42,6 +42,25 @@ def test_json_export_is_bounded_and_allowlists_metadata_fields():
     assert "raw" not in exported
 
 
+def test_ndjson_export_is_bounded_metadata_only_and_line_delimited():
+    content = export_flows_ndjson([_flow("flow-1"), _flow("flow-2")], limit=1)
+
+    lines = content.decode("utf-8").splitlines()
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["event_type"] == "flow"
+    assert event["payload_retained"] is False
+    assert event["flow_id"] == "flow-1"
+    assert event["originator"] == {"ip": "192.168.1.10", "port": 51_515}
+    assert "payload" not in event
+    assert "raw" not in event
+    assert content.endswith(b"\n")
+
+
+def test_ndjson_export_returns_empty_bytes_for_empty_flow_set():
+    assert export_flows_ndjson([]) == b""
+
+
 def test_csv_export_flattens_endpoints_and_is_formula_safe():
     content = export_flows_csv([_flow(service="=UNTRUSTED()")]).decode("utf-8")
 
@@ -63,5 +82,7 @@ def test_flow_exports_validate_limits_and_truncate_deterministically():
 
     with pytest.raises(ValueError, match="between 1 and 1000"):
         export_flows_json(flows, limit=0)
+    with pytest.raises(ValueError, match="between 1 and 1000"):
+        export_flows_ndjson(flows, limit=1_001)
     with pytest.raises(ValueError, match="between 1 and 1000"):
         export_flows_csv(flows, limit=1_001)

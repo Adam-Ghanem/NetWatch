@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-from flow_export import export_flows_csv
+from flow_export import export_flows_csv, export_flows_ndjson
 from pcap_import import MAX_PCAP_BYTES, MAX_PCAP_PACKETS, import_pcap_metadata
 from pcapng_import import import_pcapng_bytes
 from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
@@ -46,19 +46,20 @@ def render_capture_result(
     output_format: str = "json",
     flow_limit: int = 100,
 ) -> bytes:
-    """Render metadata-only capture analysis as JSON or formula-safe CSV."""
+    """Render metadata-only capture analysis as JSON, NDJSON, or formula-safe CSV."""
     if output_format == "json":
         payload = dict(result)
         payload["payload_retained"] = False
         return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    flows = result.get("flows")
+    flow_rows = (
+        [dict(item) for item in flows if isinstance(item, dict)] if isinstance(flows, list) else []
+    )
+    if output_format == "ndjson":
+        return export_flows_ndjson(flow_rows, limit=flow_limit)
     if output_format == "csv":
-        flows = result.get("flows")
-        flow_rows = flows if isinstance(flows, list) else []
-        return export_flows_csv(
-            [dict(item) for item in flow_rows if isinstance(item, dict)],
-            limit=flow_limit,
-        )
-    raise ValueError("Output format must be 'json' or 'csv'.")
+        return export_flows_csv(flow_rows, limit=flow_limit)
+    raise ValueError("Output format must be 'json', 'ndjson', or 'csv'.")
 
 
 def _read_capture(path: Path) -> bytes:
@@ -76,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("capture", type=Path, help="PCAP or PCAPNG file to analyze")
     parser.add_argument(
         "--format",
-        choices=("json", "csv"),
+        choices=("json", "ndjson", "csv"),
         default="json",
         dest="output_format",
         help="Output format (default: json)",
