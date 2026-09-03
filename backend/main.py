@@ -142,6 +142,7 @@ from traffic_capture import (
     capture_interfaces,
     capture_traffic,
 )
+from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
 
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
@@ -333,6 +334,29 @@ class HostRequest(BaseModel):
     )
 
 
+class TrafficFlowControlsRequest(BaseModel):
+    display_filter: str = Field(default="", max_length=1024)
+    ip_address: str = Field(default="", max_length=45)
+    protocol: str = Field(default="", max_length=16)
+    service: str = Field(default="", max_length=64)
+    state: str = Field(default="", max_length=64)
+    min_bytes: int = Field(default=0, ge=0)
+    sort_by: Literal["bytes", "packets", "duration", "recent"] = "bytes"
+    limit: int = Field(default=100, ge=1, le=1_000)
+
+    def to_controls(self) -> TrafficFlowControls:
+        return TrafficFlowControls(
+            display_filter=self.display_filter,
+            ip_address=self.ip_address,
+            protocol=self.protocol,
+            service=self.service,
+            state=self.state,
+            min_bytes=self.min_bytes,
+            sort_by=self.sort_by,
+            limit=self.limit,
+        )
+
+
 class TrafficCaptureRequest(BaseModel):
     interface: str = Field(default="auto", min_length=1, max_length=64)
     duration_seconds: int = Field(default=5, ge=1, le=MAX_CAPTURE_SECONDS)
@@ -340,6 +364,7 @@ class TrafficCaptureRequest(BaseModel):
     protocol: Literal["all", "tcp", "udp", "icmp", "arp"] = "all"
     ip_filter: str = Field(default="", max_length=45)
     port_filter: int | None = Field(default=None, ge=1, le=65_535)
+    flow_controls: TrafficFlowControlsRequest | None = None
     authorized: bool = Field(
         default=False,
         description="Confirm explicit authorization for metadata-only traffic capture.",
@@ -1193,6 +1218,11 @@ def capture_packet_metadata(
                 duration_seconds=payload.duration_seconds,
                 max_packets=payload.max_packets,
                 capture_filter=capture_filter,
+            )
+        if payload.flow_controls is not None:
+            result = apply_traffic_flow_controls(
+                result,
+                payload.flow_controls.to_controls(),
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
