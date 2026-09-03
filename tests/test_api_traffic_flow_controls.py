@@ -67,13 +67,11 @@ def _capture_result() -> dict[str, object]:
     }
 
 
-def test_live_capture_applies_nested_flow_controls_and_rejects_invalid_filters(
-    monkeypatch, tmp_path
-):
+def test_live_capture_applies_nested_flow_controls(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "capture_traffic", lambda **_: _capture_result())
 
     with _client(monkeypatch, tmp_path) as client:
-        filtered = client.post(
+        response = client.post(
             "/api/traffic/capture",
             headers=API_HEADERS,
             json={
@@ -89,7 +87,20 @@ def test_live_capture_applies_nested_flow_controls_and_rejects_invalid_filters(
                 },
             },
         )
-        invalid = client.post(
+
+    assert response.status_code == 200
+    assert response.json()["flow_count"] == 1
+    assert response.json()["flows"][0]["flow_id"] == "flow-https"
+    assert response.json()["conversation_count"] == 1
+    assert response.json()["flow_analysis"]["applied"] is True
+    assert response.json()["flow_analysis"]["display_filter"] == "protocol == tcp and bytes >= 1000"
+
+
+def test_live_capture_rejects_unsupported_flow_display_filter(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "capture_traffic", lambda **_: _capture_result())
+
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
             "/api/traffic/capture",
             headers=API_HEADERS,
             json={
@@ -99,11 +110,5 @@ def test_live_capture_applies_nested_flow_controls_and_rejects_invalid_filters(
             },
         )
 
-    assert filtered.status_code == 200
-    assert filtered.json()["flow_count"] == 1
-    assert filtered.json()["flows"][0]["flow_id"] == "flow-https"
-    assert filtered.json()["conversation_count"] == 1
-    assert filtered.json()["flow_analysis"]["applied"] is True
-    assert filtered.json()["flow_analysis"]["display_filter"] == "protocol == tcp and bytes >= 1000"
-    assert invalid.status_code == 400
-    assert "Unsupported field" in invalid.json()["detail"]
+    assert response.status_code == 400
+    assert "Unsupported field" in response.json()["detail"]
