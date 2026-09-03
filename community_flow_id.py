@@ -62,6 +62,7 @@ def community_flow_id(
                 struct.pack("!H", source_port_number),
                 struct.pack("!H", destination_port_number),
             )
-        )
+        ),
+        usedforsecurity=False,
     ).digest()
     return "1:" + base64.b64encode(digest).decode("ascii")
