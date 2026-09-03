@@ -42,9 +42,9 @@ def render_capture_result(
     if output_format == "json":
         payload = dict(result)
         payload["payload_retained"] = False
-        return (
-            json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
-        ).encode("utf-8")
+        return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        )
     if output_format == "csv":
         flows = result.get("flows")
         flow_rows = flows if isinstance(flows, list) else []
