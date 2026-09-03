@@ -218,26 +218,27 @@ def summarize_conversations(
         total_packets += packets
         total_bytes += byte_count
 
-        conversations.append(
-            {
-                "flow_id": str(flow.get("flow_id") or ""),
-                "community_id": str(flow.get("community_id") or ""),
-                "protocol": str(flow.get("protocol") or "Unknown"),
-                "service": str(flow.get("service") or "-"),
-                "source": originator,
-                "destination": responder,
-                "packets": packets,
-                "bytes": byte_count,
-                "source_to_destination_packets": originator_packets,
-                "source_to_destination_bytes": originator_bytes,
-                "destination_to_source_packets": responder_packets,
-                "destination_to_source_bytes": responder_bytes,
-                "first_seen": flow.get("first_seen"),
-                "last_seen": flow.get("last_seen"),
-                "duration_ms": _int(flow.get("duration_ms")),
-                "tcp_state": str(flow.get("tcp_state") or flow.get("state") or "-"),
-            }
-        )
+        conversation: dict[str, object] = {
+            "flow_id": str(flow.get("flow_id") or ""),
+            "protocol": str(flow.get("protocol") or "Unknown"),
+            "service": str(flow.get("service") or "-"),
+            "source": originator,
+            "destination": responder,
+            "packets": packets,
+            "bytes": byte_count,
+            "source_to_destination_packets": originator_packets,
+            "source_to_destination_bytes": originator_bytes,
+            "destination_to_source_packets": responder_packets,
+            "destination_to_source_bytes": responder_bytes,
+            "first_seen": flow.get("first_seen"),
+            "last_seen": flow.get("last_seen"),
+            "duration_ms": _int(flow.get("duration_ms")),
+            "tcp_state": str(flow.get("tcp_state") or flow.get("state") or "-"),
+        }
+        community_id = str(flow.get("community_id") or "")
+        if community_id:
+            conversation["community_id"] = community_id
+        conversations.append(conversation)
 
         for endpoint, sent_packets, sent_bytes, received_packets, received_bytes in (
             (
