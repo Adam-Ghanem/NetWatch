@@ -27,6 +27,7 @@ _ALLOWED_FIELDS = {
     "duration_ms",
     "flow_id",
     "uid",
+    "community_id",
     "tcp.port",
     "tcp.srcport",
     "tcp.dstport",
@@ -59,7 +60,9 @@ _FORBIDDEN_KEY_MARKERS = (
     "cookie",
 )
 _TOKEN_RE = re.compile(
-    r'"[^"\\]*(?:\\.[^"\\]*)*"|' r"'[^'\\]*(?:\\.[^'\\]*)*'|" r">=|<=|==|!=|>|<|\(|\)|[^\s()<>!=]+"
+    r'"[^"\\]*(?:\\.[^"\\]*)*"|'
+    r"'[^'\\]*(?:\\.[^'\\]*)*'|"
+    r">=|<=|==|!=|>|<|\(|\)|[^\s()<>!=]+(?:={1,2}(?=\s|$|\)))?"
 )
 
 

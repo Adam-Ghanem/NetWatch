@@ -117,6 +117,20 @@ def test_zeek_style_connection_aliases_map_to_flow_identity_and_roles() -> None:
     assert [item["flow_id"] for item in result] == ["f2"]
 
 
+def test_community_id_supports_cross_tool_flow_pivots() -> None:
+    first = _flow("f1", "10.0.0.10", "1.1.1.1")
+    second = _flow("f2", "10.0.0.20", "8.8.8.8", protocol="UDP", service="dns")
+    first["community_id"] = "1:9j2Dzwrw7T9E+IZi4b4IVT66HBI="
+    second["community_id"] = "1:another-flow"
+
+    result = filter_flows(
+        [first, second],
+        "community_id == 1:9j2Dzwrw7T9E+IZi4b4IVT66HBI= and protocol == tcp",
+    )
+
+    assert [item["flow_id"] for item in result] == ["f1"]
+
+
 def test_transport_aliases_do_not_match_the_wrong_protocol() -> None:
     udp = _flow("udp", "10.0.0.20", "8.8.8.8", protocol="UDP", service="dns")
     udp["responder"] = {"ip": "8.8.8.8", "port": 443}
