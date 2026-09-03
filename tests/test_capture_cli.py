@@ -5,6 +5,7 @@ import json
 import pytest
 
 import capture_cli
+from traffic_flow_controls import TrafficFlowControls
 
 
 def test_analyze_routes_pcapng_to_bounded_importer(
@@ -41,6 +42,58 @@ def test_analyze_routes_classic_pcap_to_bounded_importer(
 
     assert result["source"] == "pcap"
     assert seen == {"data": b"\xd4\xc3\xb2\xa1example", "max_packets": 23}
+
+
+def test_analyze_applies_bounded_flow_controls_after_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_import(data: bytes, *, max_packets: int) -> dict[str, object]:
+        assert data.startswith(b"\xd4\xc3\xb2\xa1")
+        assert max_packets == 50
+        return {
+            "source": "pcap",
+            "flows": [
+                {
+                    "flow_id": "dns-flow",
+                    "protocol": "UDP",
+                    "service": "dns",
+                    "bytes": 96,
+                    "packets": 2,
+                    "endpoint_a": {"ip": "10.0.0.5", "port": 53000},
+                    "endpoint_b": {"ip": "10.0.0.53", "port": 53},
+                },
+                {
+                    "flow_id": "https-flow",
+                    "protocol": "TCP",
+                    "service": "https",
+                    "bytes": 512,
+                    "packets": 5,
+                    "endpoint_a": {"ip": "10.0.0.5", "port": 54000},
+                    "endpoint_b": {"ip": "10.0.0.10", "port": 443},
+                },
+            ],
+            "flow_count": 2,
+            "payload_retained": False,
+        }
+
+    monkeypatch.setattr(capture_cli, "import_pcap_metadata", fake_import)
+
+    result = capture_cli.analyze_capture_bytes(
+        b"\xd4\xc3\xb2\xa1example",
+        packet_limit=50,
+        controls=TrafficFlowControls(protocol="tcp", min_bytes=100, limit=10),
+    )
+
+    assert result["flow_count"] == 1
+    assert result["flows"][0]["flow_id"] == "https-flow"
+    assert result["flow_analysis"] == {
+        "applied": True,
+        "input_flow_count": 2,
+        "matched_flow_count": 1,
+        "display_filter": "",
+        "sort_by": "bytes",
+        "limit": 10,
+    }
 
 
 def test_analyze_rejects_unknown_capture_format() -> None:

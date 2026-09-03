@@ -9,6 +9,7 @@ from typing import Any, Sequence
 from flow_export import export_flows_csv
 from pcap_import import MAX_PCAP_BYTES, MAX_PCAP_PACKETS, import_pcap_metadata
 from pcapng_import import import_pcapng_bytes
+from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
 
 _PCAPNG_MAGIC = b"\x0a\x0d\x0d\x0a"
 _PCAP_MAGICS = {
@@ -19,17 +20,24 @@ _PCAP_MAGICS = {
 }
 
 
-def analyze_capture_bytes(data: bytes, *, packet_limit: int = 1_000) -> dict[str, Any]:
+def analyze_capture_bytes(
+    data: bytes,
+    *,
+    packet_limit: int = 1_000,
+    controls: TrafficFlowControls | None = None,
+) -> dict[str, Any]:
     """Analyze a bounded PCAP/PCAPNG capture without retaining packet payloads."""
     if packet_limit < 1 or packet_limit > MAX_PCAP_PACKETS:
         raise ValueError(f"Packet limit must be between 1 and {MAX_PCAP_PACKETS}.")
     if len(data) > MAX_PCAP_BYTES:
         raise ValueError(f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.")
     if data.startswith(_PCAPNG_MAGIC):
-        return import_pcapng_bytes(data, packet_limit=packet_limit)
-    if data[:4] in _PCAP_MAGICS:
-        return import_pcap_metadata(data, max_packets=packet_limit)
-    raise ValueError("Unsupported capture format; expected classic PCAP or PCAPNG.")
+        result = import_pcapng_bytes(data, packet_limit=packet_limit)
+    elif data[:4] in _PCAP_MAGICS:
+        result = import_pcap_metadata(data, max_packets=packet_limit)
+    else:
+        raise ValueError("Unsupported capture format; expected classic PCAP or PCAPNG.")
+    return apply_traffic_flow_controls(result, controls or TrafficFlowControls())
 
 
 def render_capture_result(
@@ -83,7 +91,28 @@ def build_parser() -> argparse.ArgumentParser:
         "--flow-limit",
         type=int,
         default=100,
-        help="Maximum flow rows emitted by CSV export (1..1000)",
+        help="Maximum matched flow rows (1..1000; default: 100)",
+    )
+    parser.add_argument(
+        "--display-filter",
+        default="",
+        help="Safe metadata-only flow display filter expression",
+    )
+    parser.add_argument("--flow-ip", default="", help="Match an exact flow endpoint IP")
+    parser.add_argument("--flow-protocol", default="", help="Match a flow protocol")
+    parser.add_argument("--flow-service", default="", help="Match a service hint")
+    parser.add_argument("--flow-state", default="", help="Match a canonical flow state")
+    parser.add_argument(
+        "--min-bytes",
+        type=int,
+        default=0,
+        help="Require at least this many observed flow bytes",
+    )
+    parser.add_argument(
+        "--sort-by",
+        choices=("bytes", "packets", "duration", "recent"),
+        default="bytes",
+        help="Flow ranking order (default: bytes)",
     )
     parser.add_argument("--output", type=Path, help="Write output to a file instead of stdout")
     return parser
@@ -93,7 +122,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         data = _read_capture(args.capture)
-        result = analyze_capture_bytes(data, packet_limit=args.packet_limit)
+        controls = TrafficFlowControls(
+            display_filter=args.display_filter,
+            ip_address=args.flow_ip,
+            protocol=args.flow_protocol,
+            service=args.flow_service,
+            state=args.flow_state,
+            min_bytes=args.min_bytes,
+            sort_by=args.sort_by,
+            limit=args.flow_limit,
+        )
+        result = analyze_capture_bytes(
+            data,
+            packet_limit=args.packet_limit,
+            controls=controls,
+        )
         rendered = render_capture_result(
             result,
             output_format=args.output_format,
