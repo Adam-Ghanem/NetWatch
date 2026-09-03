@@ -122,6 +122,8 @@ def test_transport_aliases_do_not_match_the_wrong_protocol() -> None:
     udp["responder"] = {"ip": "8.8.8.8", "port": 443}
 
     assert filter_flows([udp], "tcp.port == 443") == []
+    assert filter_flows([udp], "tcp.port != 443") == []
+    assert filter_flows([udp], "tcp.srcport != 1") == []
 
 
 def test_filter_compiler_is_bounded_and_rejects_unknown_fields() -> None:
