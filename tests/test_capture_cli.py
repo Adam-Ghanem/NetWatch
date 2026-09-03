@@ -93,6 +93,7 @@ def test_analyze_applies_bounded_flow_controls_after_import(
         "display_filter": "",
         "sort_by": "bytes",
         "limit": 10,
+        "conversation_pivots_recomputed": True,
     }
 
 
