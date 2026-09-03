@@ -14,15 +14,43 @@ FlowPredicate: TypeAlias = Callable[[dict[str, object]], bool]
 _MAX_EXPRESSION_LENGTH = 1024
 _ALLOWED_FIELDS = {
     "ip",
+    "ip.addr",
+    "ip.src",
+    "ip.dst",
     "protocol",
+    "proto",
     "service",
     "state",
+    "conn_state",
     "packets",
     "bytes",
     "duration_ms",
     "flow_id",
+    "uid",
+    "tcp.port",
+    "tcp.srcport",
+    "tcp.dstport",
+    "udp.port",
+    "udp.srcport",
+    "udp.dstport",
+    "id.orig_h",
+    "id.orig_p",
+    "id.resp_h",
+    "id.resp_p",
 }
-_NUMERIC_FIELDS = {"packets", "bytes", "duration_ms"}
+_NUMERIC_FIELDS = {
+    "packets",
+    "bytes",
+    "duration_ms",
+    "tcp.port",
+    "tcp.srcport",
+    "tcp.dstport",
+    "udp.port",
+    "udp.srcport",
+    "udp.dstport",
+    "id.orig_p",
+    "id.resp_p",
+}
 _FORBIDDEN_KEY_MARKERS = (
     "payload",
     "raw",
@@ -62,6 +90,13 @@ def _unquote(token: str) -> str:
     return token
 
 
+def _endpoint(flow: dict[str, object], role: str) -> dict[str, object]:
+    value = flow.get(role)
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
 def _endpoint_ips(flow: dict[str, object]) -> set[str]:
     values: set[str] = set()
     for key in ("originator", "responder", "endpoint_a", "endpoint_b"):
@@ -73,12 +108,79 @@ def _endpoint_ips(flow: dict[str, object]) -> set[str]:
     return values
 
 
+def _endpoint_ports(flow: dict[str, object]) -> set[int]:
+    values: set[int] = set()
+    for key in ("originator", "responder", "endpoint_a", "endpoint_b"):
+        endpoint = flow.get(key)
+        if isinstance(endpoint, dict):
+            port = _number(endpoint.get("port"))
+            if port:
+                values.add(port)
+    return values
+
+
+def _transport_matches(flow: dict[str, object], protocol: str) -> bool:
+    return _text(flow.get("protocol")) == protocol
+
+
 def _field_value(flow: dict[str, object], field: str) -> object:
-    if field == "ip":
+    originator = _endpoint(flow, "originator")
+    responder = _endpoint(flow, "responder")
+
+    if field in {"ip", "ip.addr"}:
         return _endpoint_ips(flow)
-    if field == "state":
+    if field in {"ip.src", "id.orig_h"}:
+        return originator.get("ip", "")
+    if field in {"ip.dst", "id.resp_h"}:
+        return responder.get("ip", "")
+    if field in {"protocol", "proto"}:
+        return flow.get("protocol", "")
+    if field in {"state", "conn_state"}:
         return flow.get("tcp_state") or flow.get("state") or ""
+    if field in {"flow_id", "uid"}:
+        return flow.get("flow_id", "")
+    if field == "id.orig_p":
+        return originator.get("port", 0)
+    if field == "id.resp_p":
+        return responder.get("port", 0)
+
+    if field.startswith("tcp."):
+        if not _transport_matches(flow, "tcp"):
+            return set() if field == "tcp.port" else 0
+        if field == "tcp.port":
+            return _endpoint_ports(flow)
+        if field == "tcp.srcport":
+            return originator.get("port", 0)
+        if field == "tcp.dstport":
+            return responder.get("port", 0)
+
+    if field.startswith("udp."):
+        if not _transport_matches(flow, "udp"):
+            return set() if field == "udp.port" else 0
+        if field == "udp.port":
+            return _endpoint_ports(flow)
+        if field == "udp.srcport":
+            return originator.get("port", 0)
+        if field == "udp.dstport":
+            return responder.get("port", 0)
+
     return flow.get(field, "")
+
+
+def _compare_number(observed: int, operator: str, expected: int) -> bool:
+    if operator == "==":
+        return observed == expected
+    if operator == "!=":
+        return observed != expected
+    if operator == ">":
+        return observed > expected
+    if operator == ">=":
+        return observed >= expected
+    if operator == "<":
+        return observed < expected
+    if operator == "<=":
+        return observed <= expected
+    return False
 
 
 def _numeric_predicate(
@@ -87,20 +189,13 @@ def _numeric_predicate(
     expected: int,
 ) -> FlowPredicate:
     def predicate(flow: dict[str, object]) -> bool:
-        observed = _number(_field_value(flow, field))
-        if operator == "==":
-            return observed == expected
-        if operator == "!=":
-            return observed != expected
-        if operator == ">":
-            return observed > expected
-        if operator == ">=":
-            return observed >= expected
-        if operator == "<":
-            return observed < expected
-        if operator == "<=":
-            return observed <= expected
-        return False
+        observed = _field_value(flow, field)
+        if isinstance(observed, set):
+            values = [_number(value) for value in observed]
+            if operator == "!=":
+                return all(_compare_number(value, operator, expected) for value in values)
+            return any(_compare_number(value, operator, expected) for value in values)
+        return _compare_number(_number(observed), operator, expected)
 
     return predicate
 
@@ -114,8 +209,8 @@ def _text_predicate(
 
     def predicate(flow: dict[str, object]) -> bool:
         observed = _field_value(flow, field)
-        if field == "ip" and isinstance(observed, set):
-            matched = value in observed
+        if isinstance(observed, set):
+            matched = any(_text(item) == expected for item in observed)
         else:
             matched = _text(observed) == expected
         if operator == "==":
@@ -232,7 +327,12 @@ def _always_true(_: dict[str, object]) -> bool:
 
 
 def compile_flow_filter(expression: str) -> FlowPredicate:
-    """Compile a bounded metadata-only display-filter expression into a predicate."""
+    """Compile a bounded metadata-only display-filter expression into a predicate.
+
+    A small analyst-friendly alias set mirrors common Wireshark endpoint/transport
+    names and Zeek connection-record names. Directional aliases map to NetWatch's
+    stable originator/responder roles rather than individual packet direction.
+    """
     normalized = str(expression or "").strip()
     return _Parser(_tokenize(normalized)).parse()
 
