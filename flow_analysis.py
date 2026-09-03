@@ -4,6 +4,8 @@ import hashlib
 from datetime import datetime
 from typing import Iterable
 
+from community_flow_id import community_flow_id
+
 _SERVICE_PORTS = {
     ("TCP", 22): "ssh",
     ("TCP", 25): "smtp",
@@ -86,6 +88,13 @@ def summarize_flows(
             key,
             {
                 "flow_id": _flow_id(protocol, left, right),
+                "community_id": community_flow_id(
+                    protocol,
+                    source[0],
+                    destination[0],
+                    source[1],
+                    destination[1],
+                ),
                 "protocol": protocol,
                 "endpoint_a": _endpoint_dict(left),
                 "endpoint_b": _endpoint_dict(right),
@@ -212,6 +221,7 @@ def summarize_conversations(
         conversations.append(
             {
                 "flow_id": str(flow.get("flow_id") or ""),
+                "community_id": str(flow.get("community_id") or ""),
                 "protocol": str(flow.get("protocol") or "Unknown"),
                 "service": str(flow.get("service") or "-"),
                 "source": originator,
