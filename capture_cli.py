@@ -42,9 +42,7 @@ def render_capture_result(
     if output_format == "json":
         payload = dict(result)
         payload["payload_retained"] = False
-        return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(
-            "utf-8"
-        )
+        return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     if output_format == "csv":
         flows = result.get("flows")
         flow_rows = flows if isinstance(flows, list) else []
@@ -87,9 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=100,
         help="Maximum flow rows emitted by CSV export (1..1000)",
     )
-    parser.add_argument(
-        "--output", type=Path, help="Write output to a file instead of stdout"
-    )
+    parser.add_argument("--output", type=Path, help="Write output to a file instead of stdout")
     return parser
 
 
