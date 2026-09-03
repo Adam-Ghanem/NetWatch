@@ -24,6 +24,7 @@ class IPv6TransportLocation:
     fragmented: bool
     first_fragment: bool
     complete: bool
+    findings: tuple[str, ...] = ()
 
 
 def locate_ipv6_transport(
@@ -40,6 +41,10 @@ def locate_ipv6_transport(
     Routing, Fragment, Destination Options and Authentication header layouts.
     ESP is treated as opaque, and non-initial fragments never claim a transport
     header because it is not present in those fragments.
+
+    Conservative parser findings describe structural conditions that can matter
+    during defensive analysis. They are metadata only and never require payload
+    inspection.
     """
 
     if ipv6_offset < 0 or ipv6_offset + 40 > len(packet):
@@ -52,44 +57,54 @@ def locate_ipv6_transport(
     offset = ipv6_offset + 40
     current = int(next_header)
     names: list[str] = []
+    findings: list[str] = []
     extension_bytes = 0
     fragmented = False
     first_fragment = True
+    seen_hop_by_hop = False
+    seen_fragment = False
+
+    def result(*, complete: bool) -> IPv6TransportLocation:
+        return IPv6TransportLocation(
+            current,
+            offset,
+            tuple(names),
+            fragmented,
+            first_fragment,
+            complete,
+            tuple(findings),
+        )
 
     while current in _EXTENSION_NAMES:
         if len(names) >= max_extension_headers:
-            return IPv6TransportLocation(
-                current,
-                offset,
-                tuple(names),
-                fragmented,
-                first_fragment,
-                False,
-            )
+            findings.append("extension_header_limit_reached")
+            return result(complete=False)
         if offset + 2 > len(packet):
-            return IPv6TransportLocation(
-                current,
-                offset,
-                tuple(names),
-                fragmented,
-                first_fragment,
-                False,
-            )
+            findings.append("truncated_extension_header")
+            return result(complete=False)
 
-        names.append(_EXTENSION_NAMES[current])
+        name = _EXTENSION_NAMES[current]
+        if current == 0:
+            if seen_hop_by_hop:
+                findings.append("duplicate_hop_by_hop")
+            if names:
+                findings.append("hop_by_hop_not_first")
+            seen_hop_by_hop = True
+        elif current == 44:
+            if seen_fragment:
+                findings.append("duplicate_fragment")
+            seen_fragment = True
+
+        names.append(name)
         following = packet[offset]
 
         if current == 44:
             header_length = 8
             if offset + header_length > len(packet):
-                return IPv6TransportLocation(
-                    current,
-                    offset,
-                    tuple(names),
-                    True,
-                    False,
-                    False,
-                )
+                fragmented = True
+                first_fragment = False
+                findings.append("truncated_fragment_header")
+                return result(complete=False)
             fragment_field = int.from_bytes(
                 packet[offset + 2 : offset + 4],
                 "big",
@@ -101,60 +116,33 @@ def locate_ipv6_transport(
             offset += header_length
             extension_bytes += header_length
             if not first_fragment:
-                return IPv6TransportLocation(
-                    current,
-                    offset,
-                    tuple(names),
-                    True,
-                    False,
-                    True,
-                )
+                return result(complete=True)
         elif current == 51:
             header_length = (packet[offset + 1] + 2) * 4
             if header_length < 8 or offset + header_length > len(packet):
-                return IPv6TransportLocation(
-                    current,
-                    offset,
-                    tuple(names),
-                    fragmented,
-                    first_fragment,
-                    False,
-                )
+                findings.append("invalid_authentication_header_length")
+                return result(complete=False)
             current = following
             offset += header_length
             extension_bytes += header_length
         else:
             header_length = (packet[offset + 1] + 1) * 8
             if header_length < 8 or offset + header_length > len(packet):
-                return IPv6TransportLocation(
-                    current,
-                    offset,
-                    tuple(names),
-                    fragmented,
-                    first_fragment,
-                    False,
-                )
+                findings.append("invalid_extension_header_length")
+                return result(complete=False)
             current = following
             offset += header_length
             extension_bytes += header_length
 
         if extension_bytes > max_extension_bytes:
-            return IPv6TransportLocation(
-                current,
-                offset,
-                tuple(names),
-                fragmented,
-                first_fragment,
-                False,
-            )
+            findings.append("extension_byte_limit_reached")
+            return result(complete=False)
 
     # ESP is encrypted/opaque; No Next Header explicitly terminates the chain.
-    complete = current not in {50, 59}
-    return IPv6TransportLocation(
-        current,
-        offset,
-        tuple(names),
-        fragmented,
-        first_fragment,
-        complete,
-    )
+    if current == 50:
+        findings.append("opaque_esp")
+        return result(complete=False)
+    if current == 59:
+        findings.append("no_next_header")
+        return result(complete=False)
+    return result(complete=True)

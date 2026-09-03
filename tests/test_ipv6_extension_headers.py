@@ -46,6 +46,7 @@ def test_walks_options_and_routing_headers_to_tcp():
     assert location.fragmented is False
     assert location.first_fragment is True
     assert location.complete is True
+    assert location.findings == ()
 
 
 def test_initial_fragment_can_reach_upper_layer_header():
@@ -61,6 +62,7 @@ def test_initial_fragment_can_reach_upper_layer_header():
     assert location.fragmented is True
     assert location.first_fragment is True
     assert location.complete is True
+    assert location.findings == ()
 
 
 def test_non_initial_fragment_never_claims_transport_header():
@@ -74,6 +76,7 @@ def test_non_initial_fragment_never_claims_transport_header():
     assert location.fragmented is True
     assert location.first_fragment is False
     assert location.complete is True
+    assert location.findings == ()
 
 
 def test_truncated_extension_header_fails_closed():
@@ -83,6 +86,7 @@ def test_truncated_extension_header_fails_closed():
 
     assert location.extension_headers == ("hop_by_hop",)
     assert location.complete is False
+    assert location.findings == ("invalid_extension_header_length",)
 
 
 def test_extension_chain_limits_prevent_pathological_walks():
@@ -98,9 +102,43 @@ def test_extension_chain_limits_prevent_pathological_walks():
 
     assert len(location.extension_headers) == 2
     assert location.complete is False
+    assert location.findings == ("extension_header_limit_reached",)
 
 
-def test_esp_and_no_next_header_are_explicitly_opaque_or_terminal():
+def test_flags_hop_by_hop_when_it_is_not_first():
+    routing = bytes([0, 0]) + bytes(6)
+    hop_by_hop = bytes([6, 0]) + bytes(6)
+    packet = _ipv6_packet(43, routing + hop_by_hop + bytes(20))
+
+    location = locate_ipv6_transport(packet, ipv6_offset=0, next_header=43)
+
+    assert location.extension_headers == ("routing", "hop_by_hop")
+    assert location.complete is True
+    assert location.findings == ("hop_by_hop_not_first",)
+
+
+def test_flags_duplicate_hop_by_hop_and_fragment_headers():
+    hop_one = bytes([0, 0]) + bytes(6)
+    hop_two = bytes([44, 0]) + bytes(6)
+    fragment_one = bytes([44, 0, 0, 0]) + bytes(4)
+    fragment_two = bytes([17, 0, 0, 0]) + bytes(4)
+    udp = struct.pack("!HHHH", 5353, 53, 8, 0)
+    packet = _ipv6_packet(
+        0,
+        hop_one + hop_two + fragment_one + fragment_two + udp,
+    )
+
+    location = locate_ipv6_transport(packet, ipv6_offset=0, next_header=0)
+
+    assert location.complete is True
+    assert location.findings == (
+        "duplicate_hop_by_hop",
+        "hop_by_hop_not_first",
+        "duplicate_fragment",
+    )
+
+
+def test_reports_opaque_and_terminal_chains_without_claiming_transport():
     esp = locate_ipv6_transport(
         _ipv6_packet(50, b"opaque"),
         ipv6_offset=0,
@@ -113,7 +151,9 @@ def test_esp_and_no_next_header_are_explicitly_opaque_or_terminal():
     )
 
     assert esp.complete is False
+    assert esp.findings == ("opaque_esp",)
     assert no_next.complete is False
+    assert no_next.findings == ("no_next_header",)
 
 
 def test_invalid_bounds_and_short_base_header_are_rejected():
