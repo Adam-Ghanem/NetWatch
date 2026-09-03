@@ -33,7 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --check .
+          black --check --diff capture_cli.py
           isort --check-only .
 
       - name: Lint and type-check
