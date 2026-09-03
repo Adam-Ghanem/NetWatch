@@ -90,6 +90,40 @@ def test_numeric_fields_support_ordered_comparisons() -> None:
     assert [item["flow_id"] for item in result] == ["large"]
 
 
+def test_wireshark_style_endpoint_and_transport_aliases_are_directional() -> None:
+    tcp = _flow("tcp", "10.0.0.10", "1.1.1.1")
+    udp = _flow("udp", "10.0.0.20", "8.8.8.8", protocol="UDP", service="dns")
+    udp["responder"] = {"ip": "8.8.8.8", "port": 53}
+
+    source_match = filter_flows([tcp, udp], "ip.src == 10.0.0.10 and tcp.dstport == 443")
+    destination_match = filter_flows([tcp, udp], "ip.dst == 8.8.8.8 and udp.port == 53")
+
+    assert [item["flow_id"] for item in source_match] == ["tcp"]
+    assert [item["flow_id"] for item in destination_match] == ["udp"]
+
+
+def test_zeek_style_connection_aliases_map_to_flow_identity_and_roles() -> None:
+    flows = [
+        _flow("f1", "10.0.0.10", "1.1.1.1"),
+        _flow("f2", "10.0.0.20", "8.8.8.8", protocol="UDP", service="dns"),
+    ]
+
+    result = filter_flows(
+        flows,
+        "id.orig_h == 10.0.0.20 and id.resp_h == 8.8.8.8 and "
+        "id.orig_p == 50000 and proto == udp and uid == f2",
+    )
+
+    assert [item["flow_id"] for item in result] == ["f2"]
+
+
+def test_transport_aliases_do_not_match_the_wrong_protocol() -> None:
+    udp = _flow("udp", "10.0.0.20", "8.8.8.8", protocol="UDP", service="dns")
+    udp["responder"] = {"ip": "8.8.8.8", "port": 443}
+
+    assert filter_flows([udp], "tcp.port == 443") == []
+
+
 def test_filter_compiler_is_bounded_and_rejects_unknown_fields() -> None:
     with pytest.raises(FlowDisplayFilterError, match="Unsupported field"):
         compile_flow_filter("payload == secret")
