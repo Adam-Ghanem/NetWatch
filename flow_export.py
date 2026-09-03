@@ -114,6 +114,26 @@ def export_flows_json(
     return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
+def export_flows_ndjson(
+    flows: Iterable[dict[str, object]],
+    *,
+    limit: int = 100,
+) -> bytes:
+    """Serialize canonical flow metadata as bounded newline-delimited JSON records."""
+    rows = _bounded_metadata(flows, limit=limit)
+    lines = [
+        json.dumps(
+            {"event_type": "flow", "payload_retained": False, **row},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        for row in rows
+    ]
+    if not lines:
+        return b""
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
 def export_flows_csv(
     flows: Iterable[dict[str, object]],
     *,
