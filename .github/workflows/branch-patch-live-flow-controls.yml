@@ -1,0 +1,30 @@
+name: Apply live flow controls patch
+
+on:
+  push:
+    branches:
+      - upgrade/live-capture-flow-controls
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply patch
+        run: python tools/apply_live_flow_controls_patch.py
+      - name: Commit verified patch source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/main.py tools/apply_live_flow_controls_patch.py .github/workflows/branch-patch-live-flow-controls.yml
+          git commit -m "feat: add bounded live capture flow controls"
+          git push
