@@ -52,7 +52,11 @@ def render_capture_result(
         payload["payload_retained"] = False
         return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
     flows = result.get("flows")
-    flow_rows = [dict(item) for item in flows if isinstance(item, dict)] if isinstance(flows, list) else []
+    flow_rows = (
+        [dict(item) for item in flows if isinstance(item, dict)]
+        if isinstance(flows, list)
+        else []
+    )
     if output_format == "ndjson":
         return export_flows_ndjson(flow_rows, limit=flow_limit)
     if output_format == "csv":
