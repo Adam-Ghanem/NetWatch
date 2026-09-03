@@ -125,7 +125,7 @@ def test_community_id_supports_cross_tool_flow_pivots() -> None:
 
     result = filter_flows(
         [first, second],
-        "community_id == 1:9j2Dzwrw7T9E+IZi4b4IVT66HBI=",
+        "community_id == 1:9j2Dzwrw7T9E+IZi4b4IVT66HBI= and protocol == tcp",
     )
 
     assert [item["flow_id"] for item in result] == ["f1"]
