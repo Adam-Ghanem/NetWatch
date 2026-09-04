@@ -4,7 +4,9 @@ from flow_analysis import summarize_conversations, summarize_flows
 
 
 def _packet(flags: str, *, reverse: bool = False) -> dict[str, object]:
-    source_ip, destination_ip = ("10.0.0.20", "10.0.0.10") if reverse else ("10.0.0.10", "10.0.0.20")
+    source_ip, destination_ip = (
+        ("10.0.0.20", "10.0.0.10") if reverse else ("10.0.0.10", "10.0.0.20")
+    )
     source_port, destination_port = (443, 51000) if reverse else (51000, 443)
     return {
         "protocol": "TCP",
