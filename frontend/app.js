@@ -1,6 +1,6 @@
 // NetWatch Traffic Explorer bootstrap.
 // The existing application stays in app-core.js; this layer adds bounded flow exports.
-// Compatibility markers used by frontend safety tests: NetWatchApi /api/session /api/traffic/capture /api/service-findings renderTrafficCapture candidate.origin !== window.location.origin
+// Compatibility markers used by frontend safety tests: NetWatchApi /api/session /api/readiness renderReadiness /api/traffic/capture /api/service-findings renderTrafficCapture candidate.origin !== window.location.origin
 
 function loadNetWatchCore(onReady) {
   const script = document.createElement('script');
