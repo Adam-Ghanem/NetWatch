@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from flow_analysis import summarize_conversations, summarize_flows
 
 
@@ -32,14 +34,17 @@ def test_tcp_history_is_direction_aware_for_handshake_and_close():
 
     assert flow["tcp_history"] == [">S", "<SA", ">A", ">F", "<F"]
     assert flow["tcp_history_truncated"] is False
-    conversation = summarize_conversations([flow])["conversations"][0]
-    assert conversation["tcp_history"] == [">S", "<SA", ">A", ">F", "<F"]
+    conversation_rows = cast(
+        list[dict[str, object]], summarize_conversations([flow])["conversations"]
+    )
+    assert conversation_rows[0]["tcp_history"] == [">S", "<SA", ">A", ">F", "<F"]
 
 
 def test_tcp_history_is_bounded_without_affecting_packet_counters():
     flow = summarize_flows([_packet("ACK") for _ in range(40)])[0]
+    history = cast(list[str], flow["tcp_history"])
 
-    assert len(flow["tcp_history"]) == 32
+    assert len(history) == 32
     assert flow["tcp_history_truncated"] is True
     assert flow["packets"] == 40
 
