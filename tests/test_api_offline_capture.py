@@ -131,11 +131,12 @@ def test_offline_capture_export_reuses_filters_and_stays_metadata_only(
         'attachment; filename="netwatch-offline-flows.json"'
     )
     body = response.json()
-    assert len(body) == 1
-    assert body[0]["responder"]["port"] == 443
-    assert "community_id" in body[0]
-    assert "payload" not in body[0]
-    assert "raw" not in body[0]
+    assert body["count"] == 1
+    assert body["payload_retained"] is False
+    assert body["flows"][0]["responder"]["port"] == 443
+    assert "community_id" in body["flows"][0]
+    assert "payload" not in body["flows"][0]
+    assert "raw" not in body["flows"][0]
 
 
 def test_offline_capture_export_supports_ndjson_and_requires_authorization(
