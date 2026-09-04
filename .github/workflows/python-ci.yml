@@ -36,27 +36,10 @@ jobs:
           black --check .
           isort --check-only .
 
-      - name: Lint with Flake8
-        run: flake8 .
-
-      - name: Capture mypy diagnostics
+      - name: Lint and type-check
         run: |
-          set +e
-          mypy . > mypy-diagnostics.txt 2>&1
-          echo $? > mypy-status.txt
-          cat mypy-diagnostics.txt
-          exit 0
-
-      - name: Upload mypy diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: mypy-diagnostics
-          path: |
-            mypy-diagnostics.txt
-            mypy-status.txt
-
-      - name: Enforce mypy
-        run: test "$(cat mypy-status.txt)" = "0"
+          flake8 .
+          mypy .
 
       - name: Compile Python sources
         run: python -m compileall -q .
