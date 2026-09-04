@@ -1336,9 +1336,7 @@ async def export_offline_capture_flows(
         content=content,
         media_type=media_type,
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="netwatch-offline-flows.{export_format}"'
-            )
+            "Content-Disposition": f'attachment; filename="netwatch-offline-flows.{export_format}"'
         },
     )
 
