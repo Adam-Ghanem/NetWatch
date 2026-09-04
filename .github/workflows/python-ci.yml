@@ -1,46 +1,60 @@
-name: Temporary Formatter
+name: Python CI
 
 on:
   push:
-    branches: ["feat/traffic-flow-download-api"]
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
+  id-token: write
 
 jobs:
-  format:
+  test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          ref: feat/traffic-flow-download-api
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
 
-      - name: Install formatters
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install black==26.3.1 "isort>=5.13,<7"
+          python -m pip install -r requirements-dev.txt
+          python -m pip check
 
-      - name: Apply project formatting
+      - name: Check formatting and imports
         run: |
-          black .
-          isort .
+          black --check .
+          isort --check-only .
 
-      - name: Commit formatter diff
+      - name: Lint and type-check
         run: |
-          if git diff --quiet; then
-            echo "No formatter changes needed."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "style: apply project formatters"
-          git push origin HEAD:feat/traffic-flow-download-api
+          flake8 .
+          mypy .
+
+      - name: Compile Python sources
+        run: python -m compileall -q .
+
+      - name: Run tests with coverage
+        env:
+          NETWATCH_API_KEY: ci-test-key-with-at-least-32-characters
+          NETWATCH_DATA_DIR: /tmp/netwatch-python-ci-data
+        run: pytest -q --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: ./coverage.xml
+          flags: unittests
+          name: netwatch-python
+          fail_ci_if_error: false
