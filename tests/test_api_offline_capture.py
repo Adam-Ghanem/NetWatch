@@ -81,7 +81,7 @@ def test_offline_capture_analysis_is_authenticated_bounded_and_metadata_only(mon
     assert body["flow_count"] == 1
     assert body["flows"][0]["responder"]["port"] == 443
     assert body["payload_retained"] is False
-    assert "payload" not in str(body).lower()
+    assert "payload" not in body["packets"][0]
     assert "raw" not in body["packets"][0]
 
 
