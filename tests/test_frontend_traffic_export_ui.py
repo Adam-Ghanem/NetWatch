@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_traffic_explorer_exposes_bounded_flow_export_controls() -> None:
+def test_traffic_explorer_has_flow_export_controls() -> None:
     html = Path("frontend/index.html").read_text(encoding="utf-8")
     javascript = Path("frontend/app.js").read_text(encoding="utf-8")
 
