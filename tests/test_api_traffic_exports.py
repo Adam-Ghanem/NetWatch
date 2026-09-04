@@ -67,7 +67,7 @@ def _request_body() -> dict[str, object]:
     }
 
 
-def test_live_flow_json_download_is_authenticated_bounded_and_metadata_only(monkeypatch, tmp_path):
+def test_json_download_is_authenticated_and_metadata_only(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "capture_traffic", lambda **_: _capture_result())
 
     with _client(monkeypatch, tmp_path) as client:
@@ -77,10 +77,11 @@ def test_live_flow_json_download_is_authenticated_bounded_and_metadata_only(monk
             json=_request_body(),
         )
 
+    disposition = 'attachment; filename="netwatch-flows.json"'
+    payload = response.json()
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
-    assert response.headers["content-disposition"] == 'attachment; filename="netwatch-flows.json"'
-    payload = response.json()
+    assert response.headers["content-disposition"] == disposition
     assert payload["count"] == 1
     assert payload["payload_retained"] is False
     assert payload["flows"][0]["community_id"] == "1:9j2Dzwrw7T9E+IZi4b4IVT66HBI="
@@ -88,7 +89,7 @@ def test_live_flow_json_download_is_authenticated_bounded_and_metadata_only(monk
     assert "raw" not in payload["flows"][0]
 
 
-def test_live_flow_csv_and_ndjson_downloads_have_attachment_headers(monkeypatch, tmp_path):
+def test_csv_and_ndjson_downloads_have_attachment_headers(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "capture_traffic", lambda **_: _capture_result())
 
     with _client(monkeypatch, tmp_path) as client:
@@ -103,15 +104,17 @@ def test_live_flow_csv_and_ndjson_downloads_have_attachment_headers(monkeypatch,
             json=_request_body(),
         )
 
+    csv_disposition = 'attachment; filename="netwatch-flows.csv"'
+    ndjson_disposition = 'attachment; filename="netwatch-flows.ndjson"'
     assert csv_response.status_code == 200
     assert csv_response.headers["content-type"].startswith("text/csv")
-    assert csv_response.headers["content-disposition"] == 'attachment; filename="netwatch-flows.csv"'
+    assert csv_response.headers["content-disposition"] == csv_disposition
     assert "community_id" in csv_response.text.splitlines()[0]
     assert "must-not-export" not in csv_response.text
 
     assert ndjson_response.status_code == 200
     assert ndjson_response.headers["content-type"].startswith("application/x-ndjson")
-    assert ndjson_response.headers["content-disposition"] == 'attachment; filename="netwatch-flows.ndjson"'
+    assert ndjson_response.headers["content-disposition"] == ndjson_disposition
     record = json.loads(ndjson_response.text.strip())
     assert record["event_type"] == "flow"
     assert record["payload_retained"] is False
@@ -120,7 +123,7 @@ def test_live_flow_csv_and_ndjson_downloads_have_attachment_headers(monkeypatch,
     assert "raw" not in record
 
 
-def test_live_flow_download_rejects_missing_authorization_and_invalid_filter(monkeypatch, tmp_path):
+def test_download_rejects_missing_authorization_and_invalid_filter(monkeypatch, tmp_path):
     monkeypatch.setattr(api, "capture_traffic", lambda **_: _capture_result())
 
     with _client(monkeypatch, tmp_path) as client:
