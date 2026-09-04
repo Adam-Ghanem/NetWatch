@@ -52,3 +52,21 @@ def test_traffic_explorer_has_bounded_offline_flow_download_controls() -> None:
     assert "Export offline flows" in javascript
     assert "Offline ${exportFormat.toUpperCase()} flow export downloaded." in javascript
     assert "innerHTML" not in javascript
+
+
+def test_traffic_explorer_surfaces_flow_conversation_and_endpoint_pivots() -> None:
+    html = Path("frontend/index.html").read_text(encoding="utf-8")
+    core = Path("frontend/app-core.js").read_text(encoding="utf-8")
+
+    assert 'id="traffic-flow-conversations"' in html
+    assert 'id="traffic-flow-endpoints"' in html
+    assert "function renderTrafficFlowPivots" in core
+    assert "function applyTrafficFlowPivot" in core
+    assert "payload.conversation_count" in core
+    assert "payload.endpoint_count" in core
+    assert "traffic-flow-conversations" in core
+    assert "traffic-flow-endpoints" in core
+    assert "traffic-ip" in core
+    assert "traffic-port" in core
+    assert "traffic-protocol" in core
+    assert "Limit next capture/analysis to this flow pivot" in core
