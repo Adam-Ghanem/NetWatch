@@ -13,6 +13,7 @@ def _flow(
 ) -> dict[str, object]:
     return {
         "flow_id": flow_id,
+        "community_id": "1:7YVf8u8bz4qS6fUiR7mUp4lO3/8=",
         "originator": {"ip": source, "port": 51_234},
         "responder": {"ip": destination, "port": 443},
         "protocol": "TCP",
@@ -25,6 +26,25 @@ def _flow(
         "responder_packets": 5,
         "responder_bytes": 1_000,
         "duration_ms": 250,
+        "protocol_event_count": 3,
+        "protocol_events": [
+            {
+                "event_type": "tls",
+                "metadata": {
+                    "server_name": "private.example",
+                    "alpn": "h2",
+                },
+            },
+            {
+                "event_type": "http",
+                "metadata": {
+                    "host": "private.example",
+                    "method": "GET",
+                    "path": "/secret",
+                },
+            },
+            {"event_type": "tls", "metadata": {"server_name": "duplicate.example"}},
+        ],
         "payload": "must-not-export",
         "metadata": {"authorization": "must-not-export"},
     }
@@ -38,6 +58,7 @@ def test_build_flow_observability_records_maps_safe_semantic_attributes():
             "schema": "netwatch.flow.v1",
             "attributes": {
                 "netwatch.flow.id": "flow-1",
+                "network.community_id": "1:7YVf8u8bz4qS6fUiR7mUp4lO3/8=",
                 "source.address": "10.0.0.10",
                 "source.port": 51_234,
                 "destination.address": "10.0.0.20",
@@ -53,11 +74,39 @@ def test_build_flow_observability_records_maps_safe_semantic_attributes():
                 "netwatch.flow.responder.packets": 5,
                 "netwatch.flow.responder.bytes": 1_000,
                 "netwatch.flow.duration_ms": 250,
+                "netwatch.flow.protocol_event_count": 3,
+                "netwatch.flow.protocol_event_types": ["tls", "http"],
             },
         }
     ]
-    assert "payload" not in repr(records).lower()
-    assert "authorization" not in repr(records).lower()
+    serialized = repr(records).lower()
+    for forbidden in (
+        "payload",
+        "authorization",
+        "private.example",
+        "duplicate.example",
+        "/secret",
+        "server_name",
+    ):
+        assert forbidden not in serialized
+
+
+def test_flow_observability_protocol_signals_are_allowlisted_and_bounded():
+    flow = _flow()
+    flow["protocol_event_count"] = 50_000
+    flow["protocol_events"] = [
+        {"event_type": "dns", "metadata": {"query": "secret.example"}},
+        {"event_type": "unknown", "metadata": {"value": "must-not-export"}},
+        {"event_type": "http", "metadata": {"host": "secret.example"}},
+        {"event_type": "tls", "metadata": {"server_name": "secret.example"}},
+    ]
+
+    attributes = build_flow_observability_records([flow])[0]["attributes"]
+
+    assert attributes["netwatch.flow.protocol_event_count"] == 1_000
+    assert attributes["netwatch.flow.protocol_event_types"] == ["dns", "http", "tls"]
+    assert "secret.example" not in repr(attributes)
+    assert "must-not-export" not in repr(attributes)
 
 
 def test_flow_observability_is_ipv6_aware_and_bounded():
