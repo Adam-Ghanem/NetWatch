@@ -89,6 +89,13 @@ def _append_tcp_history(flow: dict[str, object], event: str) -> None:
     history.append(event)
 
 
+def _tcp_history_values(flow: dict[str, object]) -> list[str]:
+    history = flow.get("tcp_history")
+    if not isinstance(history, list):
+        return []
+    return [str(event) for event in history]
+
+
 def summarize_flows(
     records: Iterable[dict[str, object]],
     limit: int = 100,
@@ -272,7 +279,7 @@ def summarize_conversations(
             "last_seen": flow.get("last_seen"),
             "duration_ms": _int(flow.get("duration_ms")),
             "tcp_state": str(flow.get("tcp_state") or flow.get("state") or "-"),
-            "tcp_history": list(flow.get("tcp_history") or []),
+            "tcp_history": _tcp_history_values(flow),
             "tcp_history_truncated": bool(flow.get("tcp_history_truncated", False)),
         }
         community_id = str(flow.get("community_id") or "")
