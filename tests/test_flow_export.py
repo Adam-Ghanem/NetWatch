@@ -4,10 +4,13 @@ import pytest
 
 from flow_export import export_flows_csv, export_flows_json, export_flows_ndjson
 
+COMMUNITY_ID = "1:9j2Dzwrw7T9E+IZi4b4IVT66HBI="
+
 
 def _flow(flow_id: str = "flow-1", *, service: str = "https") -> dict[str, object]:
     return {
         "flow_id": flow_id,
+        "community_id": COMMUNITY_ID,
         "protocol": "TCP",
         "service": service,
         "tcp_state": "established",
@@ -34,6 +37,7 @@ def test_json_export_is_bounded_and_allowlists_metadata_fields():
     assert payload["payload_retained"] is False
     exported = payload["flows"][0]
     assert exported["flow_id"] == "flow-1"
+    assert exported["community_id"] == COMMUNITY_ID
     assert exported["originator"] == {"ip": "192.168.1.10", "port": 51_515}
     assert exported["responder"] == {"ip": "192.168.1.20", "port": 443}
     assert exported["originator_bytes"] == 400
@@ -51,6 +55,7 @@ def test_ndjson_export_is_bounded_metadata_only_and_line_delimited():
     assert event["event_type"] == "flow"
     assert event["payload_retained"] is False
     assert event["flow_id"] == "flow-1"
+    assert event["community_id"] == COMMUNITY_ID
     assert event["originator"] == {"ip": "192.168.1.10", "port": 51_515}
     assert "payload" not in event
     assert "raw" not in event
@@ -65,10 +70,12 @@ def test_csv_export_flattens_endpoints_and_is_formula_safe():
     content = export_flows_csv([_flow(service="=UNTRUSTED()")]).decode("utf-8")
 
     header = content.splitlines()[0]
+    assert "community_id" in header
     assert "originator_ip" in header
     assert "responder_port" in header
     assert "payload" not in header
     assert "raw" not in header
+    assert COMMUNITY_ID in content
     assert "192.168.1.10" in content
     assert "'=UNTRUSTED()" in content
 

@@ -11,6 +11,7 @@ FLOW_EXPORT_MAX_ROWS = 1000
 
 _SCALAR_FIELDS = (
     "flow_id",
+    "community_id",
     "protocol",
     "service",
     "tcp_state",
@@ -31,6 +32,7 @@ _SCALAR_FIELDS = (
 _ENDPOINT_FIELDS = ("endpoint_a", "endpoint_b", "originator", "responder")
 _CSV_COLUMNS = (
     "flow_id",
+    "community_id",
     "protocol",
     "service",
     "tcp_state",
