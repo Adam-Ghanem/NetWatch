@@ -142,6 +142,6 @@ def test_download_rejects_missing_authorization_and_invalid_filter(monkeypatch, 
             },
         )
 
-    assert unauthorized.status_code == 400
+    assert unauthorized.status_code == 403
     assert invalid_filter.status_code == 400
     assert "Unsupported field" in invalid_filter.json()["detail"]
