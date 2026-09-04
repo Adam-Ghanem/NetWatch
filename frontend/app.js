@@ -131,6 +131,23 @@ async function analyzeOfflineCapture() {
   }
 }
 
+function buildOfflineLimitControl(id, labelText, max, value) {
+  const wrapper = document.createElement('div');
+  const label = document.createElement('label');
+  label.setAttribute('for', id);
+  label.textContent = labelText;
+
+  const input = document.createElement('input');
+  input.id = id;
+  input.type = 'number';
+  input.min = '1';
+  input.max = String(max);
+  input.value = String(value);
+
+  wrapper.append(label, input);
+  return wrapper;
+}
+
 function installOfflineCaptureControls(form) {
   if (document.querySelector('#traffic-offline-panel')) return;
 
@@ -154,10 +171,10 @@ function installOfflineCaptureControls(form) {
 
   const limitGrid = document.createElement('div');
   limitGrid.className = 'traffic-form-grid';
-  limitGrid.innerHTML = `
-    <div><label for="traffic-offline-packet-limit">Packet limit</label><input id="traffic-offline-packet-limit" type="number" min="1" max="10000" value="1000" /></div>
-    <div><label for="traffic-offline-flow-limit">Flow limit</label><input id="traffic-offline-flow-limit" type="number" min="1" max="1000" value="100" /></div>
-  `;
+  limitGrid.append(
+    buildOfflineLimitControl('traffic-offline-packet-limit', 'Packet limit', 10000, 1000),
+    buildOfflineLimitControl('traffic-offline-flow-limit', 'Flow limit', 1000, 100),
+  );
 
   const authorizationLabel = document.createElement('label');
   authorizationLabel.className = 'check-row';
