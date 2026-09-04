@@ -24,6 +24,7 @@ def test_traffic_explorer_has_bounded_offline_capture_controls() -> None:
     assert "function offlineAnalysisUrl" in javascript
     assert "function analyzeOfflineCapture" in javascript
     assert "function installOfflineCaptureControls" in javascript
+    assert "function buildOfflineLimitControl" in javascript
     assert "traffic-offline-file" in javascript
     assert "traffic-offline-authorized" in javascript
     assert "traffic-offline-packet-limit" in javascript
@@ -35,3 +36,4 @@ def test_traffic_explorer_has_bounded_offline_capture_controls() -> None:
     assert "renderTrafficCapture(payload)" in javascript
     assert "Live sensor packet privileges are not required." in javascript
     assert "Raw payload bytes were not retained." in javascript
+    assert "innerHTML" not in javascript
