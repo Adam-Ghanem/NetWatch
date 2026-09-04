@@ -282,9 +282,7 @@ def summarize_conversations(
         }
         if "tcp_history" in flow:
             conversation["tcp_history"] = _tcp_history_values(flow)
-            conversation["tcp_history_truncated"] = bool(
-                flow.get("tcp_history_truncated", False)
-            )
+            conversation["tcp_history_truncated"] = bool(flow.get("tcp_history_truncated", False))
         community_id = str(flow.get("community_id") or "")
         if community_id:
             conversation["community_id"] = community_id
