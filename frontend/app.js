@@ -1,5 +1,6 @@
 // NetWatch Traffic Explorer bootstrap.
-// The existing application stays in app-core.js; this layer adds bounded flow exports.
+// The existing application stays in app-core.js; this layer adds bounded flow exports
+// and offline PCAP/PCAPNG analysis without retaining raw payload bytes.
 // Compatibility markers used by frontend safety tests: NetWatchApi /api/session /api/readiness renderReadiness /api/traffic/capture /api/service-findings renderTrafficCapture candidate.origin !== window.location.origin
 
 function loadNetWatchCore(onReady) {
@@ -75,40 +76,181 @@ async function downloadTrafficFlows() {
   }
 }
 
+function offlineAnalysisUrl() {
+  const params = new URLSearchParams({
+    authorized: 'true',
+    packet_limit: document.querySelector('#traffic-offline-packet-limit').value,
+    flow_limit: document.querySelector('#traffic-offline-flow-limit').value,
+    protocol: document.querySelector('#traffic-protocol').value,
+    ip_address: document.querySelector('#traffic-ip').value.trim(),
+  });
+  return `/api/traffic/offline/analyze?${params.toString()}`;
+}
+
+async function analyzeOfflineCapture() {
+  const fileInput = document.querySelector('#traffic-offline-file');
+  const authorization = document.querySelector('#traffic-offline-authorized');
+  const button = document.querySelector('#traffic-offline-analyze');
+  const status = document.querySelector('#traffic-offline-status');
+  const file = fileInput.files?.[0];
+
+  if (!file) {
+    status.textContent = 'Choose a PCAP or PCAPNG file first.';
+    status.className = 'form-status error';
+    return;
+  }
+  if (!authorization.checked) {
+    status.textContent = 'Confirm that you are authorized to analyze this capture.';
+    status.className = 'form-status error';
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Analyzing…';
+  status.textContent = `Analyzing ${file.name} as bounded metadata only…`;
+  status.className = 'form-status';
+
+  try {
+    const response = await window.NetWatchApi.apiFetch(offlineAnalysisUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    const payload = await response.json();
+    renderTrafficCapture(payload);
+    authorization.checked = false;
+    status.textContent = `Offline analysis complete: ${Number(payload.captured_packets || 0)} packet header(s), ${Number(payload.flow_count || 0)} flow(s). Raw payload bytes were not retained.`;
+    status.className = 'form-status success';
+  } catch (error) {
+    status.textContent = error.message || 'Offline capture analysis failed.';
+    status.className = 'form-status error';
+  } finally {
+    button.textContent = originalText;
+    button.disabled = false;
+  }
+}
+
+function buildOfflineLimitControl(id, labelText, max, value) {
+  const wrapper = document.createElement('div');
+  const label = document.createElement('label');
+  label.setAttribute('for', id);
+  label.textContent = labelText;
+
+  const input = document.createElement('input');
+  input.id = id;
+  input.type = 'number';
+  input.min = '1';
+  input.max = String(max);
+  input.value = String(value);
+
+  wrapper.append(label, input);
+  return wrapper;
+}
+
+function installOfflineCaptureControls(form) {
+  if (document.querySelector('#traffic-offline-panel')) return;
+
+  const panel = document.createElement('section');
+  panel.id = 'traffic-offline-panel';
+  panel.className = 'subpanel';
+
+  const heading = document.createElement('h4');
+  heading.textContent = 'Analyze saved capture';
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.textContent = 'Open an authorized PCAP/PCAPNG file locally for bounded metadata-only analysis. Live sensor packet privileges are not required.';
+
+  const fileLabel = document.createElement('label');
+  fileLabel.setAttribute('for', 'traffic-offline-file');
+  fileLabel.textContent = 'PCAP / PCAPNG file';
+  const fileInput = document.createElement('input');
+  fileInput.id = 'traffic-offline-file';
+  fileInput.type = 'file';
+  fileInput.accept = '.pcap,.pcapng,application/vnd.tcpdump.pcap,application/octet-stream';
+
+  const limitGrid = document.createElement('div');
+  limitGrid.className = 'traffic-form-grid';
+  limitGrid.append(
+    buildOfflineLimitControl('traffic-offline-packet-limit', 'Packet limit', 10000, 1000),
+    buildOfflineLimitControl('traffic-offline-flow-limit', 'Flow limit', 1000, 100),
+  );
+
+  const authorizationLabel = document.createElement('label');
+  authorizationLabel.className = 'check-row';
+  const authorization = document.createElement('input');
+  authorization.id = 'traffic-offline-authorized';
+  authorization.type = 'checkbox';
+  const authorizationText = document.createElement('span');
+  authorizationText.textContent = 'I confirm I am authorized to analyze this capture file.';
+  authorizationLabel.append(authorization, authorizationText);
+
+  const actions = document.createElement('div');
+  actions.className = 'button-row';
+  const analyzeButton = document.createElement('button');
+  analyzeButton.id = 'traffic-offline-analyze';
+  analyzeButton.type = 'button';
+  analyzeButton.className = 'button ghost';
+  analyzeButton.textContent = 'Analyze capture file';
+  analyzeButton.addEventListener('click', analyzeOfflineCapture);
+  actions.appendChild(analyzeButton);
+
+  const status = document.createElement('div');
+  status.id = 'traffic-offline-status';
+  status.className = 'form-status';
+  status.setAttribute('role', 'status');
+
+  panel.append(
+    heading,
+    help,
+    fileLabel,
+    fileInput,
+    limitGrid,
+    authorizationLabel,
+    actions,
+    status,
+  );
+  form.after(panel);
+}
+
 function installTrafficExportControls() {
   const form = document.querySelector('#traffic-form');
   const authorization = document.querySelector('#traffic-authorized');
   const actions = form?.querySelector('.button-row');
-  if (!form || !authorization || !actions || document.querySelector('#traffic-export')) return;
+  if (!form || !authorization || !actions) return;
 
-  const formatLabel = document.createElement('label');
-  formatLabel.setAttribute('for', 'traffic-export-format');
-  formatLabel.textContent = 'Flow export format';
+  if (!document.querySelector('#traffic-export')) {
+    const formatLabel = document.createElement('label');
+    formatLabel.setAttribute('for', 'traffic-export-format');
+    formatLabel.textContent = 'Flow export format';
 
-  const formatSelect = document.createElement('select');
-  formatSelect.id = 'traffic-export-format';
-  for (const [value, label] of [['json', 'JSON'], ['csv', 'CSV'], ['ndjson', 'NDJSON']]) {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    formatSelect.appendChild(option);
+    const formatSelect = document.createElement('select');
+    formatSelect.id = 'traffic-export-format';
+    for (const [value, label] of [['json', 'JSON'], ['csv', 'CSV'], ['ndjson', 'NDJSON']]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      formatSelect.appendChild(option);
+    }
+
+    const exportButton = document.createElement('button');
+    exportButton.id = 'traffic-export';
+    exportButton.type = 'button';
+    exportButton.className = 'button ghost';
+    exportButton.dataset.captureControl = '';
+    exportButton.textContent = 'Capture & export flows';
+    exportButton.disabled = authorization.disabled;
+    exportButton.addEventListener('click', downloadTrafficFlows);
+
+    actions.before(formatLabel, formatSelect);
+    actions.appendChild(exportButton);
+
+    new MutationObserver(() => {
+      exportButton.disabled = authorization.disabled;
+    }).observe(authorization, { attributes: true, attributeFilter: ['disabled'] });
   }
 
-  const exportButton = document.createElement('button');
-  exportButton.id = 'traffic-export';
-  exportButton.type = 'button';
-  exportButton.className = 'button ghost';
-  exportButton.dataset.captureControl = '';
-  exportButton.textContent = 'Capture & export flows';
-  exportButton.disabled = authorization.disabled;
-  exportButton.addEventListener('click', downloadTrafficFlows);
-
-  actions.before(formatLabel, formatSelect);
-  actions.appendChild(exportButton);
-
-  new MutationObserver(() => {
-    exportButton.disabled = authorization.disabled;
-  }).observe(authorization, { attributes: true, attributeFilter: ['disabled'] });
+  installOfflineCaptureControls(form);
 }
 
 loadNetWatchCore(installTrafficExportControls);

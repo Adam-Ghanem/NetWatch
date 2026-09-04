@@ -16,3 +16,24 @@ def test_traffic_explorer_has_flow_export_controls() -> None:
     assert "body: JSON.stringify(trafficCaptureRequest())" in javascript
     assert "Capture & export flows" in javascript
     assert "renderTrafficCapture" in core
+
+
+def test_traffic_explorer_has_bounded_offline_capture_controls() -> None:
+    javascript = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "function offlineAnalysisUrl" in javascript
+    assert "function analyzeOfflineCapture" in javascript
+    assert "function installOfflineCaptureControls" in javascript
+    assert "function buildOfflineLimitControl" in javascript
+    assert "traffic-offline-file" in javascript
+    assert "traffic-offline-authorized" in javascript
+    assert "traffic-offline-packet-limit" in javascript
+    assert "traffic-offline-flow-limit" in javascript
+    assert "'/api/traffic/offline/analyze?'" not in javascript
+    assert "`/api/traffic/offline/analyze?${params.toString()}`" in javascript
+    assert "headers: { 'Content-Type': 'application/octet-stream' }" in javascript
+    assert "body: file" in javascript
+    assert "renderTrafficCapture(payload)" in javascript
+    assert "Live sensor packet privileges are not required." in javascript
+    assert "Raw payload bytes were not retained." in javascript
+    assert "innerHTML" not in javascript
