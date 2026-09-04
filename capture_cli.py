@@ -40,6 +40,30 @@ def analyze_capture_bytes(
     return apply_traffic_flow_controls(result, controls or TrafficFlowControls())
 
 
+def build_capture_preview(result: dict[str, Any], *, capture_bytes: int) -> dict[str, Any]:
+    """Build a compact, metadata-only capture preview without packet or flow rows."""
+    preview: dict[str, Any] = {
+        "source": result.get("source", "capture"),
+        "capture_bytes": max(0, int(capture_bytes)),
+        "captured_packets": int(result.get("captured_packets", 0) or 0),
+        "flow_count": int(result.get("flow_count", 0) or 0),
+        "duration_seconds": int(result.get("duration_seconds", 0) or 0),
+        "protocols": result.get("protocols", []),
+        "truncated_by_limit": bool(result.get("truncated_by_limit", False)),
+        "payload_retained": False,
+    }
+    for key in ("pcap_version", "linktype", "processed_records"):
+        if key in result:
+            preview[key] = result[key]
+    return preview
+
+
+def render_capture_preview(result: dict[str, Any], *, capture_bytes: int) -> bytes:
+    """Render a deterministic JSON preview suitable for pre-analysis inspection."""
+    preview = build_capture_preview(result, capture_bytes=capture_bytes)
+    return (json.dumps(preview, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+
+
 def render_capture_result(
     result: dict[str, Any],
     *,
@@ -83,6 +107,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format (default: json)",
     )
     parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Emit compact JSON file/capture metadata without packet or flow rows",
+    )
+    parser.add_argument(
         "--packet-limit",
         type=int,
         default=1_000,
@@ -122,6 +151,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.preview and args.output_format != "json":
+            raise ValueError("Preview mode only supports JSON output.")
         data = _read_capture(args.capture)
         controls = TrafficFlowControls(
             display_filter=args.display_filter,
@@ -138,11 +169,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             packet_limit=args.packet_limit,
             controls=controls,
         )
-        rendered = render_capture_result(
-            result,
-            output_format=args.output_format,
-            flow_limit=args.flow_limit,
-        )
+        if args.preview:
+            rendered = render_capture_preview(result, capture_bytes=len(data))
+        else:
+            rendered = render_capture_result(
+                result,
+                output_format=args.output_format,
+                flow_limit=args.flow_limit,
+            )
         if args.output is not None:
             args.output.write_bytes(rendered)
         else:
