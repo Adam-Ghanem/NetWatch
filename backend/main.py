@@ -31,6 +31,7 @@ from ai_advisor import (
     safety_identifier,
     snapshot_hash,
 )
+from capture_cli import analyze_capture_bytes
 from config import (
     AI_CACHE_TTL_SECONDS,
     AI_DAILY_REQUEST_LIMIT,
@@ -129,6 +130,7 @@ from operations_store import (
     update_operation_alert,
     update_scan_policy,
 )
+from pcap_import import MAX_PCAP_BYTES, MAX_PCAP_PACKETS
 from port_scanner import scan_ports
 from readiness_store import readiness_center
 from report_builder import build_html_report, build_markdown_report, build_pdf_report
@@ -745,6 +747,33 @@ def _capture_slot() -> Iterator[None]:
         _capture_slots.release()
 
 
+async def _read_bounded_capture_upload(request: Request) -> bytes:
+    """Read a raw PCAP/PCAPNG request body without exceeding the parser byte budget."""
+    content_length = request.headers.get("content-length", "").strip()
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except ValueError:
+            declared_length = 0
+        if declared_length > MAX_PCAP_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.",
+            )
+
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > MAX_PCAP_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.",
+            )
+        data.extend(chunk)
+    if not data:
+        raise HTTPException(status_code=400, detail="Capture upload is empty.")
+    return bytes(data)
+
+
 def _intelligence_snapshot() -> dict[str, Any]:
     inventory_rows = asset_inventory()
     return build_deidentified_snapshot(
@@ -1186,6 +1215,58 @@ def audit_ports(
         "exposure": exposure.__dict__,
         "recommendations": top_recommendations(ports),
     }
+
+
+@app.post("/api/traffic/offline/analyze")
+async def analyze_offline_capture(
+    request: Request,
+    authorized: bool = Query(default=False),
+    packet_limit: int = Query(default=1_000, ge=1, le=MAX_PCAP_PACKETS),
+    display_filter: str = Query(default="", max_length=1_024),
+    ip_address: str = Query(default="", max_length=45),
+    protocol: str = Query(default="", max_length=16),
+    service: str = Query(default="", max_length=64),
+    state: str = Query(default="", max_length=64),
+    min_bytes: int = Query(default=0, ge=0),
+    sort_by: Literal["bytes", "packets", "duration", "recent"] = Query(default="bytes"),
+    flow_limit: int = Query(default=100, ge=1, le=1_000),
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> dict[str, Any]:
+    _require_authorization(authorized)
+    data = await _read_bounded_capture_upload(request)
+    controls = TrafficFlowControls(
+        display_filter=display_filter,
+        ip_address=ip_address,
+        protocol=protocol,
+        service=service,
+        state=state,
+        min_bytes=min_bytes,
+        sort_by=sort_by,
+        limit=flow_limit,
+    )
+    try:
+        with _capture_slot():
+            result = analyze_capture_bytes(
+                data,
+                packet_limit=packet_limit,
+                controls=controls,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    source = str(result.get("source", "capture"))
+    record_audit_event(
+        context.role,
+        "offline_capture_analysis",
+        source,
+        "completed",
+        (
+            f"Analyzed {result.get('captured_packets', 0)} packet header(s); "
+            f"matched_flows={result.get('flow_count', 0)}; payload_retained=false."
+        ),
+        **context.audit_fields,
+    )
+    return result
 
 
 @app.get("/api/traffic/interfaces")
