@@ -87,6 +87,17 @@ function offlineAnalysisUrl() {
   return `/api/traffic/offline/analyze?${params.toString()}`;
 }
 
+function offlineExportUrl(exportFormat) {
+  const params = new URLSearchParams({
+    authorized: 'true',
+    packet_limit: document.querySelector('#traffic-offline-packet-limit').value,
+    flow_limit: document.querySelector('#traffic-offline-flow-limit').value,
+    protocol: document.querySelector('#traffic-protocol').value,
+    ip_address: document.querySelector('#traffic-ip').value.trim(),
+  });
+  return `/api/traffic/offline/export.${exportFormat}?${params.toString()}`;
+}
+
 async function analyzeOfflineCapture() {
   const fileInput = document.querySelector('#traffic-offline-file');
   const authorization = document.querySelector('#traffic-offline-authorized');
@@ -131,6 +142,58 @@ async function analyzeOfflineCapture() {
   }
 }
 
+async function downloadOfflineFlows() {
+  const fileInput = document.querySelector('#traffic-offline-file');
+  const authorization = document.querySelector('#traffic-offline-authorized');
+  const button = document.querySelector('#traffic-offline-export');
+  const status = document.querySelector('#traffic-offline-status');
+  const exportFormat = document.querySelector('#traffic-offline-export-format').value;
+  const file = fileInput.files?.[0];
+
+  if (!file) {
+    status.textContent = 'Choose a PCAP or PCAPNG file first.';
+    status.className = 'form-status error';
+    return;
+  }
+  if (!authorization.checked) {
+    status.textContent = 'Confirm that you are authorized to analyze and export this capture.';
+    status.className = 'form-status error';
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Exporting…';
+  status.textContent = `Analyzing ${file.name} for bounded ${exportFormat.toUpperCase()} flow export…`;
+  status.className = 'form-status';
+
+  try {
+    const response = await window.NetWatchApi.apiFetch(offlineExportUrl(exportFormat), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = responseFilename(response, exportFormat);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    authorization.checked = false;
+    status.textContent = `Offline ${exportFormat.toUpperCase()} flow export downloaded. Payload bytes were not retained.`;
+    status.className = 'form-status success';
+  } catch (error) {
+    status.textContent = error.message || 'Offline flow export failed.';
+    status.className = 'form-status error';
+  } finally {
+    button.textContent = originalText;
+    button.disabled = false;
+  }
+}
+
 function buildOfflineLimitControl(id, labelText, max, value) {
   const wrapper = document.createElement('div');
   const label = document.createElement('label');
@@ -145,6 +208,25 @@ function buildOfflineLimitControl(id, labelText, max, value) {
   input.value = String(value);
 
   wrapper.append(label, input);
+  return wrapper;
+}
+
+function buildExportFormatControl(id) {
+  const wrapper = document.createElement('div');
+  const label = document.createElement('label');
+  label.setAttribute('for', id);
+  label.textContent = 'Offline flow export format';
+
+  const select = document.createElement('select');
+  select.id = id;
+  for (const [value, labelText] of [['json', 'JSON'], ['csv', 'CSV'], ['ndjson', 'NDJSON']]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = labelText;
+    select.appendChild(option);
+  }
+
+  wrapper.append(label, select);
   return wrapper;
 }
 
@@ -174,6 +256,7 @@ function installOfflineCaptureControls(form) {
   limitGrid.append(
     buildOfflineLimitControl('traffic-offline-packet-limit', 'Packet limit', 10000, 1000),
     buildOfflineLimitControl('traffic-offline-flow-limit', 'Flow limit', 1000, 100),
+    buildExportFormatControl('traffic-offline-export-format'),
   );
 
   const authorizationLabel = document.createElement('label');
@@ -193,7 +276,14 @@ function installOfflineCaptureControls(form) {
   analyzeButton.className = 'button ghost';
   analyzeButton.textContent = 'Analyze capture file';
   analyzeButton.addEventListener('click', analyzeOfflineCapture);
-  actions.appendChild(analyzeButton);
+
+  const exportButton = document.createElement('button');
+  exportButton.id = 'traffic-offline-export';
+  exportButton.type = 'button';
+  exportButton.className = 'button ghost';
+  exportButton.textContent = 'Export offline flows';
+  exportButton.addEventListener('click', downloadOfflineFlows);
+  actions.append(analyzeButton, exportButton);
 
   const status = document.createElement('div');
   status.id = 'traffic-offline-status';
