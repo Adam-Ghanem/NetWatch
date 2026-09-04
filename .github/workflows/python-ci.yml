@@ -31,10 +31,11 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
-      - name: Check formatting and imports
-        run: |
-          black --check .
-          isort --check-only .
+      - name: Check Black formatting
+        run: black --check .
+
+      - name: Check imports with isort
+        run: isort --check-only .
 
       - name: Lint and type-check
         run: |
