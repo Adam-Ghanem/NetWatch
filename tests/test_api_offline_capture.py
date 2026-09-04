@@ -68,7 +68,7 @@ def test_offline_capture_analysis_is_authenticated_bounded_and_metadata_only(mon
             params={
                 "authorized": "true",
                 "packet_limit": 10,
-                "display_filter": "protocol == tcp and responder.port == 443",
+                "display_filter": "protocol == tcp and id.resp_p == 443",
                 "flow_limit": 5,
             },
             content=_pcap(_tcp_frame()),
