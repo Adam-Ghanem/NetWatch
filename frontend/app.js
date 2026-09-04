@@ -1,6 +1,6 @@
 // NetWatch Traffic Explorer bootstrap.
-// The existing application stays in app-core.js; this layer adds bounded flow exports
-// and offline PCAP/PCAPNG analysis without retaining raw payload bytes.
+// The existing application stays in app-core.js; this layer adds bounded flow exports,
+// offline PCAP/PCAPNG analysis, and flow-aware analyst pivots without retaining raw payload bytes.
 // Compatibility markers used by frontend safety tests: NetWatchApi /api/session /api/readiness renderReadiness /api/traffic/capture /api/service-findings renderTrafficCapture candidate.origin !== window.location.origin
 
 function loadNetWatchCore(onReady) {
@@ -303,6 +303,208 @@ function installOfflineCaptureControls(form) {
   form.after(panel);
 }
 
+function formatPivotBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function flowEndpointText(endpoint) {
+  if (!endpoint || typeof endpoint !== 'object') return '—';
+  const ip = String(endpoint.ip || '—');
+  const port = Number(endpoint.port || 0);
+  return port > 0 ? `${ip}:${port}` : ip;
+}
+
+function buildPivotButton(label, ip, protocol) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'button ghost';
+  button.textContent = label;
+  button.addEventListener('click', () => applyTrafficFlowPivot({ ip, protocol }));
+  return button;
+}
+
+function buildFlowTable(container, columns, rows, emptyMessage) {
+  container.replaceChildren();
+  container.classList.remove('empty-state');
+  if (!Array.isArray(rows) || rows.length === 0) {
+    container.classList.add('empty-state');
+    container.textContent = emptyMessage;
+    return;
+  }
+
+  const table = document.createElement('table');
+  const head = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  columns.forEach((column) => {
+    const cell = document.createElement('th');
+    cell.textContent = column.label;
+    headRow.appendChild(cell);
+  });
+  head.appendChild(headRow);
+
+  const body = document.createElement('tbody');
+  rows.forEach((row) => {
+    const tableRow = document.createElement('tr');
+    columns.forEach((column) => {
+      const cell = document.createElement('td');
+      const value = column.render(row);
+      if (value instanceof Node) cell.appendChild(value);
+      else cell.textContent = String(value ?? '—');
+      tableRow.appendChild(cell);
+    });
+    body.appendChild(tableRow);
+  });
+  table.append(head, body);
+  container.appendChild(table);
+}
+
+function applyTrafficFlowPivot(pivot) {
+  const ipInput = document.querySelector('#traffic-ip');
+  const portInput = document.querySelector('#traffic-port');
+  const protocolSelect = document.querySelector('#traffic-protocol');
+  const status = document.querySelector('#traffic-status');
+  const ip = String(pivot?.ip || '').trim();
+  const protocol = String(pivot?.protocol || '').trim().toLowerCase();
+
+  if (ip && ip !== '—' && ip !== '-') ipInput.value = ip;
+  // Offline analysis has no independent port query today. Clear a stale live-only
+  // port filter so the same pivot means the same thing for live and saved evidence.
+  portInput.value = '';
+  if (Array.from(protocolSelect.options).some((option) => option.value === protocol)) {
+    protocolSelect.value = protocol;
+  } else {
+    protocolSelect.value = 'all';
+  }
+
+  status.textContent = 'Limit next capture/analysis to this flow pivot. Confirm authorization, then run the live or saved-capture analysis again.';
+  status.className = 'form-status success';
+  ipInput.focus();
+}
+
+function installTrafficFlowPivotPanels() {
+  if (document.querySelector('#traffic-flow-conversations')) return;
+  const packetPanel = document.querySelector('#traffic-packets')?.closest('.panel');
+  if (!packetPanel) return;
+
+  const grid = document.createElement('div');
+  grid.className = 'split-grid traffic-analysis-grid';
+
+  const conversationPanel = document.createElement('article');
+  conversationPanel.className = 'panel';
+  const conversationHead = document.createElement('div');
+  conversationHead.className = 'panel-head';
+  const conversationCopy = document.createElement('div');
+  const conversationEyebrow = document.createElement('p');
+  conversationEyebrow.className = 'eyebrow';
+  conversationEyebrow.textContent = 'Flow conversations';
+  const conversationTitle = document.createElement('h3');
+  conversationTitle.textContent = 'Originator ↔ responder';
+  conversationCopy.append(conversationEyebrow, conversationTitle);
+  const conversationCount = document.createElement('span');
+  conversationCount.id = 'traffic-flow-conversation-count';
+  conversationCount.className = 'count-badge';
+  conversationCount.textContent = '0 flows';
+  conversationHead.append(conversationCopy, conversationCount);
+  const conversations = document.createElement('div');
+  conversations.id = 'traffic-flow-conversations';
+  conversations.className = 'table-wrap empty-state';
+  conversations.textContent = 'Run an analysis to build flow-aware conversations.';
+  conversationPanel.append(conversationHead, conversations);
+
+  const endpointPanel = document.createElement('article');
+  endpointPanel.className = 'panel';
+  const endpointHead = document.createElement('div');
+  endpointHead.className = 'panel-head';
+  const endpointCopy = document.createElement('div');
+  const endpointEyebrow = document.createElement('p');
+  endpointEyebrow.className = 'eyebrow';
+  endpointEyebrow.textContent = 'Flow endpoints';
+  const endpointTitle = document.createElement('h3');
+  endpointTitle.textContent = 'Directional activity';
+  endpointCopy.append(endpointEyebrow, endpointTitle);
+  const endpointCount = document.createElement('span');
+  endpointCount.id = 'traffic-flow-endpoint-count';
+  endpointCount.className = 'count-badge';
+  endpointCount.textContent = '0 endpoints';
+  endpointHead.append(endpointCopy, endpointCount);
+  const endpoints = document.createElement('div');
+  endpoints.id = 'traffic-flow-endpoints';
+  endpoints.className = 'table-wrap empty-state';
+  endpoints.textContent = 'Run an analysis to build endpoint statistics.';
+  endpointPanel.append(endpointHead, endpoints);
+
+  grid.append(conversationPanel, endpointPanel);
+  packetPanel.before(grid);
+}
+
+function renderTrafficFlowPivots(payload) {
+  const conversationContainer = document.querySelector('#traffic-flow-conversations');
+  const endpointContainer = document.querySelector('#traffic-flow-endpoints');
+  if (!conversationContainer || !endpointContainer) return;
+
+  const conversationCount = Number(payload.conversation_count || 0);
+  const endpointCount = Number(payload.endpoint_count || 0);
+  document.querySelector('#traffic-flow-conversation-count').textContent = `${conversationCount} flow${conversationCount === 1 ? '' : 's'}`;
+  document.querySelector('#traffic-flow-endpoint-count').textContent = `${endpointCount} endpoint${endpointCount === 1 ? '' : 's'}`;
+
+  buildFlowTable(
+    conversationContainer,
+    [
+      { label: 'Originator', render: (row) => flowEndpointText(row.source) },
+      { label: 'Responder', render: (row) => flowEndpointText(row.destination) },
+      { label: 'Protocol', render: (row) => row.protocol || '—' },
+      { label: 'Service', render: (row) => row.service || '—' },
+      { label: 'State', render: (row) => row.tcp_state || '—' },
+      { label: 'Packets', render: (row) => Number(row.packets || 0) },
+      { label: 'Bytes', render: (row) => formatPivotBytes(row.bytes) },
+      { label: 'Duration', render: (row) => `${Number(row.duration_ms || 0)} ms` },
+      {
+        label: 'Pivot',
+        render: (row) => {
+          const actions = document.createElement('div');
+          actions.className = 'button-row';
+          actions.append(
+            buildPivotButton('Originator', row.source?.ip, row.protocol),
+            buildPivotButton('Responder', row.destination?.ip, row.protocol),
+          );
+          return actions;
+        },
+      },
+    ],
+    payload.conversations || [],
+    'No flow conversations matched the selected evidence.',
+  );
+
+  buildFlowTable(
+    endpointContainer,
+    [
+      { label: 'IP address', render: (row) => row.ip || '—' },
+      { label: 'Conversations', render: (row) => Number(row.conversation_count || 0) },
+      { label: 'Packets', render: (row) => Number(row.packets || 0) },
+      { label: 'Bytes', render: (row) => formatPivotBytes(row.bytes) },
+      { label: 'Sent', render: (row) => formatPivotBytes(row.sent_bytes) },
+      { label: 'Received', render: (row) => formatPivotBytes(row.received_bytes) },
+      { label: 'Pivot', render: (row) => buildPivotButton('Filter IP', row.ip, '') },
+    ],
+    payload.endpoints || [],
+    'No flow endpoint statistics matched the selected evidence.',
+  );
+}
+
+function installTrafficFlowPivotRendering() {
+  installTrafficFlowPivotPanels();
+  const baseRenderer = window.renderTrafficCapture;
+  if (typeof baseRenderer !== 'function') return;
+  window.renderTrafficCapture = function renderTrafficCaptureWithFlowPivots(payload) {
+    baseRenderer(payload);
+    renderTrafficFlowPivots(payload);
+  };
+}
+
 function installTrafficExportControls() {
   const form = document.querySelector('#traffic-form');
   const authorization = document.querySelector('#traffic-authorized');
@@ -341,6 +543,7 @@ function installTrafficExportControls() {
   }
 
   installOfflineCaptureControls(form);
+  installTrafficFlowPivotRendering();
 }
 
 loadNetWatchCore(installTrafficExportControls);
