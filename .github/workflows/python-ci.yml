@@ -44,11 +44,27 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q .
 
-      - name: Run tests with coverage
+      - name: Capture test diagnostics
         env:
           NETWATCH_API_KEY: ci-test-key-with-at-least-32-characters
           NETWATCH_DATA_DIR: /tmp/netwatch-python-ci-data
-        run: pytest -q --cov=. --cov-report=xml --cov-report=term-missing
+        run: |
+          set +e
+          pytest -q --cov=. --cov-report=xml --cov-report=term-missing > pytest-diagnostics.txt 2>&1
+          echo $? > pytest-status.txt
+          cat pytest-diagnostics.txt
+          exit 0
+
+      - name: Upload test diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-diagnostics
+          path: |
+            pytest-diagnostics.txt
+            pytest-status.txt
+
+      - name: Enforce test suite
+        run: test "$(cat pytest-status.txt)" = "0"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
