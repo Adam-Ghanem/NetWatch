@@ -31,8 +31,24 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
-      - name: Check Black formatting
-        run: black --check .
+      - name: Capture Black diff
+        run: |
+          set +e
+          black --diff . > black-diff.txt 2>&1
+          echo $? > black-status.txt
+          cat black-diff.txt
+          exit 0
+
+      - name: Upload Black diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: black-diagnostics
+          path: |
+            black-diff.txt
+            black-status.txt
+
+      - name: Enforce Black
+        run: test "$(cat black-status.txt)" = "0"
 
       - name: Check imports with isort
         run: isort --check-only .
