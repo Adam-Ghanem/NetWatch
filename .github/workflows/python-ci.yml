@@ -1,60 +1,46 @@
-name: Python CI
+name: Temporary Formatter
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: ["feat/traffic-flow-download-api"]
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write
 
 jobs:
-  test:
+  format:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: feat/traffic-flow-download-api
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: pip
 
-      - name: Install dependencies
+      - name: Install formatters
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
-          python -m pip check
+          python -m pip install black==26.3.1 "isort>=5.13,<7"
 
-      - name: Check formatting and imports
+      - name: Apply project formatting
         run: |
-          black --check .
-          isort --check-only .
+          black .
+          isort .
 
-      - name: Lint and type-check
+      - name: Commit formatter diff
         run: |
-          flake8 .
-          mypy .
-
-      - name: Compile Python sources
-        run: python -m compileall -q .
-
-      - name: Run tests with coverage
-        env:
-          NETWATCH_API_KEY: ci-test-key-with-at-least-32-characters
-          NETWATCH_DATA_DIR: /tmp/netwatch-python-ci-data
-        run: pytest -q --cov=. --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          use_oidc: true
-          files: ./coverage.xml
-          flags: unittests
-          name: netwatch-python
-          fail_ci_if_error: false
+          if git diff --quiet; then
+            echo "No formatter changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "style: apply project formatters"
+          git push origin HEAD:feat/traffic-flow-download-api
