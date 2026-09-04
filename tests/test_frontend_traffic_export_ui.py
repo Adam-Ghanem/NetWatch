@@ -55,18 +55,17 @@ def test_traffic_explorer_has_bounded_offline_flow_download_controls() -> None:
 
 
 def test_traffic_explorer_surfaces_flow_conversation_and_endpoint_pivots() -> None:
-    html = Path("frontend/index.html").read_text(encoding="utf-8")
-    core = Path("frontend/app-core.js").read_text(encoding="utf-8")
+    javascript = Path("frontend/app.js").read_text(encoding="utf-8")
 
-    assert 'id="traffic-flow-conversations"' in html
-    assert 'id="traffic-flow-endpoints"' in html
-    assert "function renderTrafficFlowPivots" in core
-    assert "function applyTrafficFlowPivot" in core
-    assert "payload.conversation_count" in core
-    assert "payload.endpoint_count" in core
-    assert "traffic-flow-conversations" in core
-    assert "traffic-flow-endpoints" in core
-    assert "traffic-ip" in core
-    assert "traffic-port" in core
-    assert "traffic-protocol" in core
-    assert "Limit next capture/analysis to this flow pivot" in core
+    assert "function installTrafficFlowPivotPanels" in javascript
+    assert "traffic-flow-conversations" in javascript
+    assert "traffic-flow-endpoints" in javascript
+    assert "function renderTrafficFlowPivots" in javascript
+    assert "function applyTrafficFlowPivot" in javascript
+    assert "payload.conversation_count" in javascript
+    assert "payload.endpoint_count" in javascript
+    assert "traffic-ip" in javascript
+    assert "traffic-port" in javascript
+    assert "traffic-protocol" in javascript
+    assert "Limit next capture/analysis to this flow pivot" in javascript
+    assert "innerHTML" not in javascript
