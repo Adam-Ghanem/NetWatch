@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from capture_cli import build_capture_preview, render_capture_preview
 
 
@@ -67,6 +65,6 @@ def test_capture_preview_json_is_deterministic_and_excludes_rows() -> None:
     assert rendered.endswith(b"\n")
 
 
-def test_capture_preview_rejects_negative_size() -> None:
+def test_capture_preview_clamps_negative_size() -> None:
     preview = build_capture_preview({}, capture_bytes=-1)
     assert preview["capture_bytes"] == 0
