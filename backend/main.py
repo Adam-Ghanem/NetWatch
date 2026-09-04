@@ -1324,9 +1324,7 @@ def export_capture_flows(
     return Response(
         content=content,
         media_type=media_type,
-        headers={
-            "Content-Disposition": f'attachment; filename="netwatch-flows.{export_format}"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="netwatch-flows.{export_format}"'},
     )
 
 
