@@ -24,6 +24,7 @@ _SERVICE_PORTS = {
     ("TCP", 445): "smb",
     ("UDP", 5353): "mdns",
 }
+_TCP_HISTORY_MAX_EVENTS = 32
 
 
 def _int(value: object) -> int:
@@ -59,6 +60,42 @@ def _service(protocol: str, responder: tuple[str, int]) -> str:
     return _SERVICE_PORTS.get((protocol, responder[1]), "-")
 
 
+def _tcp_history_event(flags: set[str], *, from_originator: bool) -> str:
+    """Return one compact, direction-aware TCP control event for analyst triage."""
+    if "RST" in flags:
+        event = "R"
+    elif "SYN" in flags and "ACK" in flags:
+        event = "SA"
+    elif "SYN" in flags:
+        event = "S"
+    elif "FIN" in flags:
+        event = "F"
+    elif "ACK" in flags:
+        event = "A"
+    else:
+        return ""
+    return f">{event}" if from_originator else f"<{event}"
+
+
+def _append_tcp_history(flow: dict[str, object], event: str) -> None:
+    if not event:
+        return
+    history = flow.get("tcp_history")
+    if not isinstance(history, list):
+        return
+    if len(history) >= _TCP_HISTORY_MAX_EVENTS:
+        flow["tcp_history_truncated"] = True
+        return
+    history.append(event)
+
+
+def _tcp_history_values(flow: dict[str, object]) -> list[str]:
+    history = flow.get("tcp_history")
+    if not isinstance(history, list):
+        return []
+    return [str(event) for event in history]
+
+
 def summarize_flows(
     records: Iterable[dict[str, object]],
     limit: int = 100,
@@ -69,7 +106,8 @@ def summarize_flows(
     merged. The first observed sender is treated as the originator and the first
     observed destination as the responder. Service hints are conservative and are
     derived only from a small set of well-known responder ports. No packet payload
-    is retained or reconstructed.
+    is retained or reconstructed. TCP control history is bounded and direction-aware
+    so analysts can quickly distinguish handshakes, closes, and resets.
     """
     if limit < 1 or limit > 1000:
         raise ValueError("Flow limit must be between 1 and 1000.")
@@ -115,6 +153,8 @@ def summarize_flows(
                 "last_seen": None,
                 "duration_ms": 0,
                 "tcp_state": "-",
+                "tcp_history": [],
+                "tcp_history_truncated": False,
             },
         )
         flow["packets"] = _int(flow["packets"]) + 1
@@ -124,10 +164,11 @@ def summarize_flows(
         flow[f"{direction}_bytes"] = _int(flow[f"{direction}_bytes"]) + size
 
         originator = flow["originator"]
-        if isinstance(originator, dict) and source == (
+        from_originator = isinstance(originator, dict) and source == (
             str(originator.get("ip") or "-"),
             _int(originator.get("port")),
-        ):
+        )
+        if from_originator:
             flow["originator_packets"] = _int(flow["originator_packets"]) + 1
             flow["originator_bytes"] = _int(flow["originator_bytes"]) + size
         else:
@@ -156,6 +197,10 @@ def summarize_flows(
                 for flag in str(record.get("tcp_flags") or "").split(",")
                 if flag and flag != "-"
             }
+            _append_tcp_history(
+                flow,
+                _tcp_history_event(flags, from_originator=from_originator),
+            )
             state = str(flow["tcp_state"])
             if "RST" in flags:
                 flow["tcp_state"] = "reset"
@@ -235,6 +280,9 @@ def summarize_conversations(
             "duration_ms": _int(flow.get("duration_ms")),
             "tcp_state": str(flow.get("tcp_state") or flow.get("state") or "-"),
         }
+        if "tcp_history" in flow:
+            conversation["tcp_history"] = _tcp_history_values(flow)
+            conversation["tcp_history_truncated"] = bool(flow.get("tcp_history_truncated", False))
         community_id = str(flow.get("community_id") or "")
         if community_id:
             conversation["community_id"] = community_id
