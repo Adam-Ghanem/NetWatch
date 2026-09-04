@@ -70,6 +70,7 @@ from enterprise_auth import (
 )
 from enterprise_runtime import enterprise_readiness
 from export_utils import safe_csv_bytes
+from flow_export import export_flows_csv, export_flows_json, export_flows_ndjson
 from host_profiler import profile_host
 from intelligence_store import (
     cached_intelligence_brief,
@@ -1252,6 +1253,79 @@ def capture_packet_metadata(
         **context.audit_fields,
     )
     return result
+
+
+@app.post("/api/traffic/capture/export.{export_format}")
+def export_capture_flows(
+    export_format: Literal["json", "csv", "ndjson"],
+    payload: TrafficCaptureRequest,
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> Response:
+    _require_authorization(payload.authorized)
+    try:
+        capture_filter = build_capture_filter(
+            protocol=payload.protocol,
+            ip_address=payload.ip_filter,
+            port=payload.port_filter,
+        )
+        with _capture_slot():
+            result = capture_traffic(
+                interface=payload.interface,
+                duration_seconds=payload.duration_seconds,
+                max_packets=payload.max_packets,
+                capture_filter=capture_filter,
+            )
+        if payload.flow_controls is not None:
+            result = apply_traffic_flow_controls(
+                result,
+                payload.flow_controls.to_controls(),
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CapturePermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Live capture needs NET_RAW/root packet access on the NetWatch sensor. "
+                "No packet data was retained."
+            ),
+        ) from exc
+    except CaptureUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Live packet metadata capture is unavailable on the selected interface.",
+        ) from exc
+
+    limit = payload.flow_controls.limit if payload.flow_controls is not None else 100
+    flows = result.get("flows", [])
+    if export_format == "json":
+        content = export_flows_json(flows, limit=limit)
+        media_type = "application/json"
+    elif export_format == "csv":
+        content = export_flows_csv(flows, limit=limit)
+        media_type = "text/csv; charset=utf-8"
+    else:
+        content = export_flows_ndjson(flows, limit=limit)
+        media_type = "application/x-ndjson"
+
+    exported_count = min(len(flows), limit)
+    record_audit_event(
+        context.role,
+        "traffic_flow_export",
+        str(result["interface"]),
+        "completed",
+        (
+            f"Captured {result['captured_packets']} packet header(s); "
+            f"export_format={export_format}; exported_flows={exported_count}; "
+            "payload_retained=false."
+        ),
+        **context.audit_fields,
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="netwatch-flows.{export_format}"'},
+    )
 
 
 @app.get("/api/inventory", dependencies=[Depends(require_api_access)])
