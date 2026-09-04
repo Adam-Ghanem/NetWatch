@@ -109,7 +109,8 @@ def test_offline_capture_analysis_rejects_oversized_upload(monkeypatch, tmp_path
 
 
 def test_offline_capture_export_reuses_filters_and_stays_metadata_only(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     with _client(monkeypatch, tmp_path) as client:
         response = client.post(
@@ -138,7 +139,8 @@ def test_offline_capture_export_reuses_filters_and_stays_metadata_only(
 
 
 def test_offline_capture_export_supports_ndjson_and_requires_authorization(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     capture = _pcap(_tcp_frame())
     with _client(monkeypatch, tmp_path) as client:
