@@ -106,3 +106,64 @@ def test_offline_capture_analysis_rejects_oversized_upload(monkeypatch, tmp_path
 
     assert response.status_code == 413
     assert "safety limit" in response.json()["detail"].lower()
+
+
+def test_offline_capture_export_reuses_filters_and_stays_metadata_only(
+    monkeypatch,
+    tmp_path,
+):
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
+            "/api/traffic/offline/export.json",
+            headers=API_HEADERS,
+            params={
+                "authorized": "true",
+                "packet_limit": 10,
+                "display_filter": "protocol == tcp and id.resp_p == 443",
+                "flow_limit": 5,
+            },
+            content=_pcap(_tcp_frame()),
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="netwatch-offline-flows.json"'
+    )
+    body = response.json()
+    assert body["count"] == 1
+    assert body["payload_retained"] is False
+    assert body["flows"][0]["responder"]["port"] == 443
+    assert "community_id" in body["flows"][0]
+    assert "payload" not in body["flows"][0]
+    assert "raw" not in body["flows"][0]
+
+
+def test_offline_capture_export_supports_ndjson_and_requires_authorization(
+    monkeypatch,
+    tmp_path,
+):
+    capture = _pcap(_tcp_frame())
+    with _client(monkeypatch, tmp_path) as client:
+        denied = client.post(
+            "/api/traffic/offline/export.ndjson",
+            headers=API_HEADERS,
+            content=capture,
+        )
+        response = client.post(
+            "/api/traffic/offline/export.ndjson",
+            headers=API_HEADERS,
+            params={"authorized": "true", "packet_limit": 10, "flow_limit": 1},
+            content=capture,
+        )
+
+    assert denied.status_code == 403
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="netwatch-offline-flows.ndjson"'
+    )
+    lines = [line for line in response.text.splitlines() if line]
+    assert len(lines) == 1
+    assert '"community_id"' in lines[0]
+    assert '"payload"' not in lines[0]
