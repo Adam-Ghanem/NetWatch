@@ -37,3 +37,18 @@ def test_traffic_explorer_has_bounded_offline_capture_controls() -> None:
     assert "Live sensor packet privileges are not required." in javascript
     assert "Raw payload bytes were not retained." in javascript
     assert "innerHTML" not in javascript
+
+
+def test_traffic_explorer_has_bounded_offline_flow_download_controls() -> None:
+    javascript = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "function offlineExportUrl" in javascript
+    assert "function downloadOfflineFlows" in javascript
+    assert "traffic-offline-export-format" in javascript
+    assert "traffic-offline-export" in javascript
+    assert "`/api/traffic/offline/export.${exportFormat}?${params.toString()}`" in javascript
+    assert "headers: { 'Content-Type': 'application/octet-stream' }" in javascript
+    assert "body: file" in javascript
+    assert "Export offline flows" in javascript
+    assert "Offline ${exportFormat.toUpperCase()} flow export downloaded." in javascript
+    assert "innerHTML" not in javascript
