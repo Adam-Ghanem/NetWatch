@@ -108,7 +108,9 @@ def test_offline_capture_analysis_rejects_oversized_upload(monkeypatch, tmp_path
     assert "safety limit" in response.json()["detail"].lower()
 
 
-def test_offline_capture_export_reuses_filters_and_stays_metadata_only(monkeypatch, tmp_path):
+def test_offline_capture_export_reuses_filters_and_stays_metadata_only(
+    monkeypatch, tmp_path
+):
     with _client(monkeypatch, tmp_path) as client:
         response = client.post(
             "/api/traffic/offline/export.json",
@@ -124,7 +126,9 @@ def test_offline_capture_export_reuses_filters_and_stays_metadata_only(monkeypat
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
-    assert response.headers["content-disposition"] == 'attachment; filename="netwatch-offline-flows.json"'
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="netwatch-offline-flows.json"'
+    )
     body = response.json()
     assert len(body) == 1
     assert body[0]["responder"]["port"] == 443
@@ -133,7 +137,9 @@ def test_offline_capture_export_reuses_filters_and_stays_metadata_only(monkeypat
     assert "raw" not in body[0]
 
 
-def test_offline_capture_export_supports_ndjson_and_requires_authorization(monkeypatch, tmp_path):
+def test_offline_capture_export_supports_ndjson_and_requires_authorization(
+    monkeypatch, tmp_path
+):
     capture = _pcap(_tcp_frame())
     with _client(monkeypatch, tmp_path) as client:
         denied = client.post(
@@ -151,7 +157,9 @@ def test_offline_capture_export_supports_ndjson_and_requires_authorization(monke
     assert denied.status_code == 403
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
-    assert response.headers["content-disposition"] == 'attachment; filename="netwatch-offline-flows.ndjson"'
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="netwatch-offline-flows.ndjson"'
+    )
     lines = [line for line in response.text.splitlines() if line]
     assert len(lines) == 1
     assert '"community_id"' in lines[0]
