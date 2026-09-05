@@ -110,7 +110,9 @@ def test_investigation_anomalies_are_scoped_and_explainable() -> None:
     assert finding["observed"] == 20
     assert finding["threshold"] == 20
     assert finding["evidence"] == {"unique_responder_count": 20, "flow_count": 20}
-    assert len(finding["flow_ids"]) == 20
+    flow_ids = finding["flow_ids"]
+    assert isinstance(flow_ids, list)
+    assert len(flow_ids) == 20
     assert finding["explanation"]
 
 
