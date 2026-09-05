@@ -102,7 +102,9 @@ def _summary(record):
 
 
 def test_dns_query_metadata_is_correlated_without_payload_retention():
-    record = _record(_udp_frame(source_port=53_000, destination_port=53, payload=_dns_query()))
+    record = _record(
+        _udp_frame(source_port=53_000, destination_port=53, payload=_dns_query())
+    )
     summary = _summary(record)
 
     flow = summary["flows"][0]
@@ -140,7 +142,9 @@ def test_http_metadata_keeps_host_and_method_but_drops_sensitive_headers_and_uri
 
 
 def test_tls_client_hello_metadata_is_correlated_without_certificate_or_payload_data():
-    summary = _summary(_record(_tcp_frame(destination_port=443, payload=_tls_client_hello())))
+    summary = _summary(
+        _record(_tcp_frame(destination_port=443, payload=_tls_client_hello()))
+    )
 
     event = summary["flows"][0]["protocol_events"][0]
     assert event["event_type"] == "tls"
@@ -154,7 +158,9 @@ def test_tls_client_hello_metadata_is_correlated_without_certificate_or_payload_
 
 
 def test_incomplete_or_unrecognized_application_data_does_not_create_protocol_events():
-    record = _record(_tcp_frame(destination_port=443, payload=b"not-a-complete-protocol-record"))
+    record = _record(
+        _tcp_frame(destination_port=443, payload=b"not-a-complete-protocol-record")
+    )
     summary = _summary(record)
 
     flow = summary["flows"][0]
