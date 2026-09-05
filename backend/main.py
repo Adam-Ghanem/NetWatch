@@ -72,6 +72,10 @@ from enterprise_auth import (
 from enterprise_runtime import enterprise_readiness
 from export_utils import safe_csv_bytes
 from flow_export import export_flows_csv, export_flows_json, export_flows_ndjson
+from flow_observability import (
+    export_flow_observability_json,
+    export_flow_observability_ndjson,
+)
 from host_profiler import profile_host
 from intelligence_store import (
     cached_intelligence_brief,
@@ -1341,6 +1345,77 @@ async def export_offline_capture_flows(
     )
 
 
+@app.post("/api/traffic/offline/observability.{export_format}")
+async def export_offline_capture_observability(
+    export_format: Literal["json", "ndjson"],
+    request: Request,
+    authorized: bool = Query(default=False),
+    packet_limit: int = Query(default=1_000, ge=1, le=MAX_PCAP_PACKETS),
+    display_filter: str = Query(default="", max_length=1_024),
+    ip_address: str = Query(default="", max_length=45),
+    protocol: str = Query(default="", max_length=16),
+    service: str = Query(default="", max_length=64),
+    state: str = Query(default="", max_length=64),
+    min_bytes: int = Query(default=0, ge=0),
+    sort_by: Literal["bytes", "packets", "duration", "recent"] = Query(default="bytes"),
+    flow_limit: int = Query(default=100, ge=1, le=1_000),
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> Response:
+    _require_authorization(authorized)
+    data = await _read_bounded_capture_upload(request)
+    controls = TrafficFlowControls(
+        display_filter=display_filter,
+        ip_address=ip_address,
+        protocol=protocol,
+        service=service,
+        state=state,
+        min_bytes=min_bytes,
+        sort_by=sort_by,
+        limit=flow_limit,
+    )
+    try:
+        with _capture_slot():
+            result = analyze_capture_bytes(
+                data,
+                packet_limit=packet_limit,
+                controls=controls,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    flows = result.get("flows", [])
+    if export_format == "json":
+        content = export_flow_observability_json(flows, limit=flow_limit)
+        media_type = "application/json"
+    else:
+        content = export_flow_observability_ndjson(flows, limit=flow_limit)
+        media_type = "application/x-ndjson"
+
+    source = str(result.get("source", "capture"))
+    exported_count = min(len(flows), flow_limit)
+    record_audit_event(
+        context.role,
+        "offline_capture_observability_export",
+        source,
+        "completed",
+        (
+            f"Analyzed {result.get('captured_packets', 0)} packet header(s); "
+            f"export_format={export_format}; exported_records={exported_count}; "
+            "payload_retained=false."
+        ),
+        **context.audit_fields,
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="netwatch-offline-observability.{export_format}"'
+            )
+        },
+    )
+
+
 @app.get("/api/traffic/interfaces")
 def traffic_interfaces(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
     interfaces = capture_interfaces()
@@ -1478,6 +1553,78 @@ def export_capture_flows(
         content=content,
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="netwatch-flows.{export_format}"'},
+    )
+
+
+@app.post("/api/traffic/capture/observability.{export_format}")
+def export_capture_observability(
+    export_format: Literal["json", "ndjson"],
+    payload: TrafficCaptureRequest,
+    context: AuthContext = Depends(require_audited_operator_access),
+) -> Response:
+    _require_authorization(payload.authorized)
+    try:
+        capture_filter = build_capture_filter(
+            protocol=payload.protocol,
+            ip_address=payload.ip_filter,
+            port=payload.port_filter,
+        )
+        with _capture_slot():
+            result = capture_traffic(
+                interface=payload.interface,
+                duration_seconds=payload.duration_seconds,
+                max_packets=payload.max_packets,
+                capture_filter=capture_filter,
+            )
+        if payload.flow_controls is not None:
+            result = apply_traffic_flow_controls(
+                result,
+                payload.flow_controls.to_controls(),
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except CapturePermissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Live capture needs NET_RAW/root packet access on the NetWatch sensor. "
+                "No packet data was retained."
+            ),
+        ) from exc
+    except CaptureUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Live packet metadata capture is unavailable on the selected interface.",
+        ) from exc
+
+    limit = payload.flow_controls.limit if payload.flow_controls is not None else 100
+    flows = result.get("flows", [])
+    if export_format == "json":
+        content = export_flow_observability_json(flows, limit=limit)
+        media_type = "application/json"
+    else:
+        content = export_flow_observability_ndjson(flows, limit=limit)
+        media_type = "application/x-ndjson"
+
+    exported_count = min(len(flows), limit)
+    record_audit_event(
+        context.role,
+        "traffic_observability_export",
+        str(result["interface"]),
+        "completed",
+        (
+            f"Captured {result['captured_packets']} packet header(s); "
+            f"export_format={export_format}; exported_records={exported_count}; "
+            "payload_retained=false."
+        ),
+        **context.audit_fields,
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="netwatch-observability.{export_format}"'
+        },
     )
 
 
