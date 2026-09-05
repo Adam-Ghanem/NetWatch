@@ -85,7 +85,7 @@ def test_investigation_scopes_all_views_to_flow_query() -> None:
 
 
 def test_investigation_anomalies_are_scoped_and_explainable() -> None:
-    flows = []
+    flows: list[dict[str, object]] = []
     for index in range(20):
         flows.append(
             {
