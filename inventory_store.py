@@ -303,12 +303,15 @@ def _insert_scan_run(
     return cursor.lastrowid
 
 
-def _normalize_ipv4(value: object) -> str | None:
+def _normalize_ip(value: object) -> str | None:
+    raw = str(value).strip()
+    if not raw or "%" in raw:
+        return None
     try:
-        address = ipaddress.ip_address(str(value).strip())
+        address = ipaddress.ip_address(raw)
     except ValueError:
         return None
-    return str(address) if isinstance(address, ipaddress.IPv4Address) else None
+    return str(address)
 
 
 def _insert_asset_event(
@@ -778,7 +781,7 @@ def upsert_hosts(
     with _connect() as conn:
         seen: set[str] = set()
         for row in host_rows:
-            ip = _normalize_ipv4(row.get("IP Address", ""))
+            ip = _normalize_ip(row.get("IP Address", ""))
             if not ip or ip in seen:
                 continue
             seen.add(ip)
@@ -797,19 +800,20 @@ def upsert_hosts(
 
 
 def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSummary:
-    """Persist one normalized network snapshot and calculate asset transitions."""
+    """Persist one normalized IPv4 or IPv6 network snapshot and calculate transitions."""
     init_db()
     network = ipaddress.ip_network(cidr, strict=False)
-    if not isinstance(network, ipaddress.IPv4Network):
-        raise ValueError("Network change tracking supports IPv4 scans only.")
 
     normalized_rows: dict[str, dict] = {}
     for row in host_rows:
-        ip = _normalize_ipv4(row.get("IP Address", ""))
-        if ip and ipaddress.IPv4Address(ip) in network:
+        ip = _normalize_ip(row.get("IP Address", ""))
+        if not ip:
+            continue
+        address = ipaddress.ip_address(ip)
+        if address.version == network.version and address in network:
             normalized_rows[ip] = row
 
-    observed = tuple(sorted(normalized_rows, key=ipaddress.IPv4Address))
+    observed = tuple(sorted(normalized_rows, key=ipaddress.ip_address))
     new_assets: list[str] = []
     returned_assets: list[str] = []
     not_observed_assets: list[str] = []
@@ -817,12 +821,14 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
     with _connect() as conn:
         scan_run_id = _insert_scan_run(conn, "network", str(network), "Saving scan snapshot")
         existing_rows = conn.execute("SELECT ip_address, status FROM assets").fetchall()
-        in_scope = {
-            row["ip_address"]: row["status"]
-            for row in existing_rows
-            if _normalize_ipv4(row["ip_address"])
-            and ipaddress.IPv4Address(row["ip_address"]) in network
-        }
+        in_scope: dict[str, str] = {}
+        for row in existing_rows:
+            normalized = _normalize_ip(row["ip_address"])
+            if not normalized:
+                continue
+            address = ipaddress.ip_address(normalized)
+            if address.version == network.version and address in network:
+                in_scope[normalized] = row["status"]
 
         for ip in observed:
             row = normalized_rows[ip]
@@ -853,8 +859,8 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
                 ),
             )
 
-        for ip in sorted(set(in_scope) - set(observed), key=ipaddress.IPv4Address):
-            details = "No ICMP reply in this scan; availability is not confirmed."
+        for ip in sorted(set(in_scope) - set(observed), key=ipaddress.ip_address):
+            details = "No host-discovery reply in this scan; availability is not confirmed."
             if in_scope[ip] != NOT_OBSERVED_STATUS:
                 conn.execute(
                     "UPDATE assets SET status = ?, details = ? WHERE ip_address = ?",
@@ -864,7 +870,7 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
                     conn,
                     ip,
                     "not_observed",
-                    "No reply in the latest scan; ICMP filtering may affect this result.",
+                    "No reply in the latest scan; filtering may affect this result.",
                     scan_run_id,
                 )
                 not_observed_assets.append(ip)
@@ -960,9 +966,9 @@ def update_asset_ports(
     scan_run_id: int | None = None,
 ) -> None:
     init_db()
-    normalized_ip = _normalize_ipv4(ip_address)
+    normalized_ip = _normalize_ip(ip_address)
     if not normalized_ip:
-        raise ValueError("A valid IPv4 asset address is required.")
+        raise ValueError("A valid IP asset address is required.")
     now = _utc_now()
     normalized_rows = [dict(row) for row in port_rows if isinstance(row, dict)]
     open_ports = [row for row in normalized_rows if row.get("Status") == "Open"]
@@ -1060,9 +1066,9 @@ def update_asset_context(
     request_id: str = "",
 ) -> dict:
     init_db()
-    normalized_ip = _normalize_ipv4(ip_address)
+    normalized_ip = _normalize_ip(ip_address)
     if not normalized_ip:
-        raise ValueError("A valid IPv4 asset address is required.")
+        raise ValueError("A valid IP asset address is required.")
     normalized_criticality = str(criticality).strip().title()
     if normalized_criticality not in ASSET_CRITICALITIES:
         raise ValueError("Criticality must be Low, Medium, High, or Critical.")
@@ -1139,9 +1145,9 @@ def recent_service_findings(
     safe_limit = max(1, min(int(limit), 1_000))
     normalized_ip = None
     if ip_address:
-        normalized_ip = _normalize_ipv4(ip_address)
+        normalized_ip = _normalize_ip(ip_address)
         if not normalized_ip:
-            raise ValueError("A valid IPv4 asset address is required.")
+            raise ValueError("A valid IP asset address is required.")
     if scan_run_id is not None and int(scan_run_id) < 1:
         raise ValueError("scan_run_id must be a positive integer.")
     with _connect() as conn:
@@ -1198,8 +1204,8 @@ def recent_asset_events(limit: int = 30) -> list[dict]:
 
 
 def asset_timeline(ip_address: str, limit: int = 100) -> list[dict]:
-    """Return bounded, normalized evidence for one saved or observed IPv4 asset."""
-    normalized_ip = _normalize_ipv4(ip_address)
+    """Return bounded, normalized evidence for one saved or observed IP asset."""
+    normalized_ip = _normalize_ip(ip_address)
     if normalized_ip is None:
         return []
 
