@@ -59,10 +59,7 @@ def _protocol_event_types(flow: dict[str, object]) -> list[str]:
         if not isinstance(event, dict):
             continue
         event_type = _text(event.get("event_type")).lower()
-        if (
-            event_type not in _ALLOWED_PROTOCOL_EVENT_TYPES
-            or event_type in event_types
-        ):
+        if event_type not in _ALLOWED_PROTOCOL_EVENT_TYPES or event_type in event_types:
             continue
         event_types.append(event_type)
         if len(event_types) >= _MAX_PROTOCOL_EVENT_TYPES:
@@ -92,9 +89,7 @@ def _record(flow: dict[str, object]) -> dict[str, Any]:
         "netwatch.flow.responder.packets": _count(flow.get("responder_packets")),
         "netwatch.flow.responder.bytes": _count(flow.get("responder_bytes")),
         "netwatch.flow.duration_ms": _count(flow.get("duration_ms")),
-        "netwatch.flow.protocol_event_count": min(
-            _count(flow.get("protocol_event_count")), 1_000
-        ),
+        "netwatch.flow.protocol_event_count": min(_count(flow.get("protocol_event_count")), 1_000),
         "netwatch.flow.protocol_event_types": protocol_event_types,
     }
     return {"schema": "netwatch.flow.v1", "attributes": attributes}
