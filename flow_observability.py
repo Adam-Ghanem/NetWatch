@@ -59,7 +59,10 @@ def _protocol_event_types(flow: dict[str, object]) -> list[str]:
         if not isinstance(event, dict):
             continue
         event_type = _text(event.get("event_type")).lower()
-        if event_type not in _ALLOWED_PROTOCOL_EVENT_TYPES or event_type in event_types:
+        if (
+            event_type not in _ALLOWED_PROTOCOL_EVENT_TYPES
+            or event_type in event_types
+        ):
             continue
         event_types.append(event_type)
         if len(event_types) >= _MAX_PROTOCOL_EVENT_TYPES:
