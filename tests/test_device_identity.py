@@ -1,6 +1,7 @@
 from device_identity import (
     NeighborEntry,
     enrich_host_rows,
+    identity_for_ip,
     infer_device_identity,
     is_locally_administered_mac,
     manufacturer_for_mac,
@@ -72,6 +73,42 @@ def test_neighbor_table_parsers_support_linux_unix_and_windows_formats():
     assert unix[0].interface == "en0"
     assert unix[0].mac_address == "00:1C:B3:00:00:01"
     assert windows[0].state == "DYNAMIC"
+
+
+def test_linux_neighbor_parser_keeps_ipv6_neighbor_evidence():
+    entries = parse_neighbor_output(
+        "fe80::a00:27ff:fe4e:66a1 dev eth0 lladdr 08:00:27:4e:66:a1 STALE\n",
+        "ip-neigh",
+    )
+
+    assert entries == [
+        NeighborEntry(
+            ip_address="fe80::a00:27ff:fe4e:66a1",
+            mac_address="08:00:27:4E:66:A1",
+            interface="eth0",
+            state="STALE",
+            source="ip-neigh",
+        )
+    ]
+
+
+def test_identity_for_ip_uses_ipv6_neighbor_evidence():
+    identity = identity_for_ip(
+        "2001:db8::20",
+        entries=[
+            NeighborEntry(
+                ip_address="2001:db8::20",
+                mac_address="00:1C:B3:00:00:01",
+                interface="eth0",
+                state="REACHABLE",
+                source="ip-neigh",
+            )
+        ],
+    )
+
+    assert identity.mac_address == "00:1C:B3:00:00:01"
+    assert identity.manufacturer != "Unknown"
+    assert "MAC OUI" in identity.identity_source
 
 
 def test_scan_rows_are_enriched_from_one_neighbor_snapshot():
