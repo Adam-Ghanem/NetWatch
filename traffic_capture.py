@@ -19,8 +19,10 @@ from protocol_metadata import extract_protocol_event
 
 CAPTURE_PROTOCOLS = ("all", "tcp", "udp", "icmp", "arp")
 SYS_CLASS_NET = Path("/sys/class/net")
+PROC_NET_IF_INET6 = Path("/proc/net/if_inet6")
 ETHERNET_ALL_PROTOCOLS = 0x0003
 _MAX_CAPTURE_PROTOCOL_EVENTS = 1_000
+_MAX_INTERFACE_IPV6_ADDRESSES = 8
 
 
 class CaptureUnavailableError(RuntimeError):
@@ -109,11 +111,33 @@ def _interface_ipv4(name: str) -> str:
         return "-"
 
 
+def _interface_ipv6_addresses(name: str) -> list[str]:
+    try:
+        lines = PROC_NET_IF_INET6.read_text(encoding="ascii").splitlines()
+    except OSError:
+        return []
+
+    addresses: list[str] = []
+    for line in lines:
+        fields = line.split()
+        if len(fields) != 6 or fields[5] != name:
+            continue
+        try:
+            address = str(ipaddress.IPv6Address(int(fields[0], 16)))
+        except ValueError:
+            continue
+        addresses.append(address)
+        if len(addresses) >= _MAX_INTERFACE_IPV6_ADDRESSES:
+            break
+    return addresses
+
+
 def capture_interfaces() -> list[dict[str, object]]:
     return [
         {
             "name": name,
             "ipv4_address": _interface_ipv4(name),
+            "ipv6_addresses": _interface_ipv6_addresses(name),
             "mac_address": _interface_mac(name),
             "loopback": name.lower() in {"lo", "lo0"},
         }
