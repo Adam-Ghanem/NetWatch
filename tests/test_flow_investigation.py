@@ -72,6 +72,7 @@ def test_investigation_scopes_all_views_to_flow_query() -> None:
     assert [flow["flow_id"] for flow in result["flows"]] == ["dns-1"]
     assert result["conversations"]["conversation_count"] == 1
     assert result["topology"]["edge_count"] == 1
+    assert result["anomalies"] == []
     protocol_events = result["flows"][0]["protocol_events"]
     assert isinstance(protocol_events, list)
     first_event = protocol_events[0]
@@ -81,6 +82,36 @@ def test_investigation_scopes_all_views_to_flow_query() -> None:
     assert metadata["query"] == "example.org"
     assert "payload" not in metadata
     assert result["payload_retained"] is False
+
+
+def test_investigation_anomalies_are_scoped_and_explainable() -> None:
+    flows = []
+    for index in range(20):
+        flows.append(
+            {
+                "flow_id": f"fanout-{index}",
+                "protocol": "TCP",
+                "service": "https",
+                "originator": {"ip": "192.168.1.50", "port": 50000 + index},
+                "responder": {"ip": f"192.168.2.{index + 1}", "port": 443},
+                "bytes": 1000,
+                "originator_bytes": 500,
+                "responder_bytes": 500,
+                "tcp_state": "established",
+            }
+        )
+
+    result = build_flow_investigation(flows, query=FlowQuery(ip_address="192.168.1.50", limit=100))
+
+    assert len(result["anomalies"]) == 1
+    finding = result["anomalies"][0]
+    assert finding["signal"] == "high_fanout"
+    assert finding["confidence"] == "high"
+    assert finding["observed"] == 20
+    assert finding["threshold"] == 20
+    assert finding["evidence"] == {"unique_responder_count": 20, "flow_count": 20}
+    assert len(finding["flow_ids"]) == 20
+    assert finding["explanation"]
 
 
 def test_investigation_applies_global_flow_bound_even_for_larger_query() -> None:
