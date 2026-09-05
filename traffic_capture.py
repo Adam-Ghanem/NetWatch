@@ -13,11 +13,14 @@ from typing import Any, Iterable
 from config import MAX_CAPTURE_PACKETS, MAX_CAPTURE_SECONDS
 from device_identity import infer_device_identity, normalize_mac
 from flow_analysis import summarize_flows
+from flow_correlation import CorrelationPolicy, correlate_flow_events
 from ipv6_extension_headers import locate_ipv6_transport
+from protocol_metadata import extract_protocol_event
 
 CAPTURE_PROTOCOLS = ("all", "tcp", "udp", "icmp", "arp")
 SYS_CLASS_NET = Path("/sys/class/net")
 ETHERNET_ALL_PROTOCOLS = 0x0003
+_MAX_CAPTURE_PROTOCOL_EVENTS = 1_000
 
 
 class CaptureUnavailableError(RuntimeError):
@@ -211,6 +214,7 @@ def parse_ethernet_frame(
     destination_port: int | None = None
     tcp_flags = "-"
     protocol = "Ethernet"
+    transport_offset: int | None = None
     ipv6_extension_headers: tuple[str, ...] = ()
     ipv6_fragmented = False
     ipv6_first_fragment = True
@@ -232,9 +236,10 @@ def parse_ethernet_frame(
         source_ip = socket.inet_ntop(socket.AF_INET, frame[offset + 12 : offset + 16])
         destination_ip = socket.inet_ntop(socket.AF_INET, frame[offset + 16 : offset + 20])
         protocol_number = frame[offset + 9]
+        transport_offset = offset + header_length
         protocol, source_port, destination_port, tcp_flags = _transport_metadata(
             frame,
-            offset=offset + header_length,
+            offset=transport_offset,
             protocol_number=protocol_number,
         )
         protocol = protocol or "IPv4"
@@ -254,14 +259,16 @@ def parse_ethernet_frame(
         ipv6_first_fragment = location.first_fragment
         ipv6_transport_complete = location.complete
         if location.complete and (not location.fragmented or location.first_fragment):
+            transport_offset = location.transport_offset
             transport_protocol, source_port, destination_port, tcp_flags = _transport_metadata(
                 frame,
-                offset=location.transport_offset,
+                offset=transport_offset,
                 protocol_number=location.protocol_number,
             )
             protocol = transport_protocol or protocol
 
     timestamp = captured_at or datetime.now(timezone.utc)
+    captured_at_value = timestamp.astimezone(timezone.utc).isoformat(timespec="milliseconds")
     source_endpoint = source_ip
     destination_endpoint = destination_ip
     if source_port is not None:
@@ -272,9 +279,9 @@ def parse_ethernet_frame(
     if tcp_flags != "-":
         summary = f"{summary} · flags {tcp_flags}"
 
-    return {
+    record: dict[str, object] = {
         "number": sequence,
-        "captured_at": timestamp.astimezone(timezone.utc).isoformat(timespec="milliseconds"),
+        "captured_at": captured_at_value,
         "protocol": protocol,
         "source_ip": source_ip,
         "destination_ip": destination_ip,
@@ -291,6 +298,16 @@ def parse_ethernet_frame(
         "length_bytes": len(frame),
         "summary": summary[:300],
     }
+    protocol_event = extract_protocol_event(
+        frame,
+        transport_offset=transport_offset,
+        protocol=protocol,
+        source_port=source_port,
+        destination_port=destination_port,
+    )
+    if protocol_event is not None:
+        record["_protocol_event"] = protocol_event
+    return record
 
 
 def packet_matches(record: dict[str, object], capture_filter: CaptureFilter) -> bool:
@@ -382,6 +399,67 @@ def _device_rows(records: Iterable[dict[str, object]]) -> list[dict[str, object]
     )[:50]
 
 
+def _endpoint_tuple(value: object) -> tuple[str, int]:
+    if not isinstance(value, dict):
+        return "-", 0
+    return str(value.get("ip") or "-"), _int_value(value.get("port"))
+
+
+def _flow_lookup_key(record: dict[str, object]) -> tuple[str, tuple[str, int], tuple[str, int]]:
+    source = (
+        str(record.get("source_ip") or "-"),
+        _int_value(record.get("source_port")),
+    )
+    destination = (
+        str(record.get("destination_ip") or "-"),
+        _int_value(record.get("destination_port")),
+    )
+    left, right = sorted((source, destination))
+    return str(record.get("protocol") or "Unknown").upper(), left, right
+
+
+def _correlate_capture_protocol_events(
+    flows: list[dict[str, object]],
+    records: Iterable[dict[str, object]],
+) -> list[dict[str, object]]:
+    flow_ids: dict[tuple[str, tuple[str, int], tuple[str, int]], str] = {}
+    for flow in flows:
+        left = _endpoint_tuple(flow.get("endpoint_a"))
+        right = _endpoint_tuple(flow.get("endpoint_b"))
+        key = (str(flow.get("protocol") or "Unknown").upper(), left, right)
+        flow_id = str(flow.get("flow_id") or "")
+        if flow_id:
+            flow_ids[key] = flow_id
+
+    events: list[dict[str, object]] = []
+    for record in records:
+        raw_event = record.get("_protocol_event")
+        if not isinstance(raw_event, dict):
+            continue
+        correlated_flow_id = flow_ids.get(_flow_lookup_key(record))
+        if not correlated_flow_id:
+            continue
+        event = dict(raw_event)
+        event["flow_id"] = correlated_flow_id
+        event["timestamp"] = str(record.get("captured_at") or "")
+        events.append(event)
+        if len(events) >= _MAX_CAPTURE_PROTOCOL_EVENTS:
+            break
+
+    if not events:
+        return flows
+    correlated = correlate_flow_events(
+        flows,
+        events,
+        policy=CorrelationPolicy(
+            max_flows=100,
+            max_events=_MAX_CAPTURE_PROTOCOL_EVENTS,
+            max_events_per_flow=100,
+        ),
+    )
+    return correlated["flows"]
+
+
 def summarize_capture(
     records: list[dict[str, object]],
     *,
@@ -392,6 +470,11 @@ def summarize_capture(
     protocol_counts = Counter(str(record["protocol"]) for record in records)
     total_bytes = sum(_int_value(record["length_bytes"]) for record in records)
     flows = summarize_flows(records, limit=100)
+    flows = _correlate_capture_protocol_events(flows, records)
+    packets = [
+        {key: value for key, value in record.items() if key != "_protocol_event"}
+        for record in records
+    ]
     return {
         "interface": interface,
         "duration_seconds": duration_seconds,
@@ -413,7 +496,7 @@ def summarize_capture(
         "flows": flows,
         "conversations": _conversation_rows(records),
         "devices": _device_rows(records),
-        "packets": records,
+        "packets": packets,
         "visibility_note": (
             "A normal switched interface usually sees traffic to or from this NetWatch host. "
             "Full-segment visibility requires an approved SPAN/mirror port or network sensor."
