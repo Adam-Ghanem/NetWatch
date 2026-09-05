@@ -20,6 +20,7 @@ def test_capture_interfaces_include_bounded_canonical_ipv6_addresses(monkeypatch
                         f"20010db80000000000000000000000{value:02x} 02 40 00 80 eth0"
                         for value in range(0x20, 0x28)
                     ],
+                    "not-an-ipv6-address 02 40 00 80 eth0",
                     "20010db8000000000000000000000099 03 40 00 80 eth1",
                 ]
             )
@@ -49,8 +50,10 @@ def test_capture_interfaces_include_bounded_canonical_ipv6_addresses(monkeypatch
     ]
 
 
-def test_traffic_interface_selector_surfaces_ipv6_without_unbounded_labels():
-    javascript = Path("frontend/app-core.js").read_text(encoding="utf-8")
+def test_interface_ipv6_addresses_fails_closed_when_kernel_table_is_unavailable(monkeypatch):
+    def unavailable_read_text(*_args, **_kwargs):
+        raise OSError("not available")
 
-    assert "item.ipv6_addresses" in javascript
-    assert ".slice(0, 2)" in javascript
+    monkeypatch.setattr(Path, "read_text", unavailable_read_text)
+
+    assert traffic_capture._interface_ipv6_addresses("eth0") == []
