@@ -36,18 +36,21 @@ def _udp_frame(*, source_port: int, destination_port: int, payload: bytes) -> by
 
 
 def _tcp_frame(*, destination_port: int, payload: bytes) -> bytes:
-    tcp = struct.pack(
-        "!HHLLBBHHH",
-        51_515,
-        destination_port,
-        0,
-        0,
-        0x50,
-        0x18,
-        65_535,
-        0,
-        0,
-    ) + payload
+    tcp = (
+        struct.pack(
+            "!HHLLBBHHH",
+            51_515,
+            destination_port,
+            0,
+            0,
+            0x50,
+            0x18,
+            65_535,
+            0,
+            0,
+        )
+        + payload
+    )
     return _ipv4_frame(
         protocol=6,
         source="192.168.1.10",
