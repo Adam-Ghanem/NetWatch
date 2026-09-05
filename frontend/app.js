@@ -739,3 +739,191 @@ function installTrafficApplicationInsights(attempt = 0) {
 }
 
 installTrafficApplicationInsights();
+
+function topologyDeviceEvidence(node) {
+  const device = node?.device && typeof node.device === 'object' ? node.device : null;
+  if (!device) return 'Observed endpoint · no inventory identity evidence';
+  const identity = String(device.name || device.type || device.manufacturer || 'Inventory identity');
+  const confidence = String(device?.confidence || 'unknown');
+  const source = String(device?.source || 'unspecified');
+  return `${identity} · confidence ${confidence} · source ${source}`;
+}
+
+function renderTopologyGraph(container, nodes, edges) {
+  container.replaceChildren();
+  const graphNodes = nodes.slice(0, 24);
+  if (!graphNodes.length) {
+    container.classList.add('empty-state');
+    container.textContent = 'No topology nodes matched the selected evidence.';
+    return;
+  }
+  container.classList.remove('empty-state');
+  const namespace = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(namespace, 'svg');
+  svg.setAttribute('viewBox', '0 0 720 360');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Observed flow topology');
+  svg.style.width = '100%';
+  svg.style.minHeight = '320px';
+
+  const centerX = 360;
+  const centerY = 180;
+  const radius = Math.min(145, 48 + graphNodes.length * 5);
+  const positions = new Map();
+  graphNodes.forEach((node, index) => {
+    const angle = (Math.PI * 2 * index) / graphNodes.length - Math.PI / 2;
+    positions.set(node.ip_address, {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * radius,
+    });
+  });
+
+  edges.slice(0, 40).forEach((edge) => {
+    const source = positions.get(edge.source);
+    const target = positions.get(edge.target);
+    if (!source || !target) return;
+    const line = document.createElementNS(namespace, 'line');
+    line.setAttribute('x1', String(source.x));
+    line.setAttribute('y1', String(source.y));
+    line.setAttribute('x2', String(target.x));
+    line.setAttribute('y2', String(target.y));
+    line.setAttribute('stroke', 'currentColor');
+    line.setAttribute('stroke-opacity', '0.28');
+    line.setAttribute('stroke-width', String(Math.min(6, 1 + Math.log10(Number(edge.bytes || 0) + 1))));
+    svg.appendChild(line);
+  });
+
+  graphNodes.forEach((node) => {
+    const position = positions.get(node.ip_address);
+    const group = document.createElementNS(namespace, 'g');
+    const circle = document.createElementNS(namespace, 'circle');
+    circle.setAttribute('cx', String(position.x));
+    circle.setAttribute('cy', String(position.y));
+    circle.setAttribute('r', node.device ? '12' : '9');
+    circle.setAttribute('fill', 'currentColor');
+    circle.setAttribute('fill-opacity', node.device ? '0.9' : '0.55');
+    const title = document.createElementNS(namespace, 'title');
+    title.textContent = `${node.ip_address} · ${topologyDeviceEvidence(node)}`;
+    const label = document.createElementNS(namespace, 'text');
+    label.setAttribute('x', String(position.x + 15));
+    label.setAttribute('y', String(position.y + 4));
+    label.setAttribute('font-size', '11');
+    label.setAttribute('fill', 'currentColor');
+    label.textContent = node.ip_address;
+    group.append(title, circle, label);
+    svg.appendChild(group);
+  });
+  container.appendChild(svg);
+}
+
+function installTrafficTopologyPanel() {
+  if (document.querySelector('#traffic-topology')) return;
+  const packetPanel = document.querySelector('#traffic-packets')?.closest('.panel');
+  if (!packetPanel) return;
+
+  const panel = document.createElement('article');
+  panel.className = 'panel';
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  const copy = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Traffic topology';
+  const title = document.createElement('h3');
+  title.textContent = 'Observed devices ↔ flows';
+  copy.append(eyebrow, title);
+  const count = document.createElement('span');
+  count.id = 'traffic-topology-count';
+  count.className = 'count-badge';
+  count.textContent = '0 nodes';
+  head.append(copy, count);
+
+  const state = document.createElement('p');
+  state.id = 'traffic-topology-state';
+  state.className = 'muted';
+  state.textContent = 'Observed flow evidence only. Run an analysis to build the bounded topology.';
+
+  const graph = document.createElement('div');
+  graph.id = 'traffic-topology';
+  graph.className = 'empty-state';
+  graph.textContent = 'Run an analysis to map selected-flow topology.';
+
+  const grid = document.createElement('div');
+  grid.className = 'split-grid traffic-analysis-grid';
+  const nodes = document.createElement('div');
+  nodes.id = 'traffic-topology-nodes';
+  nodes.className = 'table-wrap empty-state';
+  nodes.textContent = 'No topology nodes yet.';
+  const edges = document.createElement('div');
+  edges.id = 'traffic-topology-edges';
+  edges.className = 'table-wrap empty-state';
+  edges.textContent = 'No topology edges yet.';
+  grid.append(nodes, edges);
+
+  panel.append(head, state, graph, grid);
+  packetPanel.before(panel);
+}
+
+function renderTrafficTopology(payload) {
+  const topology = payload?.topology && typeof payload.topology === 'object' ? payload.topology : {};
+  const graph = document.querySelector('#traffic-topology');
+  const nodeContainer = document.querySelector('#traffic-topology-nodes');
+  const edgeContainer = document.querySelector('#traffic-topology-edges');
+  const state = document.querySelector('#traffic-topology-state');
+  const count = document.querySelector('#traffic-topology-count');
+  if (!graph || !nodeContainer || !edgeContainer || !state || !count) return;
+
+  const allNodes = Array.isArray(topology.nodes) ? topology.nodes : [];
+  const allEdges = Array.isArray(topology.edges) ? topology.edges : [];
+  const nodes = allNodes.slice(0, 80);
+  const edges = allEdges.slice(0, 120);
+  count.textContent = `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
+  const bounded = topology.truncated || allNodes.length > nodes.length || allEdges.length > edges.length;
+  state.textContent = `Observed flow evidence only · ${nodes.length}/${Number(topology.node_count || allNodes.length)} nodes · ${edges.length}/${Number(topology.edge_count || allEdges.length)} edges${bounded ? ' · bounded/truncated view' : ''}.`;
+
+  renderTopologyGraph(graph, nodes, edges);
+  buildFlowTable(
+    nodeContainer,
+    [
+      { label: 'Endpoint', render: (node) => node.ip_address || '—' },
+      { label: 'Version', render: (node) => `IPv${Number(node.ip_version || 0)}` },
+      { label: 'Traffic', render: (node) => formatPivotBytes(node.bytes) },
+      { label: 'Conversations', render: (node) => Number(node.conversation_count || 0) },
+      { label: 'Evidence', render: (node) => topologyDeviceEvidence(node) },
+      { label: 'Pivot', render: (node) => buildPivotButton('Investigate', node.ip_address, '') },
+    ],
+    nodes,
+    'No topology nodes matched the selected evidence.',
+  );
+  buildFlowTable(
+    edgeContainer,
+    [
+      { label: 'Observed link', render: (edge) => `${edge.source || '—'} ↔ ${edge.target || '—'}` },
+      { label: 'Flows', render: (edge) => Number(edge.flow_count || 0) },
+      { label: 'Traffic', render: (edge) => formatPivotBytes(edge.bytes) },
+      { label: 'Protocols', render: (edge) => (edge.protocols || []).join(', ') || '—' },
+      { label: 'Services', render: (edge) => (edge.services || []).join(', ') || '—' },
+      { label: 'Pivot', render: (edge) => buildPivotButton('Investigate', edge.source, edge.protocols?.[0]) },
+    ],
+    edges,
+    'No topology edges matched the selected evidence.',
+  );
+}
+
+function installTrafficTopology(attempt = 0) {
+  if (typeof window.renderTrafficCapture !== 'function') {
+    if (attempt < 40) window.setTimeout(() => installTrafficTopology(attempt + 1), 50);
+    return;
+  }
+  installTrafficTopologyPanel();
+  if (window.renderTrafficCapture.topologyWrapped) return;
+  const baseRenderer = window.renderTrafficCapture;
+  const wrappedRenderer = function renderTrafficCaptureWithTopology(payload) {
+    baseRenderer(payload);
+    renderTrafficTopology(payload);
+  };
+  wrappedRenderer.topologyWrapped = true;
+  window.renderTrafficCapture = wrappedRenderer;
+}
+
+installTrafficTopology();
