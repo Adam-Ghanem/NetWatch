@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from flow_analysis import summarize_conversations
+from flow_anomaly import FlowAnomalyPolicy, analyze_flow_anomalies
 from flow_correlation import CorrelationPolicy, correlate_flow_events
 from flow_query import FlowQuery, query_flows
 from flow_topology import TopologyLimits, TopologyResult, build_flow_topology
@@ -17,6 +18,7 @@ class InvestigationResult(TypedDict):
     flows: list[dict[str, object]]
     conversations: dict[str, object]
     topology: TopologyResult
+    anomalies: list[dict[str, object]]
 
 
 @dataclass(frozen=True)
@@ -57,11 +59,11 @@ def build_flow_investigation(
 ) -> InvestigationResult:
     """Build one bounded, metadata-only analyst investigation snapshot.
 
-    The function intentionally composes NetWatch's existing flow primitives instead
-    of inventing a second data model. Querying happens first so conversations,
-    protocol-event correlation, and topology are all scoped to the same analyst
-    selection. Only allowlisted protocol metadata reaches the correlated flows; raw
-    payloads are never copied or returned.
+    Querying happens first so conversations, protocol-event correlation, topology,
+    and explainable anomaly findings are scoped to the same analyst selection. Only
+    allowlisted protocol metadata reaches correlated flows; raw payloads are never
+    copied or returned. Anomalies expose deterministic thresholds and bounded evidence
+    rather than opaque risk scores.
     """
     selected = limits or InvestigationLimits()
     selected.validate()
@@ -103,6 +105,10 @@ def build_flow_investigation(
             max_edges=selected.topology_edges,
         ),
     )
+    anomalies = analyze_flow_anomalies(
+        enriched_flows,
+        policy=FlowAnomalyPolicy(max_flows=selected.flow_limit),
+    )
 
     return {
         "payload_retained": False,
@@ -111,4 +117,5 @@ def build_flow_investigation(
         "flows": enriched_flows,
         "conversations": conversations,
         "topology": topology,
+        "anomalies": anomalies,
     }
