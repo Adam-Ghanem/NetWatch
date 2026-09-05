@@ -92,6 +92,7 @@ def test_live_observability_json_is_authenticated_bounded_and_privacy_first(
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["cache-control"] == "no-store"
     assert response.headers["content-disposition"] == (
         'attachment; filename="netwatch-observability.json"'
     )
@@ -137,6 +138,7 @@ def test_offline_observability_ndjson_requires_authorization_and_exposes_safe_re
     assert denied.status_code == 403
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert response.headers["cache-control"] == "no-store"
     assert response.headers["content-disposition"] == (
         'attachment; filename="netwatch-offline-observability.ndjson"'
     )
