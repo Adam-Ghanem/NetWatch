@@ -968,7 +968,7 @@ def update_asset_ports(
     init_db()
     normalized_ip = _normalize_ip(ip_address)
     if not normalized_ip:
-        raise ValueError("A valid IP asset address is required.")
+        raise ValueError("A valid IPv4 or IPv6 asset address is required.")
     now = _utc_now()
     normalized_rows = [dict(row) for row in port_rows if isinstance(row, dict)]
     open_ports = [row for row in normalized_rows if row.get("Status") == "Open"]
@@ -1068,7 +1068,7 @@ def update_asset_context(
     init_db()
     normalized_ip = _normalize_ip(ip_address)
     if not normalized_ip:
-        raise ValueError("A valid IP asset address is required.")
+        raise ValueError("A valid IPv4 or IPv6 asset address is required.")
     normalized_criticality = str(criticality).strip().title()
     if normalized_criticality not in ASSET_CRITICALITIES:
         raise ValueError("Criticality must be Low, Medium, High, or Critical.")
@@ -1147,7 +1147,7 @@ def recent_service_findings(
     if ip_address:
         normalized_ip = _normalize_ip(ip_address)
         if not normalized_ip:
-            raise ValueError("A valid IP asset address is required.")
+            raise ValueError("A valid IPv4 or IPv6 asset address is required.")
     if scan_run_id is not None and int(scan_run_id) < 1:
         raise ValueError("scan_run_id must be a positive integer.")
     with _connect() as conn:
