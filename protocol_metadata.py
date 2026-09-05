@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import struct
-from typing import Any
 
 _MAX_INSPECTION_BYTES = 8_192
 _MAX_TEXT_LENGTH = 512
