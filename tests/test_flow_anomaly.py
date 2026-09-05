@@ -51,8 +51,12 @@ def test_detects_explainable_fanout_and_reset_burst_signals():
     assert findings[0]["entity"] == "192.168.1.20"
     assert findings[0]["observed"] == 4
     assert findings[0]["threshold"] == 4
+    assert findings[0]["confidence"] == "high"
+    assert findings[0]["evidence"] == {"unique_responder_count": 4, "flow_count": 4}
     assert findings[1]["entity"] == "192.168.1.30"
     assert findings[1]["observed"] == 3
+    assert findings[1]["confidence"] == "high"
+    assert findings[1]["evidence"] == {"reset_flow_count": 3, "unique_flow_count": 3}
     assert all(finding["explanation"] for finding in findings)
 
 
@@ -87,6 +91,13 @@ def test_detects_material_byte_asymmetry_but_ignores_tiny_flows():
     assert findings[0]["flow_ids"] == ["large-asymmetry"]
     assert findings[0]["observed"] == 50.0
     assert findings[0]["threshold"] == 20.0
+    assert findings[0]["confidence"] == "medium"
+    assert findings[0]["evidence"] == {
+        "originator_bytes": 5_000,
+        "responder_bytes": 100,
+        "total_bytes": 5_100,
+        "ratio": 50.0,
+    }
 
 
 def test_analysis_is_bounded_and_policy_fails_closed():
