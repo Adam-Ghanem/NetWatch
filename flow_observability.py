@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from ipaddress import ip_address
 from typing import Any
 
@@ -93,6 +94,31 @@ def _record(flow: dict[str, object]) -> dict[str, Any]:
         "netwatch.flow.protocol_event_types": protocol_event_types,
     }
     return {"schema": "netwatch.flow.v1", "attributes": attributes}
+
+
+def export_flow_observability_json(flows: list[dict[str, object]], *, limit: int = 100) -> bytes:
+    """Serialize bounded privacy-first flow records as a JSON integration document."""
+
+    records = build_flow_observability_records(flows, limit=limit)
+    document = {
+        "schema": "netwatch.flow.v1",
+        "count": len(records),
+        "payload_retained": False,
+        "records": records,
+    }
+    return (json.dumps(document, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
+
+
+def export_flow_observability_ndjson(flows: list[dict[str, object]], *, limit: int = 100) -> bytes:
+    """Serialize bounded privacy-first flow records as newline-delimited JSON."""
+
+    records = build_flow_observability_records(flows, limit=limit)
+    text = "\n".join(
+        json.dumps(record, separators=(",", ":"), sort_keys=True) for record in records
+    )
+    if text:
+        text += "\n"
+    return text.encode("utf-8")
 
 
 def build_flow_observability_records(
