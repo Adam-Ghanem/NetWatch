@@ -927,3 +927,200 @@ function installTrafficTopology(attempt = 0) {
 }
 
 installTrafficTopology();
+
+let latestTrafficAnomalyPayload = null;
+
+function anomalyEvidenceText(finding) {
+  const evidence = finding?.evidence && typeof finding.evidence === 'object' ? finding.evidence : {};
+  const entries = Object.entries(evidence).slice(0, 6);
+  if (!entries.length) return 'No additional structured evidence';
+  return entries
+    .map(([key, value]) => `${key.replaceAll('_', ' ')}: ${String(value ?? '—')}`)
+    .join(' · ');
+}
+
+function anomalySearchText(finding) {
+  return [
+    finding?.signal,
+    finding?.severity,
+    finding?.confidence,
+    finding?.entity,
+    finding?.observed,
+    finding?.threshold,
+    anomalyEvidenceText(finding),
+    finding?.explanation,
+  ]
+    .map((value) => String(value ?? ''))
+    .join(' ')
+    .toLowerCase();
+}
+
+function filterTrafficAnomalies(findings) {
+  const severity = String(document.querySelector('#traffic-anomaly-severity-filter')?.value || 'all');
+  const value = String(document.querySelector('#traffic-anomaly-value-filter')?.value || '')
+    .trim()
+    .toLowerCase();
+  return findings
+    .filter((finding) => severity === 'all' || String(finding?.severity || '') === severity)
+    .filter((finding) => !value || anomalySearchText(finding).includes(value))
+    .slice(0, 100);
+}
+
+function renderTrafficAnomalyFilterState(totalRows, visibleRows) {
+  const state = document.querySelector('#traffic-anomaly-filter-state');
+  if (!state) return;
+  const severity = document.querySelector('#traffic-anomaly-severity-filter')?.value || 'all';
+  const value = document.querySelector('#traffic-anomaly-value-filter')?.value.trim() || '';
+  const active = severity !== 'all' || Boolean(value);
+  state.textContent = active
+    ? `Showing ${visibleRows} of ${totalRows} selected-flow anomalies · severity ${String(severity).toUpperCase()}${value ? ` · evidence “${value}”` : ''}`
+    : `Showing ${visibleRows} of ${totalRows} selected-flow anomalies · no anomaly filter`;
+}
+
+function anomalyPivot(finding, flows) {
+  const flowIds = Array.isArray(finding?.flow_ids) ? finding.flow_ids : [];
+  const matched = flows.find((flow) => flowIds.includes(flow?.flow_id));
+  const originator = matched?.source || matched?.originator;
+  const protocol = matched?.protocol || '';
+  const entity = String(finding?.entity || '');
+  const entityIsIp = entity.includes('.') || entity.includes(':');
+  return {
+    ip: String(originator?.ip || (entityIsIp ? entity : '')),
+    protocol,
+  };
+}
+
+function installTrafficAnomalyPanel() {
+  if (document.querySelector('#traffic-anomaly-findings')) return;
+  const packetPanel = document.querySelector('#traffic-packets')?.closest('.panel');
+  if (!packetPanel) return;
+
+  const panel = document.createElement('article');
+  panel.className = 'panel';
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  const copy = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Explainable anomalies';
+  const title = document.createElement('h3');
+  title.textContent = 'Why this evidence was flagged';
+  copy.append(eyebrow, title);
+  const count = document.createElement('span');
+  count.id = 'traffic-anomaly-count';
+  count.className = 'count-badge';
+  count.textContent = '0 findings';
+  head.append(copy, count);
+
+  const filters = document.createElement('div');
+  filters.className = 'traffic-form-grid';
+  const severityWrapper = document.createElement('div');
+  const severityLabel = document.createElement('label');
+  severityLabel.setAttribute('for', 'traffic-anomaly-severity-filter');
+  severityLabel.textContent = 'Severity';
+  const severityFilter = document.createElement('select');
+  severityFilter.id = 'traffic-anomaly-severity-filter';
+  for (const [value, label] of [['all', 'All'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    severityFilter.appendChild(option);
+  }
+  severityWrapper.append(severityLabel, severityFilter);
+
+  const valueWrapper = document.createElement('div');
+  const valueLabel = document.createElement('label');
+  valueLabel.setAttribute('for', 'traffic-anomaly-value-filter');
+  valueLabel.textContent = 'Evidence contains';
+  const valueFilter = document.createElement('input');
+  valueFilter.id = 'traffic-anomaly-value-filter';
+  valueFilter.type = 'search';
+  valueFilter.maxLength = 128;
+  valueFilter.placeholder = 'signal, entity, reason, evidence…';
+  valueWrapper.append(valueLabel, valueFilter);
+
+  const clearWrapper = document.createElement('div');
+  const clearLabel = document.createElement('span');
+  clearLabel.textContent = 'Anomaly filter';
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.className = 'button ghost';
+  clearButton.textContent = 'Clear';
+  clearButton.addEventListener('click', () => {
+    severityFilter.value = 'all';
+    valueFilter.value = '';
+    if (latestTrafficAnomalyPayload) renderTrafficAnomalies(latestTrafficAnomalyPayload);
+  });
+  clearWrapper.append(clearLabel, clearButton);
+  filters.append(severityWrapper, valueWrapper, clearWrapper);
+
+  const state = document.createElement('p');
+  state.id = 'traffic-anomaly-filter-state';
+  state.className = 'muted';
+  state.textContent = 'No anomaly filter active.';
+
+  const body = document.createElement('div');
+  body.id = 'traffic-anomaly-findings';
+  body.className = 'table-wrap empty-state';
+  body.textContent = 'Run an analysis to evaluate explainable selected-flow anomaly evidence.';
+
+  const rerender = () => {
+    if (latestTrafficAnomalyPayload) renderTrafficAnomalies(latestTrafficAnomalyPayload);
+  };
+  severityFilter.addEventListener('change', rerender);
+  valueFilter.addEventListener('input', rerender);
+
+  panel.append(head, filters, state, body);
+  packetPanel.before(panel);
+}
+
+function renderTrafficAnomalies(payload) {
+  const container = document.querySelector('#traffic-anomaly-findings');
+  const count = document.querySelector('#traffic-anomaly-count');
+  if (!container || !count) return;
+  latestTrafficAnomalyPayload = payload;
+  const allFindings = Array.isArray(payload?.anomalies) ? payload.anomalies : [];
+  const flows = Array.isArray(payload?.flows) ? payload.flows : [];
+  const findings = filterTrafficAnomalies(allFindings);
+  count.textContent = `${findings.length} finding${findings.length === 1 ? '' : 's'}`;
+  renderTrafficAnomalyFilterState(allFindings.length, findings.length);
+  buildFlowTable(
+    container,
+    [
+      { label: 'Signal', render: (finding) => String(finding.signal || '—').replaceAll('_', ' ') },
+      { label: 'Severity', render: (finding) => finding.severity || '—' },
+      { label: 'Confidence', render: (finding) => finding.confidence || '—' },
+      { label: 'Entity', render: (finding) => finding.entity || '—' },
+      { label: 'Observed / threshold', render: (finding) => `${finding.observed ?? '—'} / ${finding.threshold ?? '—'}` },
+      { label: 'Evidence', render: (finding) => anomalyEvidenceText(finding) },
+      { label: 'Explanation', render: (finding) => finding.explanation || '—' },
+      {
+        label: 'Pivot',
+        render: (finding) => {
+          const pivot = anomalyPivot(finding, flows);
+          return pivot.ip ? buildPivotButton('Investigate', pivot.ip, pivot.protocol) : '—';
+        },
+      },
+    ],
+    findings,
+    'No explainable anomaly findings matched the selected evidence and local filters.',
+  );
+}
+
+function installTrafficAnomalies(attempt = 0) {
+  if (typeof window.renderTrafficCapture !== 'function') {
+    if (attempt < 40) window.setTimeout(() => installTrafficAnomalies(attempt + 1), 50);
+    return;
+  }
+  installTrafficAnomalyPanel();
+  if (window.renderTrafficCapture.anomaliesWrapped) return;
+  const baseRenderer = window.renderTrafficCapture;
+  const wrappedRenderer = function renderTrafficCaptureWithAnomalies(payload) {
+    baseRenderer(payload);
+    renderTrafficAnomalies(payload);
+  };
+  wrappedRenderer.anomaliesWrapped = true;
+  window.renderTrafficCapture = wrappedRenderer;
+}
+
+installTrafficAnomalies();
