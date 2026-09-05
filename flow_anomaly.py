@@ -91,10 +91,17 @@ def analyze_flow_anomalies(
                 {
                     "signal": "byte_asymmetry",
                     "severity": "medium",
+                    "confidence": "medium",
                     "entity": flow_id or source or destination or "unknown-flow",
                     "flow_ids": [flow_id] if flow_id else [],
                     "observed": round(ratio, 2),
                     "threshold": float(selected.byte_asymmetry_ratio),
+                    "evidence": {
+                        "originator_bytes": originator_bytes,
+                        "responder_bytes": responder_bytes,
+                        "total_bytes": total_bytes,
+                        "ratio": round(ratio, 2),
+                    },
                     "explanation": (
                         "Directional byte volume is highly asymmetric for a material flow; "
                         "validate whether the service normally has this traffic shape."
@@ -105,14 +112,20 @@ def analyze_flow_anomalies(
     for source, unique_destinations in destinations.items():
         count = len(unique_destinations)
         if count >= selected.high_fanout_threshold:
+            flow_ids = sorted(set(fanout_flow_ids[source]))
             findings.append(
                 {
                     "signal": "high_fanout",
                     "severity": "high",
+                    "confidence": "high",
                     "entity": source,
-                    "flow_ids": sorted(set(fanout_flow_ids[source])),
+                    "flow_ids": flow_ids,
                     "observed": count,
                     "threshold": selected.high_fanout_threshold,
+                    "evidence": {
+                        "unique_responder_count": count,
+                        "flow_count": len(flow_ids),
+                    },
                     "explanation": (
                         "One originator contacted many responders in this flow window; "
                         "validate expected discovery, orchestration, or scanning activity."
@@ -123,14 +136,20 @@ def analyze_flow_anomalies(
     for source, flow_ids in reset_flow_ids.items():
         count = len(flow_ids)
         if count >= selected.reset_burst_threshold:
+            selected_flow_ids = sorted(set(flow_ids))
             findings.append(
                 {
                     "signal": "reset_burst",
                     "severity": "medium",
+                    "confidence": "high",
                     "entity": source,
-                    "flow_ids": sorted(set(flow_ids)),
+                    "flow_ids": selected_flow_ids,
                     "observed": count,
                     "threshold": selected.reset_burst_threshold,
+                    "evidence": {
+                        "reset_flow_count": count,
+                        "unique_flow_count": len(selected_flow_ids),
+                    },
                     "explanation": (
                         "One originator produced repeated reset-state flows; "
                         "validate service health, policy rejection, or authorized probing."
