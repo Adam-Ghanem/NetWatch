@@ -547,3 +547,113 @@ function installTrafficExportControls() {
 }
 
 loadNetWatchCore(installTrafficExportControls);
+
+function applicationInsightDetail(event) {
+  const metadata = event && typeof event.metadata === 'object' ? event.metadata : {};
+  if (event?.event_type === 'dns') {
+    const query = String(metadata.query || '—');
+    const qtype = String(metadata.qtype || '—');
+    const rcode = Number.isFinite(Number(metadata.rcode)) ? `rcode ${Number(metadata.rcode)}` : 'rcode —';
+    return `DNS query ${query} · ${qtype} · ${rcode}`;
+  }
+  if (event?.event_type === 'tls') {
+    const server = String(metadata.server_name || '—');
+    const version = String(metadata.version || '—');
+    const alpn = String(metadata.alpn || '—');
+    return `TLS server ${server} · ${version} · ALPN ${alpn}`;
+  }
+  if (event?.event_type === 'http') {
+    const host = String(metadata.host || '—');
+    const method = String(metadata.method || '—');
+    const status = metadata.status == null ? 'status —' : `status ${Number(metadata.status)}`;
+    return `HTTP host ${host} · ${method} · ${status}`;
+  }
+  return 'Application metadata event';
+}
+
+function trafficApplicationInsightRows(payload) {
+  const rows = [];
+  for (const flow of Array.isArray(payload?.flows) ? payload.flows : []) {
+    for (const event of Array.isArray(flow?.protocol_events) ? flow.protocol_events : []) {
+      if (!['dns', 'tls', 'http'].includes(String(event?.event_type || ''))) continue;
+      rows.push({
+        type: String(event.event_type).toUpperCase(),
+        timestamp: event.timestamp || '—',
+        detail: applicationInsightDetail(event),
+        source: flow.source,
+        destination: flow.destination,
+        protocol: flow.protocol,
+      });
+    }
+  }
+  return rows.slice(0, 200);
+}
+
+function installTrafficApplicationInsightsPanel() {
+  if (document.querySelector('#traffic-application-insights')) return;
+  const packetPanel = document.querySelector('#traffic-packets')?.closest('.panel');
+  if (!packetPanel) return;
+
+  const panel = document.createElement('article');
+  panel.className = 'panel';
+  const head = document.createElement('div');
+  head.className = 'panel-head';
+  const copy = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Application insights';
+  const title = document.createElement('h3');
+  title.textContent = 'DNS · TLS · HTTP metadata';
+  copy.append(eyebrow, title);
+  const count = document.createElement('span');
+  count.id = 'traffic-application-insight-count';
+  count.className = 'count-badge';
+  count.textContent = '0 signals';
+  head.append(copy, count);
+
+  const body = document.createElement('div');
+  body.id = 'traffic-application-insights';
+  body.className = 'table-wrap empty-state';
+  body.textContent = 'Run an analysis to correlate safe application metadata with flows.';
+  panel.append(head, body);
+  packetPanel.before(panel);
+}
+
+function renderTrafficApplicationInsights(payload) {
+  const container = document.querySelector('#traffic-application-insights');
+  const count = document.querySelector('#traffic-application-insight-count');
+  if (!container || !count) return;
+  const rows = trafficApplicationInsightRows(payload);
+  count.textContent = `${rows.length} signal${rows.length === 1 ? '' : 's'}`;
+  buildFlowTable(
+    container,
+    [
+      { label: 'Type', render: (row) => row.type },
+      { label: 'Time', render: (row) => row.timestamp },
+      { label: 'Insight', render: (row) => row.detail },
+      { label: 'Originator', render: (row) => flowEndpointText(row.source) },
+      { label: 'Responder', render: (row) => flowEndpointText(row.destination) },
+      { label: 'Pivot', render: (row) => buildPivotButton('Flow', row.source?.ip, row.protocol) },
+    ],
+    rows,
+    'No DNS, TLS, or HTTP metadata signals matched the selected evidence.',
+  );
+}
+
+function installTrafficApplicationInsights(attempt = 0) {
+  if (typeof window.renderTrafficCapture !== 'function') {
+    if (attempt < 40) window.setTimeout(() => installTrafficApplicationInsights(attempt + 1), 50);
+    return;
+  }
+  installTrafficApplicationInsightsPanel();
+  if (window.renderTrafficCapture.applicationInsightsWrapped) return;
+  const baseRenderer = window.renderTrafficCapture;
+  const wrappedRenderer = function renderTrafficCaptureWithApplicationInsights(payload) {
+    baseRenderer(payload);
+    renderTrafficApplicationInsights(payload);
+  };
+  wrappedRenderer.applicationInsightsWrapped = true;
+  window.renderTrafficCapture = wrappedRenderer;
+}
+
+installTrafficApplicationInsights();
