@@ -245,7 +245,7 @@ def parse_neighbor_output(output: str, source: str) -> list[NeighborEntry]:
         except ValueError:
             continue
         normalized_mac = normalize_mac(mac_value)
-        if not isinstance(address, ipaddress.IPv4Address) or not normalized_mac:
+        if not normalized_mac:
             continue
         if state in _UNUSABLE_NEIGHBOR_STATES:
             continue
@@ -309,7 +309,7 @@ def identity_for_ip(
     entries: Iterable[NeighborEntry] | None = None,
 ) -> DeviceIdentity:
     try:
-        target = str(ipaddress.IPv4Address(ip_address))
+        target = str(ipaddress.ip_address(ip_address))
     except ValueError:
         return infer_device_identity(hostname=hostname)
     entry = neighbor_map(entries).get(target)
