@@ -436,11 +436,11 @@ def _correlate_capture_protocol_events(
         raw_event = record.get("_protocol_event")
         if not isinstance(raw_event, dict):
             continue
-        flow_id = flow_ids.get(_flow_lookup_key(record))
-        if not flow_id:
+        correlated_flow_id = flow_ids.get(_flow_lookup_key(record))
+        if not correlated_flow_id:
             continue
         event = dict(raw_event)
-        event["flow_id"] = flow_id
+        event["flow_id"] = correlated_flow_id
         event["timestamp"] = str(record.get("captured_at") or "")
         events.append(event)
         if len(events) >= _MAX_CAPTURE_PROTOCOL_EVENTS:
