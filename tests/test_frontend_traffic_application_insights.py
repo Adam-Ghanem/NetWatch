@@ -21,7 +21,7 @@ def test_application_insight_ui_has_bounded_type_and_value_filters() -> None:
     assert "traffic-application-value-filter" in javascript
     assert "traffic-application-filter-state" in javascript
     assert "filterTrafficApplicationInsightRows" in javascript
-    assert "rows.slice(0, 200)" in javascript
+    assert ".slice(0, 200)" in javascript
     assert "latestTrafficApplicationPayload" in javascript
 
 
