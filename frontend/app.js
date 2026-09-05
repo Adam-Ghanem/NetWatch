@@ -571,6 +571,8 @@ function applicationInsightDetail(event) {
   return 'Application metadata event';
 }
 
+let latestTrafficApplicationPayload = null;
+
 function trafficApplicationInsightRows(payload) {
   const rows = [];
   for (const flow of Array.isArray(payload?.flows) ? payload.flows : []) {
@@ -586,7 +588,30 @@ function trafficApplicationInsightRows(payload) {
       });
     }
   }
-  return rows.slice(0, 200);
+  return rows;
+}
+
+function filterTrafficApplicationInsightRows(rows) {
+  const typeFilter = document.querySelector('#traffic-application-type-filter');
+  const valueFilter = document.querySelector('#traffic-application-value-filter');
+  const selectedType = String(typeFilter?.value || 'all').toUpperCase();
+  const value = String(valueFilter?.value || '').trim().toLowerCase();
+
+  return rows
+    .filter((row) => selectedType === 'ALL' || row.type === selectedType)
+    .filter((row) => !value || row.detail.toLowerCase().includes(value))
+    .slice(0, 200);
+}
+
+function renderTrafficApplicationFilterState(totalRows, visibleRows) {
+  const state = document.querySelector('#traffic-application-filter-state');
+  if (!state) return;
+  const type = document.querySelector('#traffic-application-type-filter')?.value || 'all';
+  const value = document.querySelector('#traffic-application-value-filter')?.value.trim() || '';
+  const active = type !== 'all' || Boolean(value);
+  state.textContent = active
+    ? `Showing ${visibleRows} of ${totalRows} selected-flow signals · type ${type.toUpperCase()}${value ? ` · value “${value}”` : ''}`
+    : `Showing ${visibleRows} of ${totalRows} selected-flow signals · no application filter`;
 }
 
 function installTrafficApplicationInsightsPanel() {
@@ -611,11 +636,65 @@ function installTrafficApplicationInsightsPanel() {
   count.textContent = '0 signals';
   head.append(copy, count);
 
+  const filters = document.createElement('div');
+  filters.className = 'traffic-form-grid';
+  const typeWrapper = document.createElement('div');
+  const typeLabel = document.createElement('label');
+  typeLabel.setAttribute('for', 'traffic-application-type-filter');
+  typeLabel.textContent = 'Application type';
+  const typeFilter = document.createElement('select');
+  typeFilter.id = 'traffic-application-type-filter';
+  for (const [value, label] of [['all', 'All'], ['dns', 'DNS'], ['tls', 'TLS'], ['http', 'HTTP']]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    typeFilter.appendChild(option);
+  }
+  typeWrapper.append(typeLabel, typeFilter);
+
+  const valueWrapper = document.createElement('div');
+  const valueLabel = document.createElement('label');
+  valueLabel.setAttribute('for', 'traffic-application-value-filter');
+  valueLabel.textContent = 'Visible metadata contains';
+  const valueFilter = document.createElement('input');
+  valueFilter.id = 'traffic-application-value-filter';
+  valueFilter.type = 'search';
+  valueFilter.maxLength = 128;
+  valueFilter.placeholder = 'host, query, method, status…';
+  valueWrapper.append(valueLabel, valueFilter);
+
+  const clearWrapper = document.createElement('div');
+  const clearLabel = document.createElement('span');
+  clearLabel.textContent = 'Application filter';
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.className = 'button ghost';
+  clearButton.textContent = 'Clear';
+  clearButton.addEventListener('click', () => {
+    typeFilter.value = 'all';
+    valueFilter.value = '';
+    if (latestTrafficApplicationPayload) renderTrafficApplicationInsights(latestTrafficApplicationPayload);
+  });
+  clearWrapper.append(clearLabel, clearButton);
+  filters.append(typeWrapper, valueWrapper, clearWrapper);
+
+  const filterState = document.createElement('p');
+  filterState.id = 'traffic-application-filter-state';
+  filterState.className = 'muted';
+  filterState.textContent = 'No application filter active.';
+
   const body = document.createElement('div');
   body.id = 'traffic-application-insights';
   body.className = 'table-wrap empty-state';
   body.textContent = 'Run an analysis to correlate safe application metadata with flows.';
-  panel.append(head, body);
+
+  const rerender = () => {
+    if (latestTrafficApplicationPayload) renderTrafficApplicationInsights(latestTrafficApplicationPayload);
+  };
+  typeFilter.addEventListener('change', rerender);
+  valueFilter.addEventListener('input', rerender);
+
+  panel.append(head, filters, filterState, body);
   packetPanel.before(panel);
 }
 
@@ -623,8 +702,11 @@ function renderTrafficApplicationInsights(payload) {
   const container = document.querySelector('#traffic-application-insights');
   const count = document.querySelector('#traffic-application-insight-count');
   if (!container || !count) return;
-  const rows = trafficApplicationInsightRows(payload);
+  latestTrafficApplicationPayload = payload;
+  const allRows = trafficApplicationInsightRows(payload);
+  const rows = filterTrafficApplicationInsightRows(allRows);
   count.textContent = `${rows.length} signal${rows.length === 1 ? '' : 's'}`;
+  renderTrafficApplicationFilterState(allRows.length, rows.length);
   buildFlowTable(
     container,
     [
@@ -636,7 +718,7 @@ function renderTrafficApplicationInsights(payload) {
       { label: 'Pivot', render: (row) => buildPivotButton('Flow', row.source?.ip, row.protocol) },
     ],
     rows,
-    'No DNS, TLS, or HTTP metadata signals matched the selected evidence.',
+    'No DNS, TLS, or HTTP metadata signals matched the selected evidence and application filters.',
   );
 }
 
