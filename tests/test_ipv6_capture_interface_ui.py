@@ -63,7 +63,7 @@ def test_traffic_interface_selector_surfaces_bounded_ipv6_evidence() -> None:
     core = Path("frontend/app-core.js").read_text(encoding="utf-8")
 
     assert "const ipv6Addresses = Array.isArray(item.ipv6_addresses)" in core
-    assert ".slice(0, 2);" in core
+    assert ".slice(0, 2)" in core
     assert "`IPv6 ${ipv6Addresses.join(', ')}`" in core
     assert "` +${item.ipv6_addresses.length - ipv6Addresses.length}`" in core
     assert "option.value = item.name;" in core
