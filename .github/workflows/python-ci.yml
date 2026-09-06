@@ -76,13 +76,13 @@ jobs:
               1,
           )
 
-          version_marker = '        conn.execute("PRAGMA user_version = 10")\n\n\n'
+          version_marker = '        conn.execute("PRAGMA user_version = 10")'
           if text.count(version_marker) != 1:
               raise SystemExit("schema version marker not found exactly once")
-          helper = '''def _ensure_service_finding_evidence_columns(conn: sqlite3.Connection) -> None:\n    existing = {\n        row["name"]\n        for row in conn.execute("PRAGMA table_info(service_findings)").fetchall()\n    }\n    columns = {\n        "service_detection": "TEXT NOT NULL DEFAULT ''",\n        "service_product": "TEXT NOT NULL DEFAULT ''",\n        "service_version": "TEXT NOT NULL DEFAULT ''",\n        "service_confidence": "TEXT NOT NULL DEFAULT ''",\n    }\n    for name, definition in columns.items():\n        if name not in existing:\n            conn.execute(f"ALTER TABLE service_findings ADD COLUMN {name} {definition}")\n\n\n'''
+          helper = '''\n\n\ndef _ensure_service_finding_evidence_columns(conn: sqlite3.Connection) -> None:\n    existing = {\n        row["name"]\n        for row in conn.execute("PRAGMA table_info(service_findings)").fetchall()\n    }\n    columns = {\n        "service_detection": "TEXT NOT NULL DEFAULT ''",\n        "service_product": "TEXT NOT NULL DEFAULT ''",\n        "service_version": "TEXT NOT NULL DEFAULT ''",\n        "service_confidence": "TEXT NOT NULL DEFAULT ''",\n    }\n    for name, definition in columns.items():\n        if name not in existing:\n            conn.execute(f"ALTER TABLE service_findings ADD COLUMN {name} {definition}")\n'''
           text = text.replace(
               version_marker,
-              '        conn.execute("PRAGMA user_version = 11")\n\n\n' + helper,
+              '        conn.execute("PRAGMA user_version = 11")' + helper,
               1,
           )
 
@@ -117,7 +117,7 @@ jobs:
           text = text[:start] + segment + text[end:]
 
           start = text.index("def update_asset_ports(")
-          end = text.index("\ndef update_asset_context", start)
+          end = text.index("\ndef record_audit_event", start)
           segment = text[start:end]
           old_insert = '''                    scan_run_id, ip_address, port, protocol, service,\n                    status, risk, response_time_ms, observed_at\n                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n'''
           if segment.count(old_insert) != 1:
