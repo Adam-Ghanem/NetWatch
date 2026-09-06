@@ -1,0 +1,40 @@
+name: Asset timeline patch runner
+
+on:
+  push:
+    branches:
+      - feature/asset-timeline-service-version-changes
+    paths:
+      - .github/workflows/asset-timeline-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'chore: temporary asset timeline patch runner'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feature/asset-timeline-service-version-changes
+      - name: Wire retained service changes into asset timeline
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('inventory_store.py')
+          source = path.read_text(encoding='utf-8')
+          old = '''    items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)\n    return items[:safe_limit]\n'''
+          new = '''    # Import lazily to avoid a module-load cycle: service change intelligence reads\n    # retained findings through inventory_store but does not mutate scan state.\n    from service_change_intelligence import asset_service_version_changes\n\n    items.extend(asset_service_version_changes(normalized_ip, limit=safe_limit))\n    items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)\n    return items[:safe_limit]\n'''
+          if source.count(old) != 1:
+              raise SystemExit('expected asset_timeline return block was not found exactly once')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+          git diff -- inventory_store.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add inventory_store.py
+          git commit -m 'feat: surface service version changes in asset timeline'
+          git push origin HEAD:feature/asset-timeline-service-version-changes
