@@ -19,6 +19,22 @@ def _identity(row: dict) -> tuple[str, str]:
     )
 
 
+def _change_details(
+    old_product: str,
+    old_version: str,
+    new_product: str,
+    new_version: str,
+    detection: str,
+    confidence: str,
+) -> str:
+    details = [f"{old_product} {old_version} → {new_product} {new_version}".strip()]
+    if detection:
+        details.append(detection)
+    if confidence:
+        details.append(f"{confidence} confidence")
+    return " · ".join(details)
+
+
 def build_service_version_changes(
     findings: Iterable[dict],
     *,
@@ -63,19 +79,28 @@ def build_service_version_changes(
             target = _service_target(ip_address, port, protocol)
         except ValueError:
             continue
+        detection = str(row.get("service_detection", "")).strip()
+        confidence = str(row.get("service_confidence", "")).strip()
         changes.append(
             {
                 "created_at": str(row.get("observed_at", "")),
                 "kind": "service_version_change",
                 "event_type": "service_version_change",
                 "event_label": "Service version changed",
-                "details": f"{old_product} {old_version} → {product} {version}".strip(),
+                "details": _change_details(
+                    old_product,
+                    old_version,
+                    product,
+                    version,
+                    detection,
+                    confidence,
+                ),
                 "scan_run_id": row.get("scan_run_id"),
                 "status": str(row.get("status", "")),
                 "target": target,
                 "service": service,
-                "service_detection": str(row.get("service_detection", "")),
-                "service_confidence": str(row.get("service_confidence", "")),
+                "service_detection": detection,
+                "service_confidence": confidence,
                 "old_product": old_product,
                 "old_version": old_version,
                 "new_product": product,
