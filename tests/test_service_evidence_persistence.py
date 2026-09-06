@@ -13,7 +13,9 @@ def test_service_evidence_is_persisted_for_ipv4_and_ipv6(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
 
     for target in ("192.168.1.10", "2001:db8::10"):
-        scan_run_id = inventory_store.add_scan_run("ports", target, "port audit completed")
+        scan_run_id = inventory_store.add_scan_run(
+            "ports", target, "port audit completed"
+        )
         inventory_store.update_asset_ports(
             target,
             [
