@@ -1307,6 +1307,11 @@ def asset_timeline(ip_address: str, limit: int = 100) -> list[dict]:
         item["event_label"] = label
         items.append(item)
 
+    # Import lazily to avoid a module-load cycle: service change intelligence reads
+    # retained findings through inventory_store but does not mutate scan state.
+    from service_change_intelligence import asset_service_version_changes
+
+    items.extend(asset_service_version_changes(normalized_ip, limit=safe_limit))
     items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
     return items[:safe_limit]
 
