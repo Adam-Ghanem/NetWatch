@@ -112,6 +112,25 @@ def test_service_identity_includes_port_and_protocol():
     assert service_findings[0]["service"] == "dns"
 
 
+def test_ipv6_service_entities_use_brackets_to_avoid_port_ambiguity():
+    current = [
+        _flow(
+            "new-v6-https",
+            "2001:db8::10",
+            "2001:db8::20",
+            destination_port=8443,
+            service="https-alt",
+        )
+    ]
+
+    findings = flow_change_intelligence.compare_flow_snapshots([], current)
+
+    service_findings = [item for item in findings if item["change"] == "new_service"]
+    assert len(service_findings) == 1
+    assert service_findings[0]["entity"] == "[2001:db8::20]:8443/tcp"
+    assert "[2001:db8::20]:8443/tcp" in service_findings[0]["explanation"]
+
+
 def test_detects_material_service_traffic_volume_drift():
     previous = [
         _flow(
