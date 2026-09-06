@@ -65,9 +65,7 @@ _CSV_COLUMNS = (
 
 def _validate_limit(limit: int) -> None:
     if limit < 1 or limit > FLOW_EXPORT_MAX_ROWS:
-        raise ValueError(
-            f"Flow export limit must be between 1 and {FLOW_EXPORT_MAX_ROWS}."
-        )
+        raise ValueError(f"Flow export limit must be between 1 and {FLOW_EXPORT_MAX_ROWS}.")
 
 
 def _endpoint(value: object) -> dict[str, object]:
@@ -108,9 +106,7 @@ def _metadata(flow: dict[str, object]) -> dict[str, object]:
     for field in _ENDPOINT_FIELDS:
         endpoints[field] = _endpoint(flow.get(field))
         exported[field] = endpoints[field]
-    exported["address_family"] = _address_family(
-        endpoints["originator"], endpoints["responder"]
-    )
+    exported["address_family"] = _address_family(endpoints["originator"], endpoints["responder"])
     return exported
 
 
