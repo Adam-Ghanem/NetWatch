@@ -602,6 +602,10 @@ async function loadInventory() {
     { key: 'port', label: 'Port' },
     { key: 'protocol', label: 'Protocol' },
     { key: 'service', label: 'Service' },
+    { key: 'service_detection', label: 'Detection' },
+    { key: 'service_product', label: 'Product' },
+    { key: 'service_version', label: 'Version' },
+    { key: 'service_confidence', label: 'Confidence', chip: true },
     { key: 'status', label: 'Status', chip: true },
     { key: 'risk', label: 'Risk', chip: true },
     { key: 'response_time_ms', label: 'Response ms' },
@@ -800,7 +804,7 @@ async function loadAssetTimeline(ipAddress) {
     { key: 'details', label: 'Details' },
   ], asset
     ? 'No retained activity for this asset yet.'
-    : 'This IPv4 address is valid but is not saved in inventory and has no retained activity.');
+    : 'This valid IP address is not saved in inventory and has no retained activity.');
 }
 
 async function loadAudit() {
@@ -1574,6 +1578,10 @@ $('#ports-form').addEventListener('submit', async (event) => {
     renderTable($('#ports-results'), result.ports || [], [
       { key: 'Port', label: 'Port' },
       { key: 'Service', label: 'Service' },
+      { key: 'Service Detection', label: 'Detection' },
+      { key: 'Service Product', label: 'Product' },
+      { key: 'Service Version', label: 'Version' },
+      { key: 'Service Confidence', label: 'Confidence', chip: true },
       { key: 'Status', label: 'Status', chip: true },
       { key: 'Response Time (ms)', label: 'Response ms' },
       { key: 'Risk', label: 'Priority', chip: true },
