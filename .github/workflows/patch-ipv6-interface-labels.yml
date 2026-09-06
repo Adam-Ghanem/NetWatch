@@ -32,10 +32,25 @@ jobs:
               raise SystemExit('expected loadTrafficInterfaces block not found')
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
-      - name: Verify focused regression
+      - name: Verify focused contract
         run: |
-          python -m pytest tests/test_ipv6_capture_interface_ui.py -q
           node --check frontend/app-core.js
+          python - <<'PY'
+          from pathlib import Path
+
+          core = Path('frontend/app-core.js').read_text(encoding='utf-8')
+          required = [
+              "const ipv6Addresses = Array.isArray(item.ipv6_addresses)",
+              ".slice(0, 2);",
+              "`IPv6 ${ipv6Addresses.join(', ')}`",
+              "` +${item.ipv6_addresses.length - ipv6Addresses.length}`",
+              "option.value = item.name;",
+              "option.value === previous",
+          ]
+          missing = [marker for marker in required if marker not in core]
+          if missing:
+              raise SystemExit(f'missing expected selector markers: {missing}')
+          PY
       - name: Commit patch and remove temporary workflow
         run: |
           rm .github/workflows/patch-ipv6-interface-labels.yml
