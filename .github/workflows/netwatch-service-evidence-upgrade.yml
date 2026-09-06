@@ -1,0 +1,148 @@
+name: NetWatch service evidence upgrade
+
+on:
+  push:
+    branches:
+      - automation/service-evidence-ux
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install verification dependencies
+        run: python -m pip install --upgrade pip pytest black flake8
+      - name: Apply bounded service evidence UX patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/app-core.js')
+          source = path.read_text(encoding='utf-8')
+
+          persisted_old = """  renderTable($('#service-findings-results'), servicePayload.items || [], [
+            { key: 'observed_at', label: 'Observed' },
+            { key: 'scan_run_id', label: 'Scan' },
+            { key: 'ip_address', label: 'IP address' },
+            { key: 'port', label: 'Port' },
+            { key: 'protocol', label: 'Protocol' },
+            { key: 'service', label: 'Service' },
+            { key: 'status', label: 'Status', chip: true },
+            { key: 'risk', label: 'Risk', chip: true },
+            { key: 'response_time_ms', label: 'Response ms' },
+          ], 'No normalized service findings yet. Run an authorized port audit.');"""
+          persisted_new = """  renderTable($('#service-findings-results'), servicePayload.items || [], [
+            { key: 'observed_at', label: 'Observed' },
+            { key: 'scan_run_id', label: 'Scan' },
+            { key: 'ip_address', label: 'IP address' },
+            { key: 'port', label: 'Port' },
+            { key: 'protocol', label: 'Protocol' },
+            { key: 'service', label: 'Service' },
+            { key: 'service_detection', label: 'Detection' },
+            { key: 'service_product', label: 'Product' },
+            { key: 'service_version', label: 'Version' },
+            { key: 'service_confidence', label: 'Confidence', chip: true },
+            { key: 'status', label: 'Status', chip: true },
+            { key: 'risk', label: 'Risk', chip: true },
+            { key: 'response_time_ms', label: 'Response ms' },
+          ], 'No normalized service findings yet. Run an authorized port audit.');"""
+
+          immediate_old = """    renderTable($('#ports-results'), result.ports || [], [
+              { key: 'Port', label: 'Port' },
+              { key: 'Service', label: 'Service' },
+              { key: 'Status', label: 'Status', chip: true },
+              { key: 'Response Time (ms)', label: 'Response ms' },
+              { key: 'Risk', label: 'Priority', chip: true },
+              { key: 'Recommendation', label: 'Recommendation' },
+            ]);"""
+          immediate_new = """    renderTable($('#ports-results'), result.ports || [], [
+              { key: 'Port', label: 'Port' },
+              { key: 'Service', label: 'Service' },
+              { key: 'Service Detection', label: 'Detection' },
+              { key: 'Service Product', label: 'Product' },
+              { key: 'Service Version', label: 'Version' },
+              { key: 'Service Confidence', label: 'Confidence', chip: true },
+              { key: 'Status', label: 'Status', chip: true },
+              { key: 'Response Time (ms)', label: 'Response ms' },
+              { key: 'Risk', label: 'Priority', chip: true },
+              { key: 'Recommendation', label: 'Recommendation' },
+            ]);"""
+
+          timeline_old = "This IPv4 address is valid but is not saved in inventory and has no retained activity."
+          timeline_new = "This valid IP address is not saved in inventory and has no retained activity."
+
+          for old, new, label in (
+              (persisted_old, persisted_new, 'persisted service evidence table'),
+              (immediate_old, immediate_new, 'immediate port evidence table'),
+              (timeline_old, timeline_new, 'dual-stack asset timeline wording'),
+          ):
+              if old not in source:
+                  raise SystemExit(f'Expected {label} source block was not found; refusing a blind rewrite.')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          cat > tests/test_frontend_service_evidence.py <<'PY'
+          from pathlib import Path
+
+
+          APP_CORE = Path('frontend/app-core.js')
+
+
+          def _source() -> str:
+              return APP_CORE.read_text(encoding='utf-8')
+
+
+          def test_inventory_service_table_surfaces_persisted_detection_evidence() -> None:
+              source = _source()
+              for field in (
+                  "{ key: 'service_detection', label: 'Detection' }",
+                  "{ key: 'service_product', label: 'Product' }",
+                  "{ key: 'service_version', label: 'Version' }",
+                  "{ key: 'service_confidence', label: 'Confidence', chip: true }",
+              ):
+                  assert field in source
+
+
+          def test_port_audit_surfaces_response_backed_service_evidence() -> None:
+              source = _source()
+              for field in (
+                  "{ key: 'Service Detection', label: 'Detection' }",
+                  "{ key: 'Service Product', label: 'Product' }",
+                  "{ key: 'Service Version', label: 'Version' }",
+                  "{ key: 'Service Confidence', label: 'Confidence', chip: true }",
+              ):
+                  assert field in source
+
+
+          def test_asset_timeline_empty_state_is_dual_stack_truthful() -> None:
+              source = _source()
+              assert 'This IPv4 address is valid' not in source
+              assert 'This valid IP address is not saved in inventory' in source
+          PY
+      - name: Verify frontend syntax and focused regressions
+        run: |
+          node --check frontend/app-core.js
+          black --check tests/test_frontend_service_evidence.py
+          flake8 tests/test_frontend_service_evidence.py
+          pytest -q tests/test_frontend_service_evidence.py
+      - name: Commit verified patch
+        shell: bash
+        run: |
+          rm .github/workflows/netwatch-service-evidence-upgrade.yml
+          git config user.name 'NetWatch automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Surface persisted service detection evidence'
+          git push origin HEAD:automation/service-evidence-ux
