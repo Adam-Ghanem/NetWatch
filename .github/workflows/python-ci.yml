@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 jobs:
@@ -18,34 +18,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref || github.ref }}
-
-      - name: Apply deterministic asset timeline wiring
-        if: github.event_name == 'pull_request' && github.head_ref == 'feature/asset-timeline-service-version-changes'
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('inventory_store.py')
-          source = path.read_text(encoding='utf-8')
-          old = '''    items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)\n    return items[:safe_limit]\n'''
-          new = '''    # Import lazily to avoid a module-load cycle: service change intelligence reads\n    # retained findings through inventory_store but does not mutate scan state.\n    from service_change_intelligence import asset_service_version_changes\n\n    items.extend(asset_service_version_changes(normalized_ip, limit=safe_limit))\n    items.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)\n    return items[:safe_limit]\n'''
-          if new in source:
-              raise SystemExit(0)
-          if source.count(old) != 1:
-              raise SystemExit('expected asset_timeline return block was not found exactly once')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
-          PY
-          if git diff --quiet -- inventory_store.py; then
-            exit 0
-          fi
-          git diff --check
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add inventory_store.py
-          git commit -m 'feat: surface service version changes in asset timeline'
-          git push origin HEAD:feature/asset-timeline-service-version-changes
 
       - name: Set up Python
         uses: actions/setup-python@v6
