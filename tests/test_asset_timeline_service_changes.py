@@ -47,6 +47,9 @@ def test_asset_timeline_includes_service_version_change_evidence(monkeypatch, tm
     assert changes[0]["new_version"] == "9.8p1"
     assert changes[0]["service_detection"] == "SSH greeting"
     assert changes[0]["service_confidence"] == "High"
+    assert changes[0]["details"] == (
+        "OpenSSH 9.7p1 → OpenSSH 9.8p1 · SSH greeting · High confidence"
+    )
 
 
 def test_asset_timeline_suppresses_unchanged_service_versions(monkeypatch, tmp_path):
