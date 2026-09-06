@@ -66,5 +66,6 @@ def test_traffic_interface_selector_surfaces_bounded_ipv6_evidence() -> None:
     assert ".slice(0, 2)" in core
     assert "`IPv6 ${ipv6Addresses.join(', ')}`" in core
     assert "` +${item.ipv6_addresses.length - ipv6Addresses.length}`" in core
+    assert "[item.ipv4_address, ipv6Detail, item.mac_address]" in core
     assert "option.value = item.name;" in core
     assert "option.value === previous" in core
