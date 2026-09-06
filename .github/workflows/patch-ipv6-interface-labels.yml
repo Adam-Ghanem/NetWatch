@@ -41,7 +41,7 @@ jobs:
           core = Path('frontend/app-core.js').read_text(encoding='utf-8')
           required = [
               "const ipv6Addresses = Array.isArray(item.ipv6_addresses)",
-              ".slice(0, 2);",
+              ".slice(0, 2)",
               "`IPv6 ${ipv6Addresses.join(', ')}`",
               "` +${item.ipv6_addresses.length - ipv6Addresses.length}`",
               "option.value = item.name;",
