@@ -128,7 +128,7 @@ def test_ipv6_service_entities_use_brackets_to_avoid_port_ambiguity():
     service_findings = [item for item in findings if item["change"] == "new_service"]
     assert len(service_findings) == 1
     assert service_findings[0]["entity"] == "[2001:db8::20]:8443/tcp"
-    assert "[2001:db8::20]:8443/tcp" in service_findings[0]["explanation"]
+    assert "[2001:db8::20]:8443/tcp" in str(service_findings[0]["explanation"])
 
 
 def test_detects_material_service_traffic_volume_drift():
