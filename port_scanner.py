@@ -27,6 +27,9 @@ _SSH_GREETING_BYTES = 256
 _SSH_GREETING_TIMEOUT_SECONDS = 0.25
 _FTP_GREETING_BYTES = 256
 _FTP_GREETING_TIMEOUT_SECONDS = 0.25
+_SMTP_GREETING_BYTES = 256
+_SMTP_GREETING_TIMEOUT_SECONDS = 0.25
+_ServiceEvidence = dict[str, str]
 
 
 def _socket_target(target: str, port: int) -> tuple[int, tuple[object, ...]]:
@@ -127,6 +130,50 @@ def _ftp_service_evidence(sock: socket.socket, timeout: float) -> dict[str, str]
     }
 
 
+def _smtp_service_evidence(sock: socket.socket, timeout: float) -> _ServiceEvidence:
+    """Read a bounded SMTP greeting and retain only allowlisted product/version evidence."""
+    try:
+        sock.settimeout(min(timeout, _SMTP_GREETING_TIMEOUT_SECONDS))
+        payload = sock.recv(_SMTP_GREETING_BYTES)
+    except (OSError, socket.timeout):
+        return _default_service_evidence()
+
+    first_line = payload.splitlines()[0] if payload else b""
+    greeting = first_line.decode("ascii", errors="ignore").strip()
+    if not greeting.startswith("220"):
+        return _default_service_evidence()
+
+    tokens = greeting.split()
+    for index, raw_token in enumerate(tokens):
+        token = raw_token.strip("()[]{}<>,;:")
+        product = ""
+        if token == "Postfix":
+            product = "Postfix"
+        elif token == "Exim":
+            product = "Exim"
+        if not product:
+            continue
+
+        version = ""
+        if index + 1 < len(tokens):
+            candidate = tokens[index + 1].strip("()[]{}<>,;:")[:80]
+            if candidate and candidate[0].isdigit():
+                version = candidate
+        return {
+            "Service Detection": "SMTP greeting",
+            "Service Product": product,
+            "Service Version": version,
+            "Service Confidence": "High" if version else "Medium",
+        }
+
+    return {
+        "Service Detection": "SMTP greeting",
+        "Service Product": "",
+        "Service Version": "",
+        "Service Confidence": "Medium",
+    }
+
+
 def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict:
     is_open = False
     status = "Closed/Unknown"
@@ -143,10 +190,13 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
             if code == 0:
                 is_open = True
                 status = "Open"
-                if service.lower() == "ssh" or port == 22:
+                normalized_service = service.lower()
+                if normalized_service == "ssh" or port == 22:
                     service_evidence = _ssh_service_evidence(sock, timeout)
-                elif service.lower() == "ftp" or port == 21:
+                elif normalized_service == "ftp" or port == 21:
                     service_evidence = _ftp_service_evidence(sock, timeout)
+                elif normalized_service in {"smtp", "submission"} or port in {25, 587}:
+                    service_evidence = _smtp_service_evidence(sock, timeout)
             elif code in _CLOSED_CODES:
                 status = "Closed"
             elif code in _FILTERED_CODES:
