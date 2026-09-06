@@ -131,7 +131,7 @@ def _ftp_service_evidence(sock: socket.socket, timeout: float) -> dict[str, str]
 
 
 def _smtp_service_evidence(sock: socket.socket, timeout: float) -> _ServiceEvidence:
-    """Read one bounded SMTP server greeting and retain only allowlisted product/version evidence."""
+    """Read a bounded SMTP greeting and retain only allowlisted product/version evidence."""
     try:
         sock.settimeout(min(timeout, _SMTP_GREETING_TIMEOUT_SECONDS))
         payload = sock.recv(_SMTP_GREETING_BYTES)
