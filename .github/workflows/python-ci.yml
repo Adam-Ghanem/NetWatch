@@ -40,8 +40,8 @@ jobs:
           text = path.read_text()
           replacements = [
               (
-                  """                service TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
-                  """                service TEXT NOT NULL DEFAULT '',\n                service_detection TEXT NOT NULL DEFAULT '',\n                service_product TEXT NOT NULL DEFAULT '',\n                service_version TEXT NOT NULL DEFAULT '',\n                service_confidence TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
+                  """            CREATE TABLE IF NOT EXISTS service_findings (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                scan_run_id INTEGER NOT NULL,\n                ip_address TEXT NOT NULL,\n                port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),\n                protocol TEXT NOT NULL,\n                service TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
+                  """            CREATE TABLE IF NOT EXISTS service_findings (\n                id INTEGER PRIMARY KEY AUTOINCREMENT,\n                scan_run_id INTEGER NOT NULL,\n                ip_address TEXT NOT NULL,\n                port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),\n                protocol TEXT NOT NULL,\n                service TEXT NOT NULL DEFAULT '',\n                service_detection TEXT NOT NULL DEFAULT '',\n                service_product TEXT NOT NULL DEFAULT '',\n                service_version TEXT NOT NULL DEFAULT '',\n                service_confidence TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
               ),
               (
                   """            \"\"\")\n        conn.execute(\n            \"CREATE INDEX IF NOT EXISTS idx_service_findings_scan \"\n""",
@@ -56,8 +56,8 @@ jobs:
                   """        service = _audit_value(row.get(\"Service\", \"\"), 120)\n        service_detection = _audit_value(row.get(\"Service Detection\", \"\"), 80)\n        service_product = _audit_value(row.get(\"Service Product\", \"\"), 120)\n        service_version = _audit_value(row.get(\"Service Version\", \"\"), 80)\n        service_confidence = _audit_value(row.get(\"Service Confidence\", \"\"), 20)\n        status = _audit_value(row.get(\"Status\", \"Unknown\"), 40) or \"Unknown\"\n""",
               ),
               (
-                  """                service,\n                status,\n""",
-                  """                service,\n                service_detection,\n                service_product,\n                service_version,\n                service_confidence,\n                status,\n""",
+                  """                scan_run_id,\n                ip_address,\n                port,\n                protocol,\n                service,\n                status,\n""",
+                  """                scan_run_id,\n                ip_address,\n                port,\n                protocol,\n                service,\n                service_detection,\n                service_product,\n                service_version,\n                service_confidence,\n                status,\n""",
               ),
               (
                   """                    scan_run_id, ip_address, port, protocol, service,\n                    status, risk, response_time_ms, observed_at\n                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n""",
@@ -70,7 +70,7 @@ jobs:
           ]
           for old, new in replacements:
               if text.count(old) != 1:
-                  raise SystemExit(f"patch match count != 1 for {old[:70]!r}")
+                  raise SystemExit(f"patch match count {text.count(old)} for {old[:70]!r}")
               text = text.replace(old, new, 1)
           path.write_text(text)
           PY
