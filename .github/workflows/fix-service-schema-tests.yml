@@ -1,0 +1,45 @@
+name: Fix service evidence schema tests
+
+on:
+  push:
+    branches:
+      - upgrade/service-evidence-persistence
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: upgrade/service-evidence-persistence
+      - name: Update schema expectations
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          for filename in (
+              "tests/test_inventory_store.py",
+              "tests/test_operations_store.py",
+          ):
+              path = Path(filename)
+              text = path.read_text()
+              old = "assert version == 10"
+              if text.count(old) != 1:
+                  raise SystemExit(
+                      f"Expected exactly one schema assertion in {filename}, "
+                      f"found {text.count(old)}"
+                  )
+              path.write_text(text.replace(old, "assert version == 11", 1))
+          PY
+          git diff --check
+      - name: Commit test contract and remove helper
+        run: |
+          git config user.name "NetWatch automation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-service-schema-tests.yml
+          git add tests/test_inventory_store.py tests/test_operations_store.py
+          git commit -m "test: track service evidence schema v11"
+          git push origin HEAD:upgrade/service-evidence-persistence
