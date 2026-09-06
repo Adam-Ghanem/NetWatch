@@ -1,6 +1,7 @@
 import sqlite3
 
 import inventory_store
+import service_change_intelligence
 
 
 def _use_temporary_database(monkeypatch, tmp_path):
@@ -117,3 +118,42 @@ def test_schema_v10_service_findings_migrate_without_losing_history(
         "risk": "Medium",
         "response_time_ms": 8.5,
     }
+
+
+def test_asset_history_builds_bounded_service_version_change(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    target = "2001:db8::42"
+
+    for version in ("9.7p1", "9.8p1"):
+        scan_run_id = inventory_store.add_scan_run("ports", target, "port audit completed")
+        inventory_store.update_asset_ports(
+            target,
+            [
+                {
+                    "Port": 22,
+                    "Protocol": "TCP",
+                    "Service": "SSH",
+                    "Status": "Open",
+                    "Risk": "Medium",
+                    "Service Detection": "SSH greeting",
+                    "Service Product": "OpenSSH",
+                    "Service Version": version,
+                    "Service Confidence": "High",
+                }
+            ],
+            exposure_score=2,
+            exposure_level="Low",
+            scan_run_id=scan_run_id,
+        )
+
+    changes = service_change_intelligence.asset_service_version_changes(target)
+
+    assert len(changes) == 1
+    assert changes[0]["event_label"] == "Service version changed"
+    assert changes[0]["target"] == "[2001:db8::42]:22/tcp"
+    assert changes[0]["old_product"] == "OpenSSH"
+    assert changes[0]["old_version"] == "9.7p1"
+    assert changes[0]["new_product"] == "OpenSSH"
+    assert changes[0]["new_version"] == "9.8p1"
+    assert changes[0]["service_detection"] == "SSH greeting"
+    assert changes[0]["service_confidence"] == "High"
