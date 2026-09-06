@@ -105,7 +105,8 @@ def _service_volumes(
 
 def _service_entity(key: tuple[str, int, str, str]) -> str:
     ip_address, port, protocol, _ = key
-    return f"{ip_address}:{port}/{protocol}"
+    host = f"[{ip_address}]" if ":" in ip_address else ip_address
+    return f"{host}:{port}/{protocol}"
 
 
 def compare_flow_snapshots(
