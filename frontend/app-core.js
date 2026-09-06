@@ -655,7 +655,16 @@ async function loadTrafficInterfaces() {
   (payload.interfaces || []).forEach((item) => {
     const option = document.createElement('option');
     option.value = item.name;
-    const details = [item.ipv4_address, item.mac_address]
+    const ipv6Addresses = Array.isArray(item.ipv6_addresses)
+      ? item.ipv6_addresses.filter((value) => value && value !== '-').slice(0, 2)
+      : [];
+    const ipv6Detail = ipv6Addresses.length
+      ? `IPv6 ${ipv6Addresses.join(', ')}`
+        + (item.ipv6_addresses.length > ipv6Addresses.length
+          ? ` +${item.ipv6_addresses.length - ipv6Addresses.length}`
+          : '')
+      : '';
+    const details = [item.ipv4_address, ipv6Detail, item.mac_address]
       .filter((value) => value && value !== '-')
       .join(' · ');
     option.textContent = `${item.name}${details ? ` · ${details}` : ''}${item.loopback ? ' · loopback' : ''}`;
