@@ -23,6 +23,8 @@ _FILTERED_CODES = {
     10051,
     10064,
 }
+_SSH_GREETING_BYTES = 256
+_SSH_GREETING_TIMEOUT_SECONDS = 0.25
 
 
 def _socket_target(target: str, port: int) -> tuple[int, tuple[object, ...]]:
@@ -36,10 +38,56 @@ def _socket_target(target: str, port: int) -> tuple[int, tuple[object, ...]]:
     return socket.AF_INET, (host, port)
 
 
+def _default_service_evidence() -> dict[str, str]:
+    return {
+        "Service Detection": "Port catalog",
+        "Service Product": "",
+        "Service Version": "",
+        "Service Confidence": "Low",
+    }
+
+
+def _ssh_service_evidence(sock: socket.socket, timeout: float) -> dict[str, str]:
+    """Read and parse one bounded SSH identification line without returning raw banner data."""
+    try:
+        sock.settimeout(min(timeout, _SSH_GREETING_TIMEOUT_SECONDS))
+        payload = sock.recv(_SSH_GREETING_BYTES)
+    except (OSError, socket.timeout):
+        return _default_service_evidence()
+
+    first_line = payload.splitlines()[0] if payload else b""
+    greeting = first_line.decode("ascii", errors="ignore").strip()
+    if not greeting.startswith("SSH-"):
+        return _default_service_evidence()
+
+    parts = greeting.split("-", 2)
+    if len(parts) != 3 or not parts[2].strip():
+        return _default_service_evidence()
+
+    software_token = parts[2].strip().split()[0][:120]
+    product = ""
+    version = ""
+    confidence = "Medium"
+    if software_token.startswith("OpenSSH_"):
+        product = "OpenSSH"
+        version = software_token.removeprefix("OpenSSH_")[:80]
+        confidence = "High" if version else "Medium"
+    else:
+        product = software_token.replace("_", " ")[:80]
+
+    return {
+        "Service Detection": "SSH greeting",
+        "Service Product": product,
+        "Service Version": version,
+        "Service Confidence": confidence,
+    }
+
+
 def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict:
     is_open = False
     status = "Closed/Unknown"
     response_time: float | None = None
+    service_evidence = _default_service_evidence()
     started = time.perf_counter()
 
     try:
@@ -51,6 +99,8 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
             if code == 0:
                 is_open = True
                 status = "Open"
+                if service.lower() == "ssh" or port == 22:
+                    service_evidence = _ssh_service_evidence(sock, timeout)
             elif code in _CLOSED_CODES:
                 status = "Closed"
             elif code in _FILTERED_CODES:
@@ -73,6 +123,7 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
         "Description": details["description"],
         "Common Role": details["common_role"],
         "Recommendation": recommendation_for_port(port, is_open),
+        **service_evidence,
     }
 
 
@@ -94,6 +145,7 @@ def scan_ports(ip: str, timeout: float = DEFAULT_TIMEOUT) -> List[dict]:
                 "Description": "Target validation failed",
                 "Common Role": "-",
                 "Recommendation": validation.error or "Invalid target",
+                **_default_service_evidence(),
             }
         ]
 
@@ -124,6 +176,7 @@ def scan_ports(ip: str, timeout: float = DEFAULT_TIMEOUT) -> List[dict]:
                         "Description": details["description"],
                         "Common Role": details["common_role"],
                         "Recommendation": "The check failed; review the local error log and retry.",
+                        **_default_service_evidence(),
                     }
                 )
 
