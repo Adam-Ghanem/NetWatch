@@ -48,7 +48,9 @@ def test_service_evidence_is_persisted_for_ipv4_and_ipv6(monkeypatch, tmp_path):
         assert finding["service_confidence"] == "High"
 
 
-def test_schema_v10_service_findings_migrate_without_losing_history(monkeypatch, tmp_path):
+def test_schema_v10_service_findings_migrate_without_losing_history(
+    monkeypatch, tmp_path
+):
     _use_temporary_database(monkeypatch, tmp_path)
 
     with sqlite3.connect(inventory_store.DB_FILE) as conn:
