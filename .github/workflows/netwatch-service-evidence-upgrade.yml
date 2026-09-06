@@ -29,66 +29,60 @@ jobs:
           path = Path('frontend/app-core.js')
           source = path.read_text(encoding='utf-8')
 
-          persisted_old = """  renderTable($('#service-findings-results'), servicePayload.items || [], [
-            { key: 'observed_at', label: 'Observed' },
-            { key: 'scan_run_id', label: 'Scan' },
-            { key: 'ip_address', label: 'IP address' },
-            { key: 'port', label: 'Port' },
-            { key: 'protocol', label: 'Protocol' },
-            { key: 'service', label: 'Service' },
-            { key: 'status', label: 'Status', chip: true },
-            { key: 'risk', label: 'Risk', chip: true },
-            { key: 'response_time_ms', label: 'Response ms' },
-          ], 'No normalized service findings yet. Run an authorized port audit.');"""
-          persisted_new = """  renderTable($('#service-findings-results'), servicePayload.items || [], [
-            { key: 'observed_at', label: 'Observed' },
-            { key: 'scan_run_id', label: 'Scan' },
-            { key: 'ip_address', label: 'IP address' },
-            { key: 'port', label: 'Port' },
-            { key: 'protocol', label: 'Protocol' },
-            { key: 'service', label: 'Service' },
-            { key: 'service_detection', label: 'Detection' },
-            { key: 'service_product', label: 'Product' },
-            { key: 'service_version', label: 'Version' },
-            { key: 'service_confidence', label: 'Confidence', chip: true },
-            { key: 'status', label: 'Status', chip: true },
-            { key: 'risk', label: 'Risk', chip: true },
-            { key: 'response_time_ms', label: 'Response ms' },
-          ], 'No normalized service findings yet. Run an authorized port audit.');"""
+          def replace_once_in_section(text, start, end, old, new, label):
+              start_at = text.find(start)
+              if start_at < 0:
+                  raise SystemExit(f'Expected {label} section start was not found.')
+              end_at = text.find(end, start_at)
+              if end_at < 0:
+                  raise SystemExit(f'Expected {label} section end was not found.')
+              section = text[start_at:end_at]
+              if section.count(old) != 1:
+                  raise SystemExit(
+                      f'Expected exactly one {label} anchor, found {section.count(old)}; refusing rewrite.'
+                  )
+              section = section.replace(old, new, 1)
+              return text[:start_at] + section + text[end_at:]
 
-          immediate_old = """    renderTable($('#ports-results'), result.ports || [], [
-              { key: 'Port', label: 'Port' },
-              { key: 'Service', label: 'Service' },
-              { key: 'Status', label: 'Status', chip: true },
-              { key: 'Response Time (ms)', label: 'Response ms' },
-              { key: 'Risk', label: 'Priority', chip: true },
-              { key: 'Recommendation', label: 'Recommendation' },
-            ]);"""
-          immediate_new = """    renderTable($('#ports-results'), result.ports || [], [
-              { key: 'Port', label: 'Port' },
-              { key: 'Service', label: 'Service' },
-              { key: 'Service Detection', label: 'Detection' },
-              { key: 'Service Product', label: 'Product' },
-              { key: 'Service Version', label: 'Version' },
-              { key: 'Service Confidence', label: 'Confidence', chip: true },
-              { key: 'Status', label: 'Status', chip: true },
-              { key: 'Response Time (ms)', label: 'Response ms' },
-              { key: 'Risk', label: 'Priority', chip: true },
-              { key: 'Recommendation', label: 'Recommendation' },
-            ]);"""
+          persisted_anchor = "    { key: 'service', label: 'Service' },\n"
+          persisted_fields = persisted_anchor + (
+              "    { key: 'service_detection', label: 'Detection' },\n"
+              "    { key: 'service_product', label: 'Product' },\n"
+              "    { key: 'service_version', label: 'Version' },\n"
+              "    { key: 'service_confidence', label: 'Confidence', chip: true },\n"
+          )
+          source = replace_once_in_section(
+              source,
+              'async function loadInventory() {',
+              'function formatBytes(value) {',
+              persisted_anchor,
+              persisted_fields,
+              'persisted service evidence table',
+          )
 
-          timeline_old = "This IPv4 address is valid but is not saved in inventory and has no retained activity."
-          timeline_new = "This valid IP address is not saved in inventory and has no retained activity."
+          immediate_anchor = "      { key: 'Service', label: 'Service' },\n"
+          immediate_fields = immediate_anchor + (
+              "      { key: 'Service Detection', label: 'Detection' },\n"
+              "      { key: 'Service Product', label: 'Product' },\n"
+              "      { key: 'Service Version', label: 'Version' },\n"
+              "      { key: 'Service Confidence', label: 'Confidence', chip: true },\n"
+          )
+          source = replace_once_in_section(
+              source,
+              "$('#ports-form').addEventListener('submit'",
+              "$('#traffic-interface-refresh').addEventListener('click'",
+              immediate_anchor,
+              immediate_fields,
+              'immediate port evidence table',
+          )
 
-          for old, new, label in (
-              (persisted_old, persisted_new, 'persisted service evidence table'),
-              (immediate_old, immediate_new, 'immediate port evidence table'),
-              (timeline_old, timeline_new, 'dual-stack asset timeline wording'),
-          ):
-              if old not in source:
-                  raise SystemExit(f'Expected {label} source block was not found; refusing a blind rewrite.')
-              source = source.replace(old, new, 1)
-
+          timeline_old = 'This IPv4 address is valid but is not saved in inventory and has no retained activity.'
+          timeline_new = 'This valid IP address is not saved in inventory and has no retained activity.'
+          if source.count(timeline_old) != 1:
+              raise SystemExit(
+                  f'Expected exactly one dual-stack timeline wording anchor, found {source.count(timeline_old)}.'
+              )
+          source = source.replace(timeline_old, timeline_new, 1)
           path.write_text(source, encoding='utf-8')
           PY
 
