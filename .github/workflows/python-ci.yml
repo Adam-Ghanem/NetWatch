@@ -31,6 +31,59 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
+      - name: Build service evidence persistence candidate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("inventory_store.py")
+          text = path.read_text()
+          replacements = [
+              (
+                  """                service TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
+                  """                service TEXT NOT NULL DEFAULT '',\n                service_detection TEXT NOT NULL DEFAULT '',\n                service_product TEXT NOT NULL DEFAULT '',\n                service_version TEXT NOT NULL DEFAULT '',\n                service_confidence TEXT NOT NULL DEFAULT '',\n                status TEXT NOT NULL,\n""",
+              ),
+              (
+                  """            \"\"\")\n        conn.execute(\n            \"CREATE INDEX IF NOT EXISTS idx_service_findings_scan \"\n""",
+                  """            \"\"\")\n        _ensure_service_finding_evidence_columns(conn)\n        conn.execute(\n            \"CREATE INDEX IF NOT EXISTS idx_service_findings_scan \"\n""",
+              ),
+              (
+                  """        conn.execute(\"PRAGMA user_version = 10\")\n\n\ndef _ensure_asset_context_columns""",
+                  """        conn.execute(\"PRAGMA user_version = 11\")\n\n\ndef _ensure_service_finding_evidence_columns(conn: sqlite3.Connection) -> None:\n    existing = {\n        row[\"name\"] for row in conn.execute(\"PRAGMA table_info(service_findings)\").fetchall()\n    }\n    columns = {\n        \"service_detection\": \"TEXT NOT NULL DEFAULT ''\",\n        \"service_product\": \"TEXT NOT NULL DEFAULT ''\",\n        \"service_version\": \"TEXT NOT NULL DEFAULT ''\",\n        \"service_confidence\": \"TEXT NOT NULL DEFAULT ''\",\n    }\n    for name, definition in columns.items():\n        if name not in existing:\n            conn.execute(f\"ALTER TABLE service_findings ADD COLUMN {name} {definition}\")\n\n\ndef _ensure_asset_context_columns""",
+              ),
+              (
+                  """        service = _audit_value(row.get(\"Service\", \"\"), 120)\n        status = _audit_value(row.get(\"Status\", \"Unknown\"), 40) or \"Unknown\"\n""",
+                  """        service = _audit_value(row.get(\"Service\", \"\"), 120)\n        service_detection = _audit_value(row.get(\"Service Detection\", \"\"), 80)\n        service_product = _audit_value(row.get(\"Service Product\", \"\"), 120)\n        service_version = _audit_value(row.get(\"Service Version\", \"\"), 80)\n        service_confidence = _audit_value(row.get(\"Service Confidence\", \"\"), 20)\n        status = _audit_value(row.get(\"Status\", \"Unknown\"), 40) or \"Unknown\"\n""",
+              ),
+              (
+                  """                service,\n                status,\n""",
+                  """                service,\n                service_detection,\n                service_product,\n                service_version,\n                service_confidence,\n                status,\n""",
+              ),
+              (
+                  """                    scan_run_id, ip_address, port, protocol, service,\n                    status, risk, response_time_ms, observed_at\n                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n""",
+                  """                    scan_run_id, ip_address, port, protocol, service,\n                    service_detection, service_product, service_version, service_confidence,\n                    status, risk, response_time_ms, observed_at\n                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n""",
+              ),
+              (
+                  """            SELECT scan_run_id, observed_at, ip_address, port, protocol,\n                   service, status, risk, response_time_ms\n""",
+                  """            SELECT scan_run_id, observed_at, ip_address, port, protocol,\n                   service, service_detection, service_product, service_version,\n                   service_confidence, status, risk, response_time_ms\n""",
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f"patch match count != 1 for {old[:70]!r}")
+              text = text.replace(old, new, 1)
+          path.write_text(text)
+          PY
+          black inventory_store.py
+          git diff --check
+
+      - name: Upload service evidence candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-store-patched
+          path: inventory_store.py
+          retention-days: 1
+
       - name: Check formatting and imports
         run: |
           black --check .
