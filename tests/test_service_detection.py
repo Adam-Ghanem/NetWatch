@@ -61,3 +61,48 @@ def test_ssh_greeting_timeout_is_non_fatal() -> None:
 
     assert evidence["Service Detection"] == "Port catalog"
     assert evidence["Service Confidence"] == "Low"
+
+
+def test_ftp_greeting_extracts_known_product_version_without_retaining_hostname() -> None:
+    sock = _GreetingSocket(b"220 edge-gw.internal ProFTPD 1.3.8 Server ready\r\n")
+
+    evidence = port_scanner._ftp_service_evidence(cast(socket.socket, sock), timeout=2.0)
+
+    assert evidence == {
+        "Service Detection": "FTP greeting",
+        "Service Product": "ProFTPD",
+        "Service Version": "1.3.8",
+        "Service Confidence": "High",
+    }
+    assert sock.recv_sizes == [256]
+    assert sock.timeouts == [0.25]
+    assert "edge-gw.internal" not in str(evidence)
+
+
+def test_ftp_greeting_recognizes_vsftpd_without_claiming_missing_version() -> None:
+    sock = _GreetingSocket(b"220 (vsFTPd 3.0.5)\r\n")
+
+    evidence = port_scanner._ftp_service_evidence(cast(socket.socket, sock), timeout=0.1)
+
+    assert evidence == {
+        "Service Detection": "FTP greeting",
+        "Service Product": "vsftpd",
+        "Service Version": "3.0.5",
+        "Service Confidence": "High",
+    }
+    assert sock.recv_sizes == [256]
+    assert sock.timeouts == [0.1]
+
+
+def test_ftp_greeting_falls_back_for_unrecognized_or_malformed_banner() -> None:
+    sock = _GreetingSocket(b"220 storage.internal FTP service ready\r\n")
+
+    evidence = port_scanner._ftp_service_evidence(cast(socket.socket, sock), timeout=1.0)
+
+    assert evidence == {
+        "Service Detection": "FTP greeting",
+        "Service Product": "",
+        "Service Version": "",
+        "Service Confidence": "Medium",
+    }
+    assert "storage.internal" not in str(evidence)

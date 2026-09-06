@@ -25,6 +25,8 @@ _FILTERED_CODES = {
 }
 _SSH_GREETING_BYTES = 256
 _SSH_GREETING_TIMEOUT_SECONDS = 0.25
+_FTP_GREETING_BYTES = 256
+_FTP_GREETING_TIMEOUT_SECONDS = 0.25
 
 
 def _socket_target(target: str, port: int) -> tuple[int, tuple[object, ...]]:
@@ -83,6 +85,48 @@ def _ssh_service_evidence(sock: socket.socket, timeout: float) -> dict[str, str]
     }
 
 
+def _ftp_service_evidence(sock: socket.socket, timeout: float) -> dict[str, str]:
+    """Read one bounded FTP server greeting and retain only allowlisted product/version evidence."""
+    try:
+        sock.settimeout(min(timeout, _FTP_GREETING_TIMEOUT_SECONDS))
+        payload = sock.recv(_FTP_GREETING_BYTES)
+    except (OSError, socket.timeout):
+        return _default_service_evidence()
+
+    first_line = payload.splitlines()[0] if payload else b""
+    greeting = first_line.decode("ascii", errors="ignore").strip()
+    if not greeting.startswith("220"):
+        return _default_service_evidence()
+
+    tokens = greeting.split()
+    for index, raw_token in enumerate(tokens):
+        token = raw_token.strip("()[]{}<>,;:")
+        product = ""
+        if token == "ProFTPD":
+            product = "ProFTPD"
+        elif token.lower() == "vsftpd":
+            product = "vsftpd"
+        if not product:
+            continue
+
+        version = ""
+        if index + 1 < len(tokens):
+            version = tokens[index + 1].strip("()[]{}<>,;:")[:80]
+        return {
+            "Service Detection": "FTP greeting",
+            "Service Product": product,
+            "Service Version": version,
+            "Service Confidence": "High" if version else "Medium",
+        }
+
+    return {
+        "Service Detection": "FTP greeting",
+        "Service Product": "",
+        "Service Version": "",
+        "Service Confidence": "Medium",
+    }
+
+
 def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict:
     is_open = False
     status = "Closed/Unknown"
@@ -101,6 +145,8 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
                 status = "Open"
                 if service.lower() == "ssh" or port == 22:
                     service_evidence = _ssh_service_evidence(sock, timeout)
+                elif service.lower() == "ftp" or port == 21:
+                    service_evidence = _ftp_service_evidence(sock, timeout)
             elif code in _CLOSED_CODES:
                 status = "Closed"
             elif code in _FILTERED_CODES:
