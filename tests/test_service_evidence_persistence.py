@@ -1,6 +1,7 @@
 import sqlite3
 
 import inventory_store
+import service_change_intelligence
 
 
 def _use_temporary_database(monkeypatch, tmp_path):
@@ -119,7 +120,7 @@ def test_schema_v10_service_findings_migrate_without_losing_history(
     }
 
 
-def test_asset_timeline_surfaces_bounded_service_version_change(monkeypatch, tmp_path):
+def test_asset_history_builds_bounded_service_version_change(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     target = "2001:db8::42"
 
@@ -145,11 +146,7 @@ def test_asset_timeline_surfaces_bounded_service_version_change(monkeypatch, tmp
             scan_run_id=scan_run_id,
         )
 
-    changes = [
-        item
-        for item in inventory_store.asset_timeline(target)
-        if item["kind"] == "service_version_change"
-    ]
+    changes = service_change_intelligence.asset_service_version_changes(target)
 
     assert len(changes) == 1
     assert changes[0]["event_label"] == "Service version changed"
