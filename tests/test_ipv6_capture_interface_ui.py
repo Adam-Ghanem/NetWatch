@@ -57,3 +57,15 @@ def test_interface_ipv6_addresses_fails_closed_when_kernel_table_is_unavailable(
     monkeypatch.setattr(Path, "read_text", unavailable_read_text)
 
     assert traffic_capture._interface_ipv6_addresses("eth0") == []
+
+
+def test_traffic_interface_selector_surfaces_bounded_ipv6_evidence() -> None:
+    core = Path("frontend/app-core.js").read_text(encoding="utf-8")
+
+    assert "const ipv6Addresses = Array.isArray(item.ipv6_addresses)" in core
+    assert ".slice(0, 2)" in core
+    assert "`IPv6 ${ipv6Addresses.join(', ')}`" in core
+    assert "` +${item.ipv6_addresses.length - ipv6Addresses.length}`" in core
+    assert "[item.ipv4_address, ipv6Detail, item.mac_address]" in core
+    assert "option.value = item.name;" in core
+    assert "option.value === previous" in core
