@@ -211,6 +211,10 @@ def init_db() -> None:
                 port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
                 protocol TEXT NOT NULL,
                 service TEXT NOT NULL DEFAULT '',
+                service_detection TEXT NOT NULL DEFAULT '',
+                service_product TEXT NOT NULL DEFAULT '',
+                service_version TEXT NOT NULL DEFAULT '',
+                service_confidence TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL,
                 risk TEXT NOT NULL DEFAULT 'None',
                 response_time_ms REAL,
@@ -219,6 +223,7 @@ def init_db() -> None:
                 FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
             )
             """)
+        _ensure_service_finding_evidence_columns(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_service_findings_scan "
             "ON service_findings(scan_run_id, id)"
@@ -243,7 +248,22 @@ def init_db() -> None:
         create_operations_schema(conn)
         create_intelligence_schema(conn)
         create_enterprise_schema(conn)
-        conn.execute("PRAGMA user_version = 10")
+        conn.execute("PRAGMA user_version = 11")
+
+
+def _ensure_service_finding_evidence_columns(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"] for row in conn.execute("PRAGMA table_info(service_findings)").fetchall()
+    }
+    columns = {
+        "service_detection": "TEXT NOT NULL DEFAULT ''",
+        "service_product": "TEXT NOT NULL DEFAULT ''",
+        "service_version": "TEXT NOT NULL DEFAULT ''",
+        "service_confidence": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE service_findings ADD COLUMN {name} {definition}")
 
 
 def _ensure_asset_context_columns(conn: sqlite3.Connection) -> None:
@@ -918,6 +938,10 @@ def _normalized_service_findings(
             continue
         protocol = _audit_value(row.get("Protocol", "TCP"), 20).upper() or "TCP"
         service = _audit_value(row.get("Service", ""), 120)
+        service_detection = _audit_value(row.get("Service Detection", ""), 80)
+        service_product = _audit_value(row.get("Service Product", ""), 120)
+        service_version = _audit_value(row.get("Service Version", ""), 80)
+        service_confidence = _audit_value(row.get("Service Confidence", ""), 20)
         status = _audit_value(row.get("Status", "Unknown"), 40) or "Unknown"
         risk = _audit_value(row.get("Risk", "None"), 20) or "None"
         response_time: float | None = None
@@ -936,6 +960,10 @@ def _normalized_service_findings(
                 port,
                 protocol,
                 service,
+                service_detection,
+                service_product,
+                service_version,
+                service_confidence,
                 status,
                 risk,
                 response_time,
@@ -999,8 +1027,9 @@ def update_asset_ports(
                 """
                 INSERT OR REPLACE INTO service_findings (
                     scan_run_id, ip_address, port, protocol, service,
+                    service_detection, service_product, service_version, service_confidence,
                     status, risk, response_time_ms, observed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _normalized_service_findings(normalized_ip, normalized_rows, scan_run_id, now),
             )
@@ -1154,7 +1183,8 @@ def recent_service_findings(
         rows = conn.execute(
             """
             SELECT scan_run_id, observed_at, ip_address, port, protocol,
-                   service, status, risk, response_time_ms
+                   service, service_detection, service_product, service_version,
+                   service_confidence, status, risk, response_time_ms
             FROM service_findings
             WHERE (? IS NULL OR scan_run_id = ?)
               AND (? IS NULL OR ip_address = ?)

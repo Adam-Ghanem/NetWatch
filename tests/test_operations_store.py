@@ -147,7 +147,7 @@ def test_database_backup_is_a_readable_consistent_snapshot(monkeypatch, tmp_path
         version = conn.execute("PRAGMA user_version").fetchone()[0]
 
     assert asset == ("192.168.1.90",)
-    assert version == 10
+    assert version == 11
 
 
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):
