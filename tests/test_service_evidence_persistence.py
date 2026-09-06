@@ -46,7 +46,9 @@ def test_service_evidence_is_persisted_for_ipv4_and_ipv6(monkeypatch, tmp_path):
         assert finding["service_confidence"] == "High"
 
 
-def test_existing_service_findings_schema_migrates_without_losing_rows(monkeypatch, tmp_path):
+def test_existing_service_findings_schema_migrates_without_losing_rows(
+    monkeypatch, tmp_path
+):
     _use_temporary_database(monkeypatch, tmp_path)
     tmp_path.mkdir(parents=True, exist_ok=True)
 
@@ -82,7 +84,10 @@ def test_existing_service_findings_schema_migrates_without_losing_rows(monkeypat
             """
         )
         conn.execute(
-            "INSERT INTO scan_runs (created_at, scan_type, target, summary) VALUES (?, ?, ?, ?)",
+            """
+            INSERT INTO scan_runs (created_at, scan_type, target, summary)
+            VALUES (?, ?, ?, ?)
+            """,
             ("2026-09-01T10:00:00+00:00", "ports", "192.168.1.10", "legacy scan"),
         )
         conn.execute(
@@ -99,7 +104,9 @@ def test_existing_service_findings_schema_migrates_without_losing_rows(monkeypat
     inventory_store.init_db()
 
     with sqlite3.connect(inventory_store.DB_FILE) as conn:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(service_findings)")}
+        columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(service_findings)")
+        }
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         row = conn.execute(
             """
