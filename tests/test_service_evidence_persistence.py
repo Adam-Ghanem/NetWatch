@@ -55,8 +55,7 @@ def test_schema_v10_service_findings_migrate_without_losing_history(
     _use_temporary_database(monkeypatch, tmp_path)
 
     with sqlite3.connect(inventory_store.DB_FILE) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE service_findings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 scan_run_id INTEGER NOT NULL,
@@ -69,8 +68,7 @@ def test_schema_v10_service_findings_migrate_without_losing_history(
                 risk TEXT NOT NULL DEFAULT 'None',
                 response_time_ms REAL
             )
-            """
-        )
+            """)
         conn.execute(
             """
             INSERT INTO service_findings (
@@ -96,14 +94,12 @@ def test_schema_v10_service_findings_migrate_without_losing_history(
 
     with sqlite3.connect(inventory_store.DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
-        row = conn.execute(
-            """
+        row = conn.execute("""
             SELECT scan_run_id, ip_address, port, service,
                    service_detection, service_product, service_version,
                    service_confidence, status, risk, response_time_ms
             FROM service_findings
-            """
-        ).fetchone()
+            """).fetchone()
         version = conn.execute("PRAGMA user_version").fetchone()[0]
 
     assert version == 11
