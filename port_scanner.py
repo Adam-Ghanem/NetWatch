@@ -239,7 +239,7 @@ def _parse_http_server_header(payload: bytes) -> _ServiceEvidence:
 
 
 def _http_service_evidence(sock: socket.socket, timeout: float) -> _ServiceEvidence:
-    """Issue one bounded HEAD request and retain only allowlisted Server product/version evidence."""
+    """Return bounded, allowlisted HTTP Server product/version evidence."""
     request = b"HEAD / HTTP/1.0\r\nConnection: close\r\n\r\n"
     try:
         sock.settimeout(min(timeout, _HTTP_PROBE_TIMEOUT_SECONDS))
