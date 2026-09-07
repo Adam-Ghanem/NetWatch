@@ -95,9 +95,8 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_tls_service_history_scan "
         "ON tls_service_history(scan_run_id, id)"
     )
-    conn.execute("DROP TRIGGER IF EXISTS trg_service_findings_tls_history")
     conn.execute(f"""
-        CREATE TRIGGER trg_service_findings_tls_history
+        CREATE TRIGGER IF NOT EXISTS trg_service_findings_tls_history
         AFTER INSERT ON service_findings
         WHEN lower(NEW.status) = 'open'
         BEGIN
