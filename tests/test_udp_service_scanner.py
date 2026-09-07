@@ -56,18 +56,21 @@ def test_dns_response_marks_service_open_and_retains_only_metadata():
     )
 
     assert len(rows) == 1
-    assert rows[0] == {
+    row = rows[0]
+    response_time = row["Response Time (ms)"]
+    assert isinstance(response_time, (int, float))
+    assert row == {
         "Port": 53,
         "Protocol": "UDP",
         "Service": "DNS",
         "Status": "Open",
-        "Response Time (ms)": pytest.approx(rows[0]["Response Time (ms)"], abs=0.01),
+        "Response Time (ms)": response_time,
         "Service Detection": "DNS response",
         "Service Product": "DNS",
         "Service Version": "",
         "Service Confidence": "High",
     }
-    assert 0 <= rows[0]["Response Time (ms)"] <= 1000
+    assert 0 <= response_time <= 1000
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 17
     assert sock.timeout == 0.2
