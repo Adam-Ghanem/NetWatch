@@ -1,0 +1,28 @@
+name: Test diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest-output:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Capture focused TLS history failures
+        run: pytest -q tests/test_tls_service_history.py > /tmp/pytest.txt 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pytest-diagnostic
+          path: /tmp/pytest.txt
+          if-no-files-found: error
+          retention-days: 1
