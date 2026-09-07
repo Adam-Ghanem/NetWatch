@@ -1,4 +1,5 @@
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 import intelligence_store
 import inventory_store
@@ -32,6 +33,21 @@ def _tls_result(**overrides):
     }
     result.update(overrides)
     return result
+
+
+def test_tls_schema_initialization_is_idempotent_under_concurrency(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda _: inventory_store.init_db(), range(16)))
+
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        trigger_count = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master "
+            "WHERE type = 'trigger' AND name = 'trg_service_findings_tls_history'"
+        ).fetchone()[0]
+
+    assert trigger_count == 1
 
 
 def test_tls_service_evidence_is_retained_across_scans(monkeypatch, tmp_path):
