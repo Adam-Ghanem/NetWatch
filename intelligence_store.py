@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from config import AI_CACHE_TTL_SECONDS, MAX_INTELLIGENCE_EVENTS
+from config import AI_CACHE_TTL_SECONDS, MAX_INTELLIGENCE_EVENTS, MAX_SERVICE_FINDINGS
 
 _SNAPSHOT_HASH = re.compile(r"^[a-f0-9]{64}$")
 
@@ -66,6 +67,101 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL
         )
         """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tls_service_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_run_id INTEGER NOT NULL,
+            ip_address TEXT NOT NULL,
+            port INTEGER NOT NULL CHECK(port BETWEEN 1 AND 65535),
+            protocol TEXT NOT NULL,
+            observed_at TEXT NOT NULL,
+            tls_protocol TEXT NOT NULL DEFAULT '',
+            tls_cipher TEXT NOT NULL DEFAULT '',
+            tls_alpn TEXT NOT NULL DEFAULT '',
+            certificate_sha256 TEXT NOT NULL DEFAULT '',
+            certificate_not_before TEXT NOT NULL DEFAULT '',
+            certificate_not_after TEXT NOT NULL DEFAULT '',
+            certificate_status TEXT NOT NULL DEFAULT 'Unknown',
+            certificate_days_remaining TEXT NOT NULL DEFAULT '',
+            UNIQUE(scan_run_id, ip_address, protocol, port),
+            FOREIGN KEY(scan_run_id) REFERENCES scan_runs(id) ON DELETE CASCADE
+        )
+        """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tls_service_history_asset "
+        "ON tls_service_history(ip_address, observed_at, id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tls_service_history_scan "
+        "ON tls_service_history(scan_run_id, id)"
+    )
+    conn.execute("DROP TRIGGER IF EXISTS trg_service_findings_tls_history")
+    conn.execute(
+        f"""
+        CREATE TRIGGER trg_service_findings_tls_history
+        AFTER INSERT ON service_findings
+        WHEN lower(NEW.status) = 'open'
+        BEGIN
+            INSERT OR REPLACE INTO tls_service_history (
+                scan_run_id, ip_address, port, protocol, observed_at,
+                tls_protocol, tls_cipher, tls_alpn, certificate_sha256,
+                certificate_not_before, certificate_not_after,
+                certificate_status, certificate_days_remaining
+            )
+            SELECT
+                NEW.scan_run_id,
+                NEW.ip_address,
+                NEW.port,
+                NEW.protocol,
+                NEW.observed_at,
+                substr(COALESCE(json_extract(port.value, '$."TLS Protocol"'), ''), 1, 32),
+                substr(COALESCE(json_extract(port.value, '$."TLS Cipher"'), ''), 1, 96),
+                substr(COALESCE(json_extract(port.value, '$."TLS ALPN"'), ''), 1, 32),
+                CASE
+                    WHEN length(lower(COALESCE(json_extract(
+                        port.value, '$."TLS Certificate SHA256"'
+                    ), ''))) = 64
+                    AND lower(COALESCE(json_extract(
+                        port.value, '$."TLS Certificate SHA256"'
+                    ), '')) NOT GLOB '*[^0-9a-f]*'
+                    THEN lower(json_extract(port.value, '$."TLS Certificate SHA256"'))
+                    ELSE ''
+                END,
+                substr(COALESCE(json_extract(
+                    port.value, '$."TLS Certificate Not Before"'
+                ), ''), 1, 40),
+                substr(COALESCE(json_extract(
+                    port.value, '$."TLS Certificate Not After"'
+                ), ''), 1, 40),
+                CASE COALESCE(json_extract(
+                    port.value, '$."TLS Certificate Status"'
+                ), 'Unknown')
+                    WHEN 'Valid' THEN 'Valid'
+                    WHEN 'Expired' THEN 'Expired'
+                    WHEN 'Not Yet Valid' THEN 'Not Yet Valid'
+                    ELSE 'Unknown'
+                END,
+                substr(COALESCE(json_extract(
+                    port.value, '$."TLS Certificate Days Remaining"'
+                ), ''), 1, 16)
+            FROM assets AS asset, json_each(asset.open_ports) AS port
+            WHERE asset.ip_address = NEW.ip_address
+              AND CAST(COALESCE(json_extract(port.value, '$.Port'), 0) AS INTEGER) = NEW.port
+              AND upper(COALESCE(json_extract(port.value, '$.Protocol'), 'TCP')) = upper(NEW.protocol)
+              AND (
+                    COALESCE(json_extract(port.value, '$."TLS Protocol"'), '') != ''
+                 OR COALESCE(json_extract(port.value, '$."TLS Certificate SHA256"'), '') != ''
+                 OR COALESCE(json_extract(port.value, '$."TLS Certificate Status"'), '') != ''
+              )
+            LIMIT 1;
+
+            DELETE FROM tls_service_history
+            WHERE id NOT IN (
+                SELECT id FROM tls_service_history ORDER BY id DESC LIMIT {int(MAX_SERVICE_FINDINGS)}
+            );
+        END
+        """
+    )
 
 
 def _prune(conn: sqlite3.Connection) -> None:
@@ -230,6 +326,57 @@ def reserve_intelligence_request(
             (day_utc, updated_at, limit),
         )
         return cursor.rowcount == 1
+
+
+def recent_tls_service_history(
+    *,
+    limit: int = 100,
+    ip_address: str | None = None,
+) -> list[dict[str, object]]:
+    """Return bounded, privacy-preserving TLS service evidence retained across scans."""
+    safe_limit = max(1, min(int(limit), 1_000))
+    normalized_ip: str | None = None
+    if ip_address is not None:
+        raw_ip = str(ip_address).strip()
+        if not raw_ip or "%" in raw_ip:
+            raise ValueError("A valid IPv4 or IPv6 address is required.")
+        try:
+            normalized_ip = str(ipaddress.ip_address(raw_ip))
+        except ValueError as exc:
+            raise ValueError("A valid IPv4 or IPv6 address is required.") from exc
+
+    _, connect = _database_modules()
+    with connect() as conn:
+        if normalized_ip is None:
+            rows = conn.execute(
+                """
+                SELECT
+                    scan_run_id, ip_address, port, protocol, observed_at,
+                    tls_protocol, tls_cipher, tls_alpn, certificate_sha256,
+                    certificate_not_before, certificate_not_after,
+                    certificate_status, certificate_days_remaining
+                FROM tls_service_history
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT
+                    scan_run_id, ip_address, port, protocol, observed_at,
+                    tls_protocol, tls_cipher, tls_alpn, certificate_sha256,
+                    certificate_not_before, certificate_not_after,
+                    certificate_status, certificate_days_remaining
+                FROM tls_service_history
+                WHERE ip_address = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (normalized_ip, safe_limit),
+            ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def intelligence_metrics(*, now: datetime | None = None) -> dict[str, int]:
