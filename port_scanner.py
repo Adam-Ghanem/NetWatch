@@ -12,6 +12,7 @@ from typing import List
 from config import COMMON_PORTS, DEFAULT_TIMEOUT, PORT_SCAN_WORKERS
 from security import classify_port_risk, recommendation_for_port, validate_target_ip
 from service_catalog import guess_device_role, service_info
+from tls_service_probe import probe_tls_service
 
 _CLOSED_CODES = {errno.ECONNREFUSED, 10061}
 _FILTERED_CODES = {
@@ -273,6 +274,12 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
                     service_evidence = _ftp_service_evidence(sock, timeout)
                 elif normalized_service in {"smtp", "submission"} or port in {25, 587}:
                     service_evidence = _smtp_service_evidence(sock, timeout)
+                elif normalized_service in {"https", "https-alt"} or port in {
+                    443,
+                    8443,
+                    9443,
+                }:
+                    service_evidence = probe_tls_service(sock, target, timeout)
                 elif normalized_service in {"http", "http-alt"} or port in {
                     80,
                     8000,
