@@ -12,6 +12,7 @@ def _finding(
     port: int = 443,
     protocol: str = "TCP",
     detection: str = "TLS handshake",
+    risk: str = "Medium",
 ) -> dict:
     return {
         "scan_run_id": scan_run_id,
@@ -25,6 +26,7 @@ def _finding(
         "service_version": "TLSv1.3",
         "service_confidence": "High",
         "status": status,
+        "risk": risk,
     }
 
 
@@ -43,7 +45,61 @@ def test_build_service_state_changes_detects_service_becoming_open() -> None:
     assert change["old_status"] == "Closed"
     assert change["new_status"] == "Open"
     assert change["target"] == "192.168.1.25:443/tcp"
+    assert change["alert_recommended"] is False
     assert "Reachability changed from Closed to Open" in change["details"]
+
+
+def test_newly_reachable_remote_admin_service_recommends_high_alert() -> None:
+    changes = service_change_intelligence.build_service_state_changes(
+        [
+            _finding(
+                scan_run_id=1,
+                observed_at="2026-09-07T07:00:00+00:00",
+                status="Closed",
+                service="ssh",
+                port=22,
+                detection="Port catalog",
+            ),
+            _finding(
+                scan_run_id=2,
+                observed_at="2026-09-07T08:00:00+00:00",
+                status="Open",
+                service="ssh",
+                port=22,
+                detection="SSH greeting",
+            ),
+        ]
+    )
+
+    change = changes[0]
+    assert change["alert_recommended"] is True
+    assert change["alert_severity"] == "high"
+    assert change["alert_reason"] == "Remote administration service became reachable"
+
+
+def test_alert_threshold_can_suppress_high_reachability_alert() -> None:
+    changes = service_change_intelligence.build_service_state_changes(
+        [
+            _finding(
+                scan_run_id=1,
+                observed_at="2026-09-07T07:00:00+00:00",
+                status="Closed",
+                service="ssh",
+                port=22,
+            ),
+            _finding(
+                scan_run_id=2,
+                observed_at="2026-09-07T08:00:00+00:00",
+                status="Open",
+                service="ssh",
+                port=22,
+            ),
+        ],
+        minimum_alert_severity="critical",
+    )
+
+    assert changes[0]["alert_recommended"] is False
+    assert changes[0]["alert_reason"] == ""
 
 
 def test_build_service_state_changes_does_not_overstate_filtered_result() -> None:
@@ -64,6 +120,7 @@ def test_build_service_state_changes_does_not_overstate_filtered_result() -> Non
     assert change["event_label"] == "Service no longer confirmed open"
     assert change["old_status"] == "Open"
     assert change["new_status"] == "Filtered/Timeout"
+    assert change["alert_recommended"] is False
     assert "does not by itself prove the service is down" in change["details"]
 
 
@@ -96,6 +153,7 @@ def test_build_service_state_changes_treats_open_filtered_as_not_confirmed_open(
     assert changes[0]["target"] == "192.168.1.25:53/udp"
     assert changes[0]["old_status"] == "Open|Filtered"
     assert changes[0]["new_status"] == "Open"
+    assert changes[0]["alert_recommended"] is False
 
 
 def test_build_service_state_changes_ignores_non_open_to_non_open_transitions() -> None:
