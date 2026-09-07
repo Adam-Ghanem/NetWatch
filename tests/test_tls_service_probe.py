@@ -44,7 +44,10 @@ class _Context:
         self.server_hostname: str | None = "unexpected"
 
     def wrap_socket(
-        self, sock: socket.socket, *, server_hostname: str | None = None
+        self,
+        sock: socket.socket,
+        *,
+        server_hostname: str | None = None,
     ) -> _TlsSocket:
         self.server_hostname = server_hostname
         return _TlsSocket()
@@ -85,7 +88,10 @@ def test_tls_probe_returns_bounded_handshake_metadata() -> None:
 def test_tls_probe_failure_falls_back_without_raising() -> None:
     class FailingContext(_Context):
         def wrap_socket(
-            self, sock: socket.socket, *, server_hostname: str | None = None
+            self,
+            sock: socket.socket,
+            *,
+            server_hostname: str | None = None,
         ) -> _TlsSocket:
             raise ssl.SSLError("handshake failed")
 
@@ -107,7 +113,10 @@ def test_tls_probe_failure_falls_back_without_raising() -> None:
 def test_tls_probe_rejects_oversized_certificate_body() -> None:
     class LargeCertificateContext(_Context):
         def wrap_socket(
-            self, sock: socket.socket, *, server_hostname: str | None = None
+            self,
+            sock: socket.socket,
+            *,
+            server_hostname: str | None = None,
         ) -> _TlsSocket:
             return _TlsSocket(b"x" * (64 * 1024 + 1))
 
