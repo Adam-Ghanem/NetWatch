@@ -16,6 +16,22 @@ def _text(value: object) -> str:
     return str(value or "").strip()
 
 
+def _integer(value: object, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return default
+        try:
+            return int(raw)
+        except ValueError:
+            return default
+    return default
+
+
 def _days_remaining(value: object) -> int | None:
     raw = _text(value)
     if not raw:
@@ -76,14 +92,11 @@ def analyze_tls_service_changes(
         history,
         key=lambda row: (
             _text(row.get("observed_at")),
-            int(row.get("scan_run_id", 0) or 0),
+            _integer(row.get("scan_run_id", 0)),
         ),
     )
     for current in ordered:
-        try:
-            port = int(current.get("port", 0) or 0)
-        except (TypeError, ValueError):
-            continue
+        port = _integer(current.get("port", 0))
         ip_address = _text(current.get("ip_address"))
         protocol = (_text(current.get("protocol")) or "TCP").upper()
         if not ip_address or not 1 <= port <= 65535:
@@ -188,7 +201,7 @@ def analyze_tls_service_changes(
     changes.sort(
         key=lambda event: (
             _text(event.get("observed_at")),
-            int(event.get("scan_run_id", 0) or 0),
+            _integer(event.get("scan_run_id", 0)),
         ),
         reverse=True,
     )
