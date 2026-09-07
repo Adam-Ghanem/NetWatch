@@ -1,0 +1,31 @@
+name: Format diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install black==26.3.1 isort==6.0.1
+      - name: Produce formatter diff
+        run: |
+          black --diff intelligence_store.py tests/test_tls_service_history.py > /tmp/black.diff || true
+          isort --diff intelligence_store.py tests/test_tls_service_history.py > /tmp/isort.diff || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatter-diffs
+          path: |
+            /tmp/black.diff
+            /tmp/isort.diff
+          if-no-files-found: error
+          retention-days: 1
