@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import ipaddress
 import math
+import re
 import socket
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -29,6 +30,23 @@ _FTP_GREETING_BYTES = 256
 _FTP_GREETING_TIMEOUT_SECONDS = 0.25
 _SMTP_GREETING_BYTES = 256
 _SMTP_GREETING_TIMEOUT_SECONDS = 0.25
+_HTTP_RESPONSE_BYTES = 1024
+_HTTP_PROBE_TIMEOUT_SECONDS = 0.35
+_HTTP_SERVER_TOKEN_PATTERN = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,79}(?:/[A-Za-z0-9][A-Za-z0-9._+-]{0,79})?$"
+)
+_HTTP_KNOWN_PRODUCTS = {
+    "apache": "Apache",
+    "caddy": "Caddy",
+    "cloudflare": "cloudflare",
+    "envoy": "Envoy",
+    "gunicorn": "gunicorn",
+    "iis": "Microsoft-IIS",
+    "lighttpd": "lighttpd",
+    "nginx": "nginx",
+    "openresty": "openresty",
+    "uvicorn": "uvicorn",
+}
 _ServiceEvidence = dict[str, str]
 
 
@@ -174,6 +192,64 @@ def _smtp_service_evidence(sock: socket.socket, timeout: float) -> _ServiceEvide
     }
 
 
+def _parse_http_server_header(payload: bytes) -> _ServiceEvidence:
+    header_block = payload.split(b"\r\n\r\n", 1)[0]
+    lines = header_block.splitlines()
+    if not lines or not lines[0].startswith(b"HTTP/"):
+        return _default_service_evidence()
+
+    for raw_line in lines[1:]:
+        name, separator, raw_value = raw_line.partition(b":")
+        if not separator or name.strip().lower() != b"server":
+            continue
+
+        value = raw_value.decode("ascii", errors="ignore").strip()[:160]
+        token = value.split()[0] if value else ""
+        if not token or not _HTTP_SERVER_TOKEN_PATTERN.fullmatch(token):
+            return {
+                "Service Detection": "HTTP response",
+                "Service Product": "",
+                "Service Version": "",
+                "Service Confidence": "Medium",
+            }
+
+        product_token, slash, version = token.partition("/")
+        product = _HTTP_KNOWN_PRODUCTS.get(product_token.lower(), "")
+        if not product:
+            return {
+                "Service Detection": "HTTP response",
+                "Service Product": "",
+                "Service Version": "",
+                "Service Confidence": "Medium",
+            }
+
+        return {
+            "Service Detection": "HTTP Server header",
+            "Service Product": product,
+            "Service Version": version[:80] if slash else "",
+            "Service Confidence": "High" if slash and version else "Medium",
+        }
+
+    return {
+        "Service Detection": "HTTP response",
+        "Service Product": "",
+        "Service Version": "",
+        "Service Confidence": "Medium",
+    }
+
+
+def _http_service_evidence(sock: socket.socket, timeout: float) -> _ServiceEvidence:
+    """Return bounded, allowlisted HTTP Server product/version evidence."""
+    request = b"HEAD / HTTP/1.0\r\nConnection: close\r\n\r\n"
+    try:
+        sock.settimeout(min(timeout, _HTTP_PROBE_TIMEOUT_SECONDS))
+        sock.sendall(request)
+        payload = sock.recv(_HTTP_RESPONSE_BYTES)
+    except (OSError, socket.timeout):
+        return _default_service_evidence()
+    return _parse_http_server_header(payload)
+
+
 def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict:
     is_open = False
     status = "Closed/Unknown"
@@ -197,6 +273,13 @@ def _scan_one_port(target: str, port: int, service: str, timeout: float) -> dict
                     service_evidence = _ftp_service_evidence(sock, timeout)
                 elif normalized_service in {"smtp", "submission"} or port in {25, 587}:
                     service_evidence = _smtp_service_evidence(sock, timeout)
+                elif normalized_service in {"http", "http-alt"} or port in {
+                    80,
+                    8000,
+                    8080,
+                    8888,
+                }:
+                    service_evidence = _http_service_evidence(sock, timeout)
             elif code in _CLOSED_CODES:
                 status = "Closed"
             elif code in _FILTERED_CODES:
