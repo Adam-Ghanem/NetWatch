@@ -38,8 +38,22 @@ def test_http_probe_extracts_allowlisted_server_product_and_version() -> None:
     }
     assert sock.recv_sizes == [1024]
     assert sock.timeouts == [0.35]
-    assert sock.sent == [b"HEAD / HTTP/1.0\r\nHost: netwatch.local\r\nConnection: close\r\n\r\n"]
+    assert sock.sent == [b"HEAD / HTTP/1.0\r\nConnection: close\r\n\r\n"]
     assert "app-07.private.example" not in str(evidence)
+
+
+def test_http_probe_extracts_product_without_retaining_server_details() -> None:
+    sock = _HttpSocket(b"HTTP/1.1 200 OK\r\nServer: Apache/2.4.62 (Unix)\r\n\r\n")
+
+    evidence = port_scanner._http_service_evidence(cast(socket.socket, sock), timeout=1.0)
+
+    assert evidence == {
+        "Service Detection": "HTTP Server header",
+        "Service Product": "Apache",
+        "Service Version": "2.4.62",
+        "Service Confidence": "High",
+    }
+    assert "Unix" not in str(evidence)
 
 
 def test_http_probe_does_not_claim_unknown_server_product() -> None:
