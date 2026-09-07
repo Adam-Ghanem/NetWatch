@@ -79,7 +79,9 @@ def test_tls_service_evidence_is_retained_across_scans(monkeypatch, tmp_path):
     assert history[1]["certificate_sha256"] == "a" * 64
 
 
-def test_tls_history_does_not_retain_certificate_body_or_identity(monkeypatch, tmp_path):
+def test_tls_history_does_not_retain_certificate_body_or_identity(
+    monkeypatch, tmp_path
+):
     _use_temporary_database(monkeypatch, tmp_path)
     target = "192.168.1.40"
     scan_run_id = inventory_store.add_scan_run("ports", target, "TLS privacy test")
