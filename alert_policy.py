@@ -23,6 +23,19 @@ def should_alert(finding: Mapping[str, object], *, minimum_severity: str = "high
     return _SEVERITY_ORDER[severity] >= _SEVERITY_ORDER[threshold]
 
 
+def _coerce_port(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def service_reachability_alert(
     change: Mapping[str, object],
     *,
@@ -37,9 +50,8 @@ def service_reachability_alert(
     if str(change.get("event_type", "")) != "service_became_open":
         return {"recommended": False, "severity": "low", "reason": ""}
 
-    try:
-        port = int(change.get("port", 0))
-    except (TypeError, ValueError):
+    port = _coerce_port(change.get("port", 0))
+    if port is None:
         return {"recommended": False, "severity": "low", "reason": ""}
     protocol = str(change.get("protocol", "TCP")).strip().upper() or "TCP"
     risk = str(change.get("risk", "None")).strip().lower()
