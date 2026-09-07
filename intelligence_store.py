@@ -146,7 +146,9 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
             FROM assets AS asset, json_each(asset.open_ports) AS port
             WHERE asset.ip_address = NEW.ip_address
               AND CAST(COALESCE(json_extract(port.value, '$.Port'), 0) AS INTEGER) = NEW.port
-              AND upper(COALESCE(json_extract(port.value, '$.Protocol'), 'TCP')) = upper(NEW.protocol)
+              AND upper(COALESCE(
+                    json_extract(port.value, '$.Protocol'), 'TCP'
+              )) = upper(NEW.protocol)
               AND (
                     COALESCE(json_extract(port.value, '$."TLS Protocol"'), '') != ''
                  OR COALESCE(json_extract(port.value, '$."TLS Certificate SHA256"'), '') != ''
@@ -156,7 +158,8 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
 
             DELETE FROM tls_service_history
             WHERE id NOT IN (
-                SELECT id FROM tls_service_history ORDER BY id DESC LIMIT {int(MAX_SERVICE_FINDINGS)}
+                SELECT id FROM tls_service_history
+                ORDER BY id DESC LIMIT {int(MAX_SERVICE_FINDINGS)}
             );
         END
         """)
