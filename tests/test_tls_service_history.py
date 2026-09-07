@@ -37,6 +37,12 @@ def _tls_result(**overrides):
 
 def test_tls_schema_initialization_is_idempotent_under_concurrency(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
+    # Establish unrelated schemas first, then force the TLS trigger through its
+    # concurrent creation path. This keeps the regression focused on the TLS
+    # schema rather than stress-testing independent legacy table migrations.
+    inventory_store.init_db()
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        conn.execute("DROP TRIGGER IF EXISTS trg_service_findings_tls_history")
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(lambda _: inventory_store.init_db(), range(16)))
