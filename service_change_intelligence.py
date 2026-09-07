@@ -35,6 +35,30 @@ def _change_details(
     return " · ".join(details)
 
 
+def _normalized_status(row: dict) -> str:
+    return " ".join(str(row.get("status", "Unknown")).split())[:40] or "Unknown"
+
+
+def _status_change_details(old_status: str, new_status: str, detection: str) -> str:
+    if new_status.casefold() == "open":
+        details = f"Reachability changed from {old_status} to Open."
+    else:
+        details = (
+            f"The service was previously confirmed Open; the latest observation is "
+            f"{new_status}. This does not by itself prove the service is down."
+        )
+    if detection:
+        details = f"{details} Evidence: {detection}."
+    return details
+
+
+def _ordered_findings(findings: Iterable[dict]) -> list[dict]:
+    return sorted(
+        (dict(row) for row in findings if isinstance(row, dict)),
+        key=lambda row: (str(row.get("observed_at", "")), int(row.get("scan_run_id", 0))),
+    )
+
+
 def build_service_version_changes(
     findings: Iterable[dict],
     *,
@@ -42,15 +66,12 @@ def build_service_version_changes(
 ) -> list[dict]:
     """Build bounded old→new software transitions from persisted service evidence."""
     safe_limit = max(1, min(int(limit), 200))
-    ordered = sorted(
-        (dict(row) for row in findings if isinstance(row, dict)),
-        key=lambda row: (str(row.get("observed_at", "")), int(row.get("scan_run_id", 0))),
-    )
+    ordered = _ordered_findings(findings)
     previous_by_service: dict[tuple[str, int, str], dict] = {}
     changes: list[dict] = []
 
     for row in ordered:
-        if str(row.get("status", "")).lower() != "open":
+        if _normalized_status(row).casefold() != "open":
             continue
         try:
             port = int(row.get("port", 0))
@@ -96,7 +117,7 @@ def build_service_version_changes(
                     confidence,
                 ),
                 "scan_run_id": row.get("scan_run_id"),
-                "status": str(row.get("status", "")),
+                "status": _normalized_status(row),
                 "target": target,
                 "service": service,
                 "service_detection": detection,
@@ -112,11 +133,100 @@ def build_service_version_changes(
     return changes[:safe_limit]
 
 
-def asset_service_version_changes(ip_address: str, *, limit: int = 100) -> list[dict]:
-    """Return passive version-change intelligence for one retained asset."""
+def build_service_state_changes(
+    findings: Iterable[dict],
+    *,
+    limit: int = 100,
+) -> list[dict]:
+    """Build bounded reachability transitions without overstating filtered/timeout evidence."""
+    safe_limit = max(1, min(int(limit), 200))
+    previous_by_service: dict[tuple[str, int, str], dict] = {}
+    changes: list[dict] = []
+
+    for row in _ordered_findings(findings):
+        try:
+            port = int(row.get("port", 0))
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= port <= 65_535:
+            continue
+
+        protocol = str(row.get("protocol", "TCP")).strip().upper() or "TCP"
+        service = str(row.get("service", "")).strip()
+        status = _normalized_status(row)
+        key = (service.casefold(), port, protocol)
+        previous = previous_by_service.get(key)
+        previous_by_service[key] = row
+        if previous is None:
+            continue
+
+        old_status = _normalized_status(previous)
+        old_open = old_status.casefold() == "open"
+        new_open = status.casefold() == "open"
+        if old_open == new_open:
+            continue
+
+        ip_address = str(row.get("ip_address", "")).strip()
+        try:
+            target = _service_target(ip_address, port, protocol)
+        except ValueError:
+            continue
+
+        detection = str(row.get("service_detection", "")).strip()
+        if new_open:
+            event_type = "service_became_open"
+            event_label = "Service became reachable"
+        else:
+            event_type = "service_open_not_confirmed"
+            event_label = "Service no longer confirmed open"
+
+        changes.append(
+            {
+                "created_at": str(row.get("observed_at", "")),
+                "kind": "service_state_change",
+                "event_type": event_type,
+                "event_label": event_label,
+                "details": _status_change_details(old_status, status, detection),
+                "scan_run_id": row.get("scan_run_id"),
+                "status": status,
+                "target": target,
+                "service": service,
+                "service_detection": detection,
+                "old_status": old_status,
+                "new_status": status,
+            }
+        )
+
+    changes.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    return changes[:safe_limit]
+
+
+def _asset_service_changes(ip_address: str, *, limit: int) -> list[dict]:
     safe_limit = max(1, min(int(limit), 200))
     findings = inventory_store.recent_service_findings(
         limit=min(1_000, max(safe_limit * 10, 20)),
         ip_address=ip_address,
     )
-    return build_service_version_changes(findings, limit=safe_limit)
+    changes = build_service_version_changes(findings, limit=safe_limit)
+    changes.extend(build_service_state_changes(findings, limit=safe_limit))
+    changes.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    return changes[:safe_limit]
+
+
+def asset_service_version_changes(ip_address: str, *, limit: int = 100) -> list[dict]:
+    """Return bounded service-change intelligence for one retained asset timeline.
+
+    The historical function name is retained for compatibility. Results now include both
+    software-version changes and evidence-safe reachability transitions.
+    """
+    return _asset_service_changes(ip_address, limit=limit)
+
+
+def asset_service_state_changes(ip_address: str, *, limit: int = 100) -> list[dict]:
+    """Return only reachability transitions for one retained asset."""
+    safe_limit = max(1, min(int(limit), 200))
+    findings = inventory_store.recent_service_findings(
+        limit=min(1_000, max(safe_limit * 10, 20)),
+        ip_address=ip_address,
+    )
+    return build_service_state_changes(findings, limit=safe_limit)
