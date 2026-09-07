@@ -110,7 +110,9 @@ def test_tls_history_does_not_retain_certificate_body_or_identity(monkeypatch, t
     assert "Internal CA" not in str(stored)
 
 
-def test_tls_history_rejects_malformed_fingerprint_and_unknown_status(monkeypatch, tmp_path):
+def test_tls_history_rejects_malformed_fingerprint_and_unknown_status(
+    monkeypatch, tmp_path
+):
     _use_temporary_database(monkeypatch, tmp_path)
     target = "192.168.1.41"
     scan_run_id = inventory_store.add_scan_run("ports", target, "TLS normalization test")
