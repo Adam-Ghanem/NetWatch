@@ -96,8 +96,7 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
         "ON tls_service_history(scan_run_id, id)"
     )
     conn.execute("DROP TRIGGER IF EXISTS trg_service_findings_tls_history")
-    conn.execute(
-        f"""
+    conn.execute(f"""
         CREATE TRIGGER trg_service_findings_tls_history
         AFTER INSERT ON service_findings
         WHEN lower(NEW.status) = 'open'
@@ -160,8 +159,7 @@ def create_intelligence_schema(conn: sqlite3.Connection) -> None:
                 SELECT id FROM tls_service_history ORDER BY id DESC LIMIT {int(MAX_SERVICE_FINDINGS)}
             );
         END
-        """
-    )
+        """)
 
 
 def _prune(conn: sqlite3.Connection) -> None:
