@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 
@@ -11,6 +12,7 @@ from security import validate_target_ip
 @dataclass(frozen=True)
 class HostProfile:
     ip_address: str
+    address_family: str
     hostname: str
     online: bool
     latency_ms: float | None
@@ -25,6 +27,15 @@ class HostProfile:
     identity_confidence: str
     identity_source: str
     randomized_mac: bool
+
+
+def _address_family(value: str) -> str:
+    address = value.strip().split("%", 1)[0]
+    try:
+        version = ipaddress.ip_address(address).version
+    except ValueError:
+        return "unknown"
+    return "ipv6" if version == 6 else "ipv4"
 
 
 def parse_latency_ms(output: str) -> float | None:
@@ -62,21 +73,22 @@ def profile_host(ip: str) -> HostProfile:
     if not validation.ok:
         identity = identity_for_ip(ip)
         return HostProfile(
-            ip,
-            "-",
-            False,
-            None,
-            None,
-            "Blocked",
-            validation.error or "Invalid target",
-            identity.mac_address,
-            identity.manufacturer,
-            identity.device_name,
-            identity.device_type,
-            identity.device_family,
-            identity.identity_confidence,
-            identity.identity_source,
-            identity.randomized_mac,
+            ip_address=ip,
+            address_family=_address_family(ip),
+            hostname="-",
+            online=False,
+            latency_ms=None,
+            ttl=None,
+            os_hint="Blocked",
+            notes=validation.error or "Invalid target",
+            mac_address=identity.mac_address,
+            manufacturer=identity.manufacturer,
+            device_name=identity.device_name,
+            device_type=identity.device_type,
+            device_family=identity.device_family,
+            identity_confidence=identity.identity_confidence,
+            identity_source=identity.identity_source,
+            randomized_mac=identity.randomized_mac,
         )
 
     target = validation.value or ip.strip()
@@ -95,6 +107,7 @@ def profile_host(ip: str) -> HostProfile:
 
     return HostProfile(
         ip_address=target,
+        address_family=_address_family(target),
         hostname=hostname,
         online=online,
         latency_ms=latency,
