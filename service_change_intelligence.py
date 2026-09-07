@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 from collections.abc import Iterable
 
+import alert_policy
 import inventory_store
 
 
@@ -137,6 +138,7 @@ def build_service_state_changes(
     findings: Iterable[dict],
     *,
     limit: int = 100,
+    minimum_alert_severity: str = "high",
 ) -> list[dict]:
     """Build bounded reachability transitions without overstating filtered/timeout evidence."""
     safe_limit = max(1, min(int(limit), 200))
@@ -173,6 +175,7 @@ def build_service_state_changes(
             continue
 
         detection = str(row.get("service_detection", "")).strip()
+        risk = str(row.get("risk", "None")).strip() or "None"
         if new_open:
             event_type = "service_became_open"
             event_label = "Service became reachable"
@@ -180,22 +183,31 @@ def build_service_state_changes(
             event_type = "service_open_not_confirmed"
             event_label = "Service no longer confirmed open"
 
-        changes.append(
-            {
-                "created_at": str(row.get("observed_at", "")),
-                "kind": "service_state_change",
-                "event_type": event_type,
-                "event_label": event_label,
-                "details": _status_change_details(old_status, status, detection),
-                "scan_run_id": row.get("scan_run_id"),
-                "status": status,
-                "target": target,
-                "service": service,
-                "service_detection": detection,
-                "old_status": old_status,
-                "new_status": status,
-            }
+        change = {
+            "created_at": str(row.get("observed_at", "")),
+            "kind": "service_state_change",
+            "event_type": event_type,
+            "event_label": event_label,
+            "details": _status_change_details(old_status, status, detection),
+            "scan_run_id": row.get("scan_run_id"),
+            "status": status,
+            "target": target,
+            "service": service,
+            "service_detection": detection,
+            "risk": risk,
+            "port": port,
+            "protocol": protocol,
+            "old_status": old_status,
+            "new_status": status,
+        }
+        alert = alert_policy.service_reachability_alert(
+            change,
+            minimum_severity=minimum_alert_severity,
         )
+        change["alert_recommended"] = alert["recommended"]
+        change["alert_severity"] = alert["severity"]
+        change["alert_reason"] = alert["reason"]
+        changes.append(change)
 
     changes.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
     return changes[:safe_limit]
