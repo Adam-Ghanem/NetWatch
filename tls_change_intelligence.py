@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from intelligence_store import recent_tls_service_history
 
 _TLS_PROTOCOL_RANK = {
