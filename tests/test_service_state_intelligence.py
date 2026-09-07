@@ -77,6 +77,50 @@ def test_newly_reachable_remote_admin_service_recommends_high_alert() -> None:
     assert change["alert_reason"] == "Remote administration service became reachable"
 
 
+def test_repeated_reachability_alert_is_suppressed_inside_dedup_window() -> None:
+    changes = service_change_intelligence.build_service_state_changes(
+        [
+            _finding(
+                scan_run_id=1,
+                observed_at="2026-09-07T08:00:00+00:00",
+                status="Closed",
+                service="ssh",
+                port=22,
+            ),
+            _finding(
+                scan_run_id=2,
+                observed_at="2026-09-07T08:01:00+00:00",
+                status="Open",
+                service="ssh",
+                port=22,
+            ),
+            _finding(
+                scan_run_id=3,
+                observed_at="2026-09-07T08:02:00+00:00",
+                status="Filtered/Timeout",
+                service="ssh",
+                port=22,
+            ),
+            _finding(
+                scan_run_id=4,
+                observed_at="2026-09-07T08:03:00+00:00",
+                status="Open",
+                service="ssh",
+                port=22,
+            ),
+        ],
+        alert_dedupe_seconds=900,
+    )
+
+    became_open = [change for change in changes if change["event_type"] == "service_became_open"]
+    assert len(became_open) == 2
+    assert became_open[0]["alert_recommended"] is False
+    assert became_open[0]["alert_suppressed"] is True
+    assert became_open[0]["alert_suppression_reason"] == "Duplicate reachability alert suppressed"
+    assert became_open[1]["alert_recommended"] is True
+    assert became_open[1]["alert_suppressed"] is False
+
+
 def test_alert_threshold_can_suppress_high_reachability_alert() -> None:
     changes = service_change_intelligence.build_service_state_changes(
         [
