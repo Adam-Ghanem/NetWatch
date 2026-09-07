@@ -16,8 +16,13 @@ class _ConnectedSocket:
 
 
 class _TlsSocket:
-    def __init__(self, certificate: bytes = b"certificate-bytes") -> None:
+    def __init__(
+        self,
+        certificate: bytes = b"certificate-bytes",
+        alpn: str | None = "h2",
+    ) -> None:
         self.certificate = certificate
+        self.alpn = alpn
 
     def __enter__(self) -> "_TlsSocket":
         return self
@@ -31,6 +36,9 @@ class _TlsSocket:
     def cipher(self) -> tuple[str, str, int]:
         return ("TLS_AES_256_GCM_SHA384", "TLSv1.3", 256)
 
+    def selected_alpn_protocol(self) -> str | None:
+        return self.alpn
+
     def getpeercert(self, *, binary_form: bool = False) -> bytes:
         assert binary_form is True
         return self.certificate
@@ -42,6 +50,10 @@ class _Context:
         self.check_hostname = True
         self.verify_mode = ssl.CERT_REQUIRED
         self.server_hostname: str | None = "unexpected"
+        self.alpn_protocols: list[str] = []
+
+    def set_alpn_protocols(self, protocols: list[str]) -> None:
+        self.alpn_protocols = protocols
 
     def wrap_socket(
         self,
@@ -76,13 +88,37 @@ def test_tls_probe_returns_bounded_handshake_metadata() -> None:
         "Service Confidence": "High",
         "TLS Protocol": "TLSv1.3",
         "TLS Cipher": "TLS_AES_256_GCM_SHA384",
+        "TLS ALPN": "h2",
         "TLS Certificate SHA256": hashlib.sha256(b"certificate-bytes").hexdigest(),
     }
     assert sock.timeouts == [0.5]
     assert contexts[0].check_hostname is False
     assert contexts[0].verify_mode == ssl.CERT_NONE
     assert contexts[0].server_hostname is None
+    assert contexts[0].alpn_protocols == ["h2", "http/1.1"]
     assert "certificate-bytes" not in str(evidence)
+
+
+def test_tls_probe_records_empty_alpn_when_server_does_not_negotiate_one() -> None:
+    class NoAlpnContext(_Context):
+        def wrap_socket(
+            self,
+            sock: socket.socket,
+            *,
+            server_hostname: str | None = None,
+        ) -> _TlsSocket:
+            self.server_hostname = server_hostname
+            return _TlsSocket(alpn=None)
+
+    evidence = tls_service_probe.probe_tls_service(
+        cast(socket.socket, _ConnectedSocket()),
+        "192.168.1.20",
+        timeout=1.0,
+        context_factory=NoAlpnContext,
+    )
+
+    assert evidence["TLS ALPN"] == ""
+    assert evidence["TLS Protocol"] == "TLSv1.3"
 
 
 def test_tls_probe_failure_falls_back_without_raising() -> None:
@@ -159,6 +195,7 @@ def test_https_scan_routes_open_port_to_tls_probe(monkeypatch: Any) -> None:
             "Service Confidence": "High",
             "TLS Protocol": "TLSv1.3",
             "TLS Cipher": "TLS_AES_128_GCM_SHA256",
+            "TLS ALPN": "h2",
             "TLS Certificate SHA256": "abc123",
         },
     )
@@ -169,3 +206,4 @@ def test_https_scan_routes_open_port_to_tls_probe(monkeypatch: Any) -> None:
     assert result["Service Detection"] == "TLS handshake"
     assert result["TLS Protocol"] == "TLSv1.3"
     assert result["TLS Cipher"] == "TLS_AES_128_GCM_SHA256"
+    assert result["TLS ALPN"] == "h2"
