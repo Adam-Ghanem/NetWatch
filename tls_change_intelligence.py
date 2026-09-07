@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import alert_policy
 from intelligence_store import recent_tls_service_history
 
 _TLS_PROTOCOL_RANK = {
@@ -71,17 +72,37 @@ def _change_event(
     }
 
 
+def _apply_alert_policy(
+    changes: list[dict[str, object]],
+    *,
+    minimum_severity: str,
+) -> None:
+    """Attach deterministic alert recommendations without inventing new TLS evidence."""
+    for change in changes:
+        summary = _text(change.get("summary"))
+        severity = _text(change.get("severity")) or "info"
+        recommended = alert_policy.should_alert(
+            {"severity": severity, "evidence": summary},
+            minimum_severity=minimum_severity,
+        )
+        change["alert_recommended"] = recommended
+        change["alert_severity"] = severity
+        change["alert_reason"] = summary if recommended else ""
+
+
 def analyze_tls_service_changes(
     history: list[dict[str, object]],
     *,
     limit: int = 100,
     expiry_warning_days: int = 30,
+    alert_min_severity: str = "medium",
 ) -> list[dict[str, object]]:
     """Derive evidence-safe TLS transitions from normalized historical observations.
 
     The analyzer is intentionally conservative: it only compares consecutive observations
     for the same IP/protocol/port tuple and does not infer certificate identity, compromise,
-    or cipher weakness from names alone.
+    or cipher weakness from names alone. Alert recommendations are derived only from the
+    already-classified evidence and never turn neutral rotation/cipher changes into risks.
     """
     safe_limit = max(1, min(int(limit), 1_000))
     warning_days = max(1, min(int(expiry_warning_days), 365))
@@ -198,6 +219,7 @@ def analyze_tls_service_changes(
                 )
             )
 
+    _apply_alert_policy(changes, minimum_severity=alert_min_severity)
     changes.sort(
         key=lambda event: (
             _text(event.get("observed_at")),
@@ -213,8 +235,9 @@ def recent_tls_service_changes(
     limit: int = 100,
     ip_address: str | None = None,
     expiry_warning_days: int = 30,
+    alert_min_severity: str = "medium",
 ) -> list[dict[str, object]]:
-    """Return bounded TLS rotation, negotiation-change, and expiry-risk evidence."""
+    """Return bounded TLS rotation, negotiation-change, expiry-risk and alert evidence."""
     safe_limit = max(1, min(int(limit), 1_000))
     history_limit = min(1_000, max(100, safe_limit * 4))
     history = recent_tls_service_history(limit=history_limit, ip_address=ip_address)
@@ -222,4 +245,5 @@ def recent_tls_service_changes(
         history,
         limit=safe_limit,
         expiry_warning_days=expiry_warning_days,
+        alert_min_severity=alert_min_severity,
     )

@@ -177,3 +177,49 @@ def test_results_are_newest_first_and_limit_is_bounded():
 
     assert len(changes) == 1
     assert changes[0]["scan_run_id"] == 3
+
+
+def test_alert_policy_recommends_only_evidence_backed_tls_risks_by_default():
+    history = [
+        _row(certificate_days_remaining="31"),
+        _row(
+            scan_run_id=2,
+            observed_at="2026-09-02T10:00:00+00:00",
+            tls_protocol="TLSv1.2",
+            tls_cipher="ECDHE-RSA-AES256-GCM-SHA384",
+            certificate_sha256="b" * 64,
+            certificate_days_remaining="30",
+        ),
+    ]
+
+    changes = analyze_tls_service_changes(history, expiry_warning_days=30)
+    by_type = {change["change_type"]: change for change in changes}
+
+    assert by_type["tls_protocol_downgrade"]["alert_recommended"] is True
+    assert by_type["tls_protocol_downgrade"]["alert_severity"] == "high"
+    assert by_type["certificate_expiry_risk"]["alert_recommended"] is True
+    assert by_type["certificate_expiry_risk"]["alert_severity"] == "medium"
+    assert by_type["certificate_rotated"]["alert_recommended"] is False
+    assert by_type["tls_cipher_changed"]["alert_recommended"] is False
+
+
+def test_alert_policy_threshold_can_require_high_severity():
+    history = [
+        _row(certificate_days_remaining="31"),
+        _row(
+            scan_run_id=2,
+            observed_at="2026-09-02T10:00:00+00:00",
+            certificate_days_remaining="30",
+        ),
+    ]
+
+    changes = analyze_tls_service_changes(
+        history,
+        expiry_warning_days=30,
+        alert_min_severity="high",
+    )
+
+    assert len(changes) == 1
+    assert changes[0]["change_type"] == "certificate_expiry_risk"
+    assert changes[0]["alert_recommended"] is False
+    assert changes[0]["alert_severity"] == "medium"
