@@ -79,9 +79,7 @@ def test_tls_service_evidence_is_retained_across_scans(monkeypatch, tmp_path):
     assert history[1]["certificate_sha256"] == "a" * 64
 
 
-def test_tls_history_does_not_retain_certificate_body_or_identity(
-    monkeypatch, tmp_path
-):
+def test_tls_history_does_not_retain_certificate_body_or_identity(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     target = "192.168.1.40"
     scan_run_id = inventory_store.add_scan_run("ports", target, "TLS privacy test")
@@ -104,17 +102,15 @@ def test_tls_history_does_not_retain_certificate_body_or_identity(
 
     assert row is not None
     stored = dict(row)
-    assert "certificate" not in stored
-    assert "subject" not in stored
-    assert "issuer" not in stored
+    assert "certificate_pem" not in stored
+    assert "certificate_subject" not in stored
+    assert "certificate_issuer" not in stored
     assert "PRIVATE-DATA" not in str(stored)
     assert "private.internal" not in str(stored)
     assert "Internal CA" not in str(stored)
 
 
-def test_tls_history_rejects_malformed_fingerprint_and_unknown_status(
-    monkeypatch, tmp_path
-):
+def test_tls_history_rejects_malformed_fingerprint_and_unknown_status(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     target = "192.168.1.41"
     scan_run_id = inventory_store.add_scan_run("ports", target, "TLS normalization test")
