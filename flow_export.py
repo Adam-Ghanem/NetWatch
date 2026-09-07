@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from ipaddress import ip_address
 
 import pandas as pd
 
@@ -12,6 +13,7 @@ FLOW_EXPORT_MAX_ROWS = 1000
 _SCALAR_FIELDS = (
     "flow_id",
     "community_id",
+    "address_family",
     "protocol",
     "service",
     "tcp_state",
@@ -33,6 +35,7 @@ _ENDPOINT_FIELDS = ("endpoint_a", "endpoint_b", "originator", "responder")
 _CSV_COLUMNS = (
     "flow_id",
     "community_id",
+    "address_family",
     "protocol",
     "service",
     "tcp_state",
@@ -80,10 +83,30 @@ def _endpoint(value: object) -> dict[str, object]:
     return {"ip": ip_address, "port": port}
 
 
+def _address_family(*endpoints: dict[str, object]) -> str:
+    versions: set[int] = set()
+    for endpoint in endpoints:
+        address = str(endpoint.get("ip") or "").strip()
+        if not address:
+            continue
+        try:
+            versions.add(ip_address(address).version)
+        except ValueError:
+            continue
+    if versions == {4}:
+        return "ipv4"
+    if versions == {6}:
+        return "ipv6"
+    return ""
+
+
 def _metadata(flow: dict[str, object]) -> dict[str, object]:
     exported = {field: flow.get(field) for field in _SCALAR_FIELDS}
+    endpoints: dict[str, dict[str, object]] = {}
     for field in _ENDPOINT_FIELDS:
-        exported[field] = _endpoint(flow.get(field))
+        endpoints[field] = _endpoint(flow.get(field))
+        exported[field] = endpoints[field]
+    exported["address_family"] = _address_family(endpoints["originator"], endpoints["responder"])
     return exported
 
 

@@ -30,6 +30,13 @@ def _flow(flow_id: str = "flow-1", *, service: str = "https") -> dict[str, objec
     }
 
 
+def _ipv6_flow() -> dict[str, object]:
+    flow = _flow("flow-v6")
+    flow["originator"] = {"ip": "2001:db8::10", "port": 51_515}
+    flow["responder"] = {"ip": "2001:db8::20", "port": 443}
+    return flow
+
+
 def test_json_export_is_bounded_and_allowlists_metadata_fields():
     payload = json.loads(export_flows_json([_flow()]).decode("utf-8"))
 
@@ -38,12 +45,31 @@ def test_json_export_is_bounded_and_allowlists_metadata_fields():
     exported = payload["flows"][0]
     assert exported["flow_id"] == "flow-1"
     assert exported["community_id"] == COMMUNITY_ID
+    assert exported["address_family"] == "ipv4"
     assert exported["originator"] == {"ip": "192.168.1.10", "port": 51_515}
     assert exported["responder"] == {"ip": "192.168.1.20", "port": 443}
     assert exported["originator_bytes"] == 400
     assert exported["responder_bytes"] == 240
     assert "payload" not in exported
     assert "raw" not in exported
+
+
+def test_exports_surface_ipv6_address_family_without_rewriting_endpoints():
+    payload = json.loads(export_flows_json([_ipv6_flow()]).decode("utf-8"))
+    exported = payload["flows"][0]
+
+    assert exported["address_family"] == "ipv6"
+    assert exported["originator"]["ip"] == "2001:db8::10"
+    assert exported["responder"]["ip"] == "2001:db8::20"
+
+    event = json.loads(export_flows_ndjson([_ipv6_flow()]).decode("utf-8"))
+    assert event["address_family"] == "ipv6"
+
+    csv_text = export_flows_csv([_ipv6_flow()]).decode("utf-8")
+    header, row = csv_text.splitlines()[:2]
+    assert "address_family" in header
+    assert "ipv6" in row
+    assert "2001:db8::10" in row
 
 
 def test_ndjson_export_is_bounded_metadata_only_and_line_delimited():
@@ -71,6 +97,7 @@ def test_csv_export_flattens_endpoints_and_is_formula_safe():
 
     header = content.splitlines()[0]
     assert "community_id" in header
+    assert "address_family" in header
     assert "originator_ip" in header
     assert "responder_port" in header
     assert "payload" not in header
