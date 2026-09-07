@@ -1,6 +1,7 @@
 import hashlib
 import socket
 import ssl
+from datetime import datetime, timezone
 from typing import Any, cast
 
 import port_scanner
@@ -90,6 +91,10 @@ def test_tls_probe_returns_bounded_handshake_metadata() -> None:
         "TLS Cipher": "TLS_AES_256_GCM_SHA384",
         "TLS ALPN": "h2",
         "TLS Certificate SHA256": hashlib.sha256(b"certificate-bytes").hexdigest(),
+        "TLS Certificate Not Before": "",
+        "TLS Certificate Not After": "",
+        "TLS Certificate Status": "Unknown",
+        "TLS Certificate Days Remaining": "",
     }
     assert sock.timeouts == [0.5]
     assert contexts[0].check_hostname is False
@@ -97,6 +102,64 @@ def test_tls_probe_returns_bounded_handshake_metadata() -> None:
     assert contexts[0].server_hostname is None
     assert contexts[0].alpn_protocols == ["h2", "http/1.1"]
     assert "certificate-bytes" not in str(evidence)
+
+
+def test_certificate_validity_evidence_is_privacy_preserving(monkeypatch: Any) -> None:
+    class Certificate:
+        not_valid_before_utc = datetime(2026, 9, 1, tzinfo=timezone.utc)
+        not_valid_after_utc = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
+        @property
+        def subject(self) -> str:
+            raise AssertionError("subject must not be inspected")
+
+        @property
+        def issuer(self) -> str:
+            raise AssertionError("issuer must not be inspected")
+
+    monkeypatch.setattr(
+        tls_service_probe.x509,
+        "load_der_x509_certificate",
+        lambda certificate: Certificate(),
+    )
+
+    evidence = tls_service_probe._certificate_validity_evidence(
+        b"bounded-der",
+        now=datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert evidence == {
+        "TLS Certificate Not Before": "2026-09-01T00:00:00+00:00",
+        "TLS Certificate Not After": "2026-10-01T00:00:00+00:00",
+        "TLS Certificate Status": "Valid",
+        "TLS Certificate Days Remaining": "23",
+    }
+
+
+def test_certificate_validity_status_handles_future_and_expired(monkeypatch: Any) -> None:
+    class Certificate:
+        not_valid_before_utc = datetime(2026, 9, 10, tzinfo=timezone.utc)
+        not_valid_after_utc = datetime(2026, 9, 20, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(
+        tls_service_probe.x509,
+        "load_der_x509_certificate",
+        lambda certificate: Certificate(),
+    )
+
+    future = tls_service_probe._certificate_validity_evidence(
+        b"bounded-der",
+        now=datetime(2026, 9, 7, tzinfo=timezone.utc),
+    )
+    expired = tls_service_probe._certificate_validity_evidence(
+        b"bounded-der",
+        now=datetime(2026, 9, 21, tzinfo=timezone.utc),
+    )
+
+    assert future["TLS Certificate Status"] == "Not Yet Valid"
+    assert future["TLS Certificate Days Remaining"] == "13"
+    assert expired["TLS Certificate Status"] == "Expired"
+    assert expired["TLS Certificate Days Remaining"] == "-1"
 
 
 def test_tls_probe_records_empty_alpn_when_server_does_not_negotiate_one() -> None:
@@ -164,6 +227,7 @@ def test_tls_probe_rejects_oversized_certificate_body() -> None:
     )
 
     assert evidence["TLS Certificate SHA256"] == ""
+    assert evidence["TLS Certificate Status"] == "Unknown"
     assert evidence["TLS Protocol"] == "TLSv1.3"
 
 
@@ -197,6 +261,10 @@ def test_https_scan_routes_open_port_to_tls_probe(monkeypatch: Any) -> None:
             "TLS Cipher": "TLS_AES_128_GCM_SHA256",
             "TLS ALPN": "h2",
             "TLS Certificate SHA256": "abc123",
+            "TLS Certificate Not Before": "2026-09-01T00:00:00+00:00",
+            "TLS Certificate Not After": "2026-10-01T00:00:00+00:00",
+            "TLS Certificate Status": "Valid",
+            "TLS Certificate Days Remaining": "23",
         },
     )
 
@@ -207,3 +275,5 @@ def test_https_scan_routes_open_port_to_tls_probe(monkeypatch: Any) -> None:
     assert result["TLS Protocol"] == "TLSv1.3"
     assert result["TLS Cipher"] == "TLS_AES_128_GCM_SHA256"
     assert result["TLS ALPN"] == "h2"
+    assert result["TLS Certificate Status"] == "Valid"
+    assert result["TLS Certificate Days Remaining"] == "23"
