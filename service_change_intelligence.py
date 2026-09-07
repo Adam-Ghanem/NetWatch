@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 from collections.abc import Iterable
+from datetime import datetime
 
 import alert_policy
 import inventory_store
@@ -58,6 +59,19 @@ def _ordered_findings(findings: Iterable[dict]) -> list[dict]:
         (dict(row) for row in findings if isinstance(row, dict)),
         key=lambda row: (str(row.get("observed_at", "")), int(row.get("scan_run_id", 0))),
     )
+
+
+def _observation_timestamp(row: dict) -> datetime | None:
+    value = str(row.get("observed_at", "")).strip()
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
 
 
 def build_service_version_changes(
@@ -139,10 +153,13 @@ def build_service_state_changes(
     *,
     limit: int = 100,
     minimum_alert_severity: str = "high",
+    alert_dedupe_seconds: int = 900,
 ) -> list[dict]:
     """Build bounded reachability transitions without overstating filtered/timeout evidence."""
     safe_limit = max(1, min(int(limit), 200))
+    safe_dedupe_seconds = max(0, min(int(alert_dedupe_seconds), 86_400))
     previous_by_service: dict[tuple[str, int, str], dict] = {}
+    last_alert_by_service: dict[tuple[str, int, str], datetime] = {}
     changes: list[dict] = []
 
     for row in _ordered_findings(findings):
@@ -204,9 +221,26 @@ def build_service_state_changes(
             change,
             minimum_severity=minimum_alert_severity,
         )
-        change["alert_recommended"] = alert["recommended"]
+        alert_recommended = bool(alert["recommended"])
+        alert_suppressed = False
+        alert_suppression_reason = ""
+        if alert_recommended and new_open and safe_dedupe_seconds:
+            observed_at = _observation_timestamp(row)
+            previous_alert_at = last_alert_by_service.get(key)
+            if observed_at is not None and previous_alert_at is not None:
+                elapsed = (observed_at - previous_alert_at).total_seconds()
+                if 0 <= elapsed < safe_dedupe_seconds:
+                    alert_recommended = False
+                    alert_suppressed = True
+                    alert_suppression_reason = "Duplicate reachability alert suppressed"
+            if alert_recommended and observed_at is not None:
+                last_alert_by_service[key] = observed_at
+
+        change["alert_recommended"] = alert_recommended
         change["alert_severity"] = alert["severity"]
         change["alert_reason"] = alert["reason"]
+        change["alert_suppressed"] = alert_suppressed
+        change["alert_suppression_reason"] = alert_suppression_reason
         changes.append(change)
 
     changes.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
