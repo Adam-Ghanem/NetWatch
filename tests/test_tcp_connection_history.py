@@ -34,10 +34,49 @@ def test_tcp_history_is_direction_aware_for_handshake_and_close():
 
     assert flow["tcp_history"] == [">S", "<SA", ">A", ">F", "<F"]
     assert flow["tcp_history_truncated"] is False
+    assert flow["tcp_handshake_observed"] is True
+    assert flow["tcp_termination"] == "graceful_close"
     conversation_rows = cast(
         list[dict[str, object]], summarize_conversations([flow])["conversations"]
     )
     assert conversation_rows[0]["tcp_history"] == [">S", "<SA", ">A", ">F", "<F"]
+    assert conversation_rows[0]["tcp_handshake_observed"] is True
+    assert conversation_rows[0]["tcp_termination"] == "graceful_close"
+
+
+def test_tcp_reset_is_classified_without_claiming_graceful_close():
+    flow = summarize_flows(
+        [
+            _packet("SYN"),
+            _packet("ACK,SYN", reverse=True),
+            _packet("ACK"),
+            _packet("ACK,RST", reverse=True),
+        ]
+    )[0]
+
+    assert flow["tcp_handshake_observed"] is True
+    assert flow["tcp_termination"] == "reset"
+
+
+def test_single_fin_is_partial_close_not_failure_claim():
+    flow = summarize_flows(
+        [
+            _packet("SYN"),
+            _packet("ACK,SYN", reverse=True),
+            _packet("ACK"),
+            _packet("ACK,FIN"),
+        ]
+    )[0]
+
+    assert flow["tcp_handshake_observed"] is True
+    assert flow["tcp_termination"] == "partial_close"
+
+
+def test_midstream_tcp_capture_keeps_unknown_handshake_and_termination():
+    flow = summarize_flows([_packet("ACK"), _packet("ACK", reverse=True)])[0]
+
+    assert flow["tcp_handshake_observed"] is False
+    assert flow["tcp_termination"] == "not_observed"
 
 
 def test_tcp_history_is_bounded_without_affecting_packet_counters():
@@ -65,3 +104,5 @@ def test_udp_flow_has_empty_transport_history():
 
     assert flow["tcp_history"] == []
     assert flow["tcp_history_truncated"] is False
+    assert flow["tcp_handshake_observed"] is False
+    assert flow["tcp_termination"] == "not_observed"

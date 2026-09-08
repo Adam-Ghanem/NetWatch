@@ -96,6 +96,33 @@ def _tcp_history_values(flow: dict[str, object]) -> list[str]:
     return [str(event) for event in history]
 
 
+def _tcp_session_quality(flow: dict[str, object]) -> tuple[bool, str]:
+    """Derive conservative TCP handshake and termination evidence.
+
+    Labels describe only what the capture proves. Missing FIN evidence is not
+    treated as an abnormal close because a capture can start late or end early.
+    """
+    history = _tcp_history_values(flow)
+    handshake_observed = False
+    for index in range(len(history) - 2):
+        if history[index : index + 3] == [">S", "<SA", ">A"]:
+            handshake_observed = True
+            break
+
+    if any(event in {">R", "<R"} for event in history):
+        termination = "reset"
+    else:
+        originator_fin = ">F" in history
+        responder_fin = "<F" in history
+        if originator_fin and responder_fin:
+            termination = "graceful_close"
+        elif originator_fin or responder_fin:
+            termination = "partial_close"
+        else:
+            termination = "not_observed"
+    return handshake_observed, termination
+
+
 def summarize_flows(
     records: Iterable[dict[str, object]],
     limit: int = 100,
@@ -155,6 +182,8 @@ def summarize_flows(
                 "tcp_state": "-",
                 "tcp_history": [],
                 "tcp_history_truncated": False,
+                "tcp_handshake_observed": False,
+                "tcp_termination": "not_observed",
             },
         )
         flow["packets"] = _int(flow["packets"]) + 1
@@ -212,6 +241,13 @@ def summarize_flows(
                 flow["tcp_state"] = "opening"
             elif "ACK" in flags and state in {"-", "opening", "establishing"}:
                 flow["tcp_state"] = "established"
+
+    for flow in flows.values():
+        if str(flow.get("protocol") or "").upper() != "TCP":
+            continue
+        handshake_observed, termination = _tcp_session_quality(flow)
+        flow["tcp_handshake_observed"] = handshake_observed
+        flow["tcp_termination"] = termination
 
     return sorted(
         flows.values(),
@@ -283,6 +319,8 @@ def summarize_conversations(
         if "tcp_history" in flow:
             conversation["tcp_history"] = _tcp_history_values(flow)
             conversation["tcp_history_truncated"] = bool(flow.get("tcp_history_truncated", False))
+            conversation["tcp_handshake_observed"] = bool(flow.get("tcp_handshake_observed", False))
+            conversation["tcp_termination"] = str(flow.get("tcp_termination") or "not_observed")
         community_id = str(flow.get("community_id") or "")
         if community_id:
             conversation["community_id"] = community_id
