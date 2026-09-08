@@ -71,9 +71,7 @@ def test_unknown_cipher_change_stays_neutral_evidence() -> None:
     assert changes[0]["severity"] == "info"
     assert changes[0]["alert_recommended"] is False
     assert (
-        is_confirmed_cipher_regression(
-            "TLS_RSA_WITH_AES_256_CBC_SHA", "VENDOR_CUSTOM_SUITE"
-        )
+        is_confirmed_cipher_regression("TLS_RSA_WITH_AES_256_CBC_SHA", "VENDOR_CUSTOM_SUITE")
         is False
     )
 
