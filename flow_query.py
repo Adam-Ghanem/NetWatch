@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 FlowSort = Literal["bytes", "packets", "duration", "recent"]
-_TCP_TERMINATIONS = {"graceful_close", "partial_close", "reset", "not_observed"}
+_TCP_TERMINATIONS = {
+    "graceful_close",
+    "partial_close",
+    "reset",
+    "not_observed",
+}
 
 
 @dataclass(frozen=True)
