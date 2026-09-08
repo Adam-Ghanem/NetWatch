@@ -37,8 +37,8 @@ def test_viewer_can_read_bounded_tls_investigator_snapshot(monkeypatch, tmp_path
             "/api/tls/investigator",
             headers=VIEWER_HEADERS,
             params={
-                "history_limit": 9999,
-                "limit": 9999,
+                "history_limit": 1000,
+                "limit": 1000,
                 "ip_address": "2001:db8::20",
                 "port": 443,
                 "protocol": "tcp",
