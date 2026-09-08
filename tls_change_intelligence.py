@@ -16,6 +16,7 @@ _TLS_CHANGE_TYPES = {
     "tls_protocol_downgrade",
     "tls_protocol_changed",
     "tls_cipher_changed",
+    "tls_alpn_changed",
     "certificate_validity_risk",
     "certificate_expiry_risk",
 }
@@ -174,8 +175,9 @@ def analyze_tls_service_changes(
     The analyzer is intentionally conservative: it only compares consecutive observations
     for the same IP/protocol/port tuple and does not infer certificate identity, compromise,
     or cipher weakness from names alone. Alert recommendations are derived only from the
-    already-classified evidence and never turn neutral rotation/cipher changes into risks.
-    Optional investigator pivots filter only derived evidence; they never trigger new probes.
+    already-classified evidence and never turn neutral rotation/cipher/ALPN changes into
+    risks. Optional investigator pivots filter only derived evidence; they never trigger
+    new probes.
     """
     safe_limit = max(1, min(int(limit), 1_000))
     warning_days = max(1, min(int(expiry_warning_days), 365))
@@ -270,6 +272,20 @@ def analyze_tls_service_changes(
                     summary="Negotiated TLS cipher changed between observations.",
                     previous=previous_cipher,
                     current_value=current_cipher,
+                )
+            )
+
+        previous_alpn = _text(previous.get("tls_alpn"))
+        current_alpn = _text(current.get("tls_alpn"))
+        if previous_alpn and current_alpn and previous_alpn != current_alpn:
+            changes.append(
+                _change_event(
+                    current,
+                    change_type="tls_alpn_changed",
+                    severity="info",
+                    summary="Negotiated TLS application protocol changed between observations.",
+                    previous=previous_alpn,
+                    current_value=current_alpn,
                 )
             )
 

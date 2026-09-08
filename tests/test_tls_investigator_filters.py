@@ -57,6 +57,40 @@ def test_investigator_filters_can_pivot_to_one_service_and_change_type():
     assert changes[0]["change_type"] == "tls_protocol_downgrade"
 
 
+def test_investigator_tracks_negotiated_alpn_changes_as_neutral_evidence():
+    history = [
+        _row(tls_alpn="h2"),
+        _row(
+            scan_run_id=2,
+            observed_at="2026-09-02T10:00:00+00:00",
+            tls_alpn="http/1.1",
+        ),
+    ]
+
+    changes = analyze_tls_service_changes(history, change_type="tls_alpn_changed")
+
+    assert len(changes) == 1
+    assert changes[0]["severity"] == "info"
+    assert changes[0]["previous"] == "h2"
+    assert changes[0]["current"] == "http/1.1"
+    assert changes[0]["alert_recommended"] is False
+
+
+def test_investigator_does_not_invent_alpn_changes_when_evidence_is_missing():
+    history = [
+        _row(tls_alpn=""),
+        _row(
+            scan_run_id=2,
+            observed_at="2026-09-02T10:00:00+00:00",
+            tls_alpn="h2",
+        ),
+    ]
+
+    changes = analyze_tls_service_changes(history, change_type="tls_alpn_changed")
+
+    assert changes == []
+
+
 def test_investigator_alerts_only_keeps_recommended_evidence():
     changes = analyze_tls_service_changes(_history(), alerts_only=True)
 
