@@ -97,10 +97,10 @@ def _tcp_history_values(flow: dict[str, object]) -> list[str]:
 
 
 def _tcp_session_quality(flow: dict[str, object]) -> tuple[bool, str]:
-    """Derive conservative handshake and termination evidence from observed TCP control flags.
+    """Derive conservative TCP handshake and termination evidence.
 
-    The labels intentionally describe only what the capture proves. A missing FIN is not
-    treated as an abnormal close because the capture may have started late or ended early.
+    Labels describe only what the capture proves. Missing FIN evidence is not
+    treated as an abnormal close because a capture can start late or end early.
     """
     history = _tcp_history_values(flow)
     handshake_observed = False
