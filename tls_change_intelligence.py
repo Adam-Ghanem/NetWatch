@@ -234,7 +234,11 @@ def analyze_tls_service_changes(
 
         previous_tls_protocol = _text(previous.get("tls_protocol"))
         current_tls_protocol = _text(current.get("tls_protocol"))
-        if previous_tls_protocol and current_tls_protocol and previous_tls_protocol != current_tls_protocol:
+        if (
+            previous_tls_protocol
+            and current_tls_protocol
+            and previous_tls_protocol != current_tls_protocol
+        ):
             previous_rank = _TLS_PROTOCOL_RANK.get(previous_tls_protocol.lower())
             current_rank = _TLS_PROTOCOL_RANK.get(current_tls_protocol.lower())
             downgrade = (
@@ -311,7 +315,9 @@ def analyze_tls_service_changes(
                     current,
                     change_type="certificate_expiry_risk",
                     severity="medium",
-                    summary=f"TLS certificate entered the {warning_days}-day expiry warning window.",
+                    summary=(
+                        f"TLS certificate entered the {warning_days}-day expiry warning window."
+                    ),
                     previous=("" if previous_days is None else previous_days),
                     current_value=current_days,
                 )
