@@ -270,7 +270,9 @@ def analyze_tls_service_changes(
             changes.append(
                 _change_event(
                     current,
-                    change_type=("tls_cipher_regression" if cipher_regression else "tls_cipher_changed"),
+                    change_type=(
+                        "tls_cipher_regression" if cipher_regression else "tls_cipher_changed"
+                    ),
                     severity=("high" if cipher_regression else "info"),
                     summary=(
                         "Negotiated TLS cipher regressed from known modern AEAD to a known legacy cipher."
