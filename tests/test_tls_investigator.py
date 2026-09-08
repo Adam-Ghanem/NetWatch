@@ -56,6 +56,15 @@ def test_snapshot_facets_match_filtered_evidence():
         "change_types": {"tls_protocol_downgrade": 1},
         "severities": {"high": 1},
     }
+    assert snapshot["timeline"] == [
+        {
+            "day": "2026-09-02",
+            "change_count": 1,
+            "alert_recommended_count": 1,
+            "change_types": {"tls_protocol_downgrade": 1},
+            "severities": {"high": 1},
+        }
+    ]
     assert snapshot["items"][0]["change_type"] == "tls_protocol_downgrade"
 
 
@@ -68,10 +77,64 @@ def test_snapshot_keeps_neutral_changes_but_does_not_recommend_alerts():
 
     assert snapshot["change_count"] == 1
     assert snapshot["alert_recommended_count"] == 0
+    assert snapshot["timeline"][0]["alert_recommended_count"] == 0
     assert snapshot["items"][0]["previous"] == "h2"
     assert snapshot["items"][0]["current"] == "http/1.1"
     assert snapshot["evidence_scope"]["network_probes_added"] is False
     assert snapshot["evidence_scope"]["certificate_bodies_retained"] is False
+
+
+def test_snapshot_timeline_is_sorted_and_ignores_unparseable_dates(monkeypatch):
+    changes = [
+        {
+            "observed_at": "2026-09-03T08:00:00+00:00",
+            "change_type": "tls_protocol_downgrade",
+            "severity": "high",
+            "alert_recommended": True,
+        },
+        {
+            "observed_at": "not-a-date",
+            "change_type": "tls_cipher_changed",
+            "severity": "info",
+            "alert_recommended": False,
+        },
+        {
+            "observed_at": "2026-09-02T09:00:00+00:00",
+            "change_type": "tls_alpn_changed",
+            "severity": "info",
+            "alert_recommended": False,
+        },
+        {
+            "observed_at": "2026-09-03T10:00:00+00:00",
+            "change_type": "certificate_expiry_risk",
+            "severity": "medium",
+            "alert_recommended": True,
+        },
+    ]
+
+    monkeypatch.setattr(
+        tls_investigator,
+        "analyze_tls_service_changes",
+        lambda history, **kwargs: changes,
+    )
+
+    snapshot = tls_investigator.build_tls_investigator_snapshot(_history())
+
+    assert [point["day"] for point in snapshot["timeline"]] == [
+        "2026-09-02",
+        "2026-09-03",
+    ]
+    assert snapshot["timeline"][1] == {
+        "day": "2026-09-03",
+        "change_count": 2,
+        "alert_recommended_count": 2,
+        "change_types": {
+            "certificate_expiry_risk": 1,
+            "tls_protocol_downgrade": 1,
+        },
+        "severities": {"high": 1, "medium": 1},
+    }
+    assert snapshot["change_count"] == 4
 
 
 def test_recent_snapshot_loads_bounded_history_and_forwards_filters(monkeypatch):
@@ -114,6 +177,7 @@ def test_recent_snapshot_loads_bounded_history_and_forwards_filters(monkeypatch)
     assert captured["analysis"]["severity"] == "high"
     assert captured["analysis"]["alerts_only"] is True
     assert snapshot["change_count"] == 0
+    assert snapshot["timeline"] == []
 
 
 def test_snapshot_bounds_history_and_change_limits(monkeypatch):
