@@ -77,9 +77,7 @@ def _matches(flow: dict[str, object], query: FlowQuery) -> bool:
         return False
     if query.state and _flow_state(flow) != _text(query.state):
         return False
-    if query.tcp_termination and _text(flow.get("tcp_termination")) != _text(
-        query.tcp_termination
-    ):
+    if query.tcp_termination and _text(flow.get("tcp_termination")) != _text(query.tcp_termination):
         return False
     if _int(flow.get("bytes")) < query.min_bytes:
         return False
