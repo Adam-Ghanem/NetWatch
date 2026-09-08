@@ -74,6 +74,7 @@ def build_flow_investigation(
         protocol=requested_query.protocol,
         service=requested_query.service,
         state=requested_query.state,
+        tcp_termination=requested_query.tcp_termination,
         min_bytes=requested_query.min_bytes,
         sort_by=requested_query.sort_by,
         limit=min(requested_query.limit, selected.flow_limit),
