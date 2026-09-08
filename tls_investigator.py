@@ -42,11 +42,11 @@ def _facet_counts(
     changes: Iterable[dict[str, object]],
     field: str,
 ) -> dict[str, int]:
-    counts = Counter(
-        value
-        for change in changes
-        if (value := _text(change.get(field)).lower())
-    )
+    counts: Counter[str] = Counter()
+    for change in changes:
+        value = _text(change.get(field)).lower()
+        if value:
+            counts[value] += 1
     return dict(sorted(counts.items()))
 
 
@@ -81,17 +81,15 @@ def build_tls_investigator_snapshot(
         severity=severity,
         alerts_only=alerts_only,
     )
-    service_count = len(
-        {
-            key
-            for row in bounded_history
-            if (key := _service_key(row)) is not None
-        }
-    )
+    services: set[tuple[str, str, int]] = set()
+    for row in bounded_history:
+        key = _service_key(row)
+        if key is not None:
+            services.add(key)
     alert_count = sum(change.get("alert_recommended") is True for change in changes)
     return {
         "history_count": len(bounded_history),
-        "service_count": service_count,
+        "service_count": len(services),
         "change_count": len(changes),
         "alert_recommended_count": alert_count,
         "facets": {
