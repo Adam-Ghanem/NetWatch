@@ -16,6 +16,7 @@ class TrafficFlowControls:
     protocol: str = ""
     service: str = ""
     state: str = ""
+    tcp_termination: str = ""
     min_bytes: int = 0
     sort_by: FlowSort = "bytes"
     limit: int = 100
@@ -26,6 +27,7 @@ class TrafficFlowControls:
             protocol=self.protocol,
             service=self.service,
             state=self.state,
+            tcp_termination=self.tcp_termination,
             min_bytes=self.min_bytes,
             sort_by=self.sort_by,
             limit=self.limit,
@@ -38,6 +40,7 @@ class TrafficFlowControls:
             or self.protocol.strip()
             or self.service.strip()
             or self.state.strip()
+            or self.tcp_termination.strip()
             or self.min_bytes
             or self.sort_by != "bytes"
             or self.limit != 100
