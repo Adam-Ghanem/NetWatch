@@ -41,7 +41,9 @@ def test_known_modern_to_known_legacy_cipher_is_high_risk_regression() -> None:
         ),
     ]
 
-    changes = analyze_tls_service_changes(history, change_type="tls_cipher_regression")
+    changes = analyze_tls_service_changes(
+        history, change_type="tls_cipher_regression"
+    )
 
     assert len(changes) == 1
     change = changes[0]
@@ -70,9 +72,12 @@ def test_unknown_cipher_change_stays_neutral_evidence() -> None:
     assert len(changes) == 1
     assert changes[0]["severity"] == "info"
     assert changes[0]["alert_recommended"] is False
-    assert is_confirmed_cipher_regression(
-        "TLS_RSA_WITH_AES_256_CBC_SHA", "VENDOR_CUSTOM_SUITE"
-    ) is False
+    assert (
+        is_confirmed_cipher_regression(
+            "TLS_RSA_WITH_AES_256_CBC_SHA", "VENDOR_CUSTOM_SUITE"
+        )
+        is False
+    )
 
 
 def test_legacy_to_modern_change_is_not_mislabeled_as_regression() -> None:
