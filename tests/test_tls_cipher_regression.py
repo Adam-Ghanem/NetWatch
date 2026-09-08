@@ -41,9 +41,7 @@ def test_known_modern_to_known_legacy_cipher_is_high_risk_regression() -> None:
         ),
     ]
 
-    changes = analyze_tls_service_changes(
-        history, change_type="tls_cipher_regression"
-    )
+    changes = analyze_tls_service_changes(history, change_type="tls_cipher_regression")
 
     assert len(changes) == 1
     change = changes[0]
