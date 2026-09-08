@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Iterable
+from typing import Any, Iterable
 
 from intelligence_store import recent_tls_service_history
 from tls_change_intelligence import analyze_tls_service_changes
@@ -61,7 +61,7 @@ def build_tls_investigator_snapshot(
     change_type: str | None = None,
     severity: str | None = None,
     alerts_only: bool = False,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Build a bounded, privacy-preserving TLS investigator view from retained evidence.
 
     The snapshot does not collect certificate bodies or identity fields and never triggers
@@ -118,7 +118,7 @@ def recent_tls_investigator_snapshot(
     change_type: str | None = None,
     severity: str | None = None,
     alerts_only: bool = False,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Load bounded retained TLS evidence and return an investigator-ready snapshot."""
     safe_history_limit = _bounded_limit(
         history_limit,
