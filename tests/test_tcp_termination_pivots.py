@@ -8,7 +8,6 @@ from flow_investigation import build_flow_investigation
 from flow_query import FlowQuery, query_flows
 from traffic_flow_controls import TrafficFlowControls, apply_traffic_flow_controls
 
-
 FLOWS = [
     {
         "flow_id": "reset-flow",
@@ -77,9 +76,7 @@ def test_investigation_propagates_partial_close_pivot_to_all_views():
         FLOWS,
         query=FlowQuery(tcp_termination="partial_close"),
     )
-    conversations = cast(
-        list[dict[str, object]], result["conversations"]["conversations"]
-    )
+    conversations = cast(list[dict[str, object]], result["conversations"]["conversations"])
 
     assert result["matched_flow_count"] == 1
     assert [flow["flow_id"] for flow in result["flows"]] == ["partial-flow"]
@@ -100,9 +97,8 @@ def test_capture_controls_recompute_conversations_for_reset_pivot():
     )
 
     assert result["flow_count"] == 1
-    assert [
-        flow["flow_id"]
-        for flow in cast(list[dict[str, object]], result["flows"])
-    ] == ["reset-flow"]
+    assert [flow["flow_id"] for flow in cast(list[dict[str, object]], result["flows"])] == [
+        "reset-flow"
+    ]
     conversations = cast(list[dict[str, object]], result["conversations"])
     assert [row["flow_id"] for row in conversations] == ["reset-flow"]
