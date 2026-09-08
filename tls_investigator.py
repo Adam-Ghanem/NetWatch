@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date
 from typing import Any, Iterable
 
 from intelligence_store import recent_tls_service_history
@@ -50,6 +51,42 @@ def _facet_counts(
     return dict(sorted(counts.items()))
 
 
+def _observed_day(value: object) -> str | None:
+    raw = _text(value)
+    if len(raw) < 10:
+        return None
+    candidate = raw[:10]
+    try:
+        return date.fromisoformat(candidate).isoformat()
+    except ValueError:
+        return None
+
+
+def _timeline_points(changes: Iterable[dict[str, object]]) -> list[dict[str, object]]:
+    buckets: dict[str, list[dict[str, object]]] = {}
+    for change in changes:
+        day = _observed_day(change.get("observed_at"))
+        if day is None:
+            continue
+        buckets.setdefault(day, []).append(change)
+
+    points: list[dict[str, object]] = []
+    for day in sorted(buckets):
+        day_changes = buckets[day]
+        points.append(
+            {
+                "day": day,
+                "change_count": len(day_changes),
+                "alert_recommended_count": sum(
+                    change.get("alert_recommended") is True for change in day_changes
+                ),
+                "change_types": _facet_counts(day_changes, "change_type"),
+                "severities": _facet_counts(day_changes, "severity"),
+            }
+        )
+    return points
+
+
 def build_tls_investigator_snapshot(
     history: list[dict[str, object]],
     *,
@@ -65,8 +102,9 @@ def build_tls_investigator_snapshot(
     """Build a bounded, privacy-preserving TLS investigator view from retained evidence.
 
     The snapshot does not collect certificate bodies or identity fields and never triggers
-    network probes. Facets describe only the filtered change set returned to the caller so
-    dashboard/API consumers cannot accidentally display stale counts from a broader scope.
+    network probes. Facets and timeline points describe only the filtered change set returned
+    to the caller so dashboard/API consumers cannot accidentally display stale counts from a
+    broader scope.
     """
     safe_limit = _bounded_limit(limit, minimum=1, maximum=_MAX_CHANGE_ROWS)
     bounded_history = list(history[:_MAX_HISTORY_ROWS])
@@ -96,6 +134,7 @@ def build_tls_investigator_snapshot(
             "change_types": _facet_counts(changes, "change_type"),
             "severities": _facet_counts(changes, "severity"),
         },
+        "timeline": _timeline_points(changes),
         "items": changes,
         "evidence_scope": {
             "source": "retained_tls_service_metadata",
