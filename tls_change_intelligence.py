@@ -275,7 +275,7 @@ def analyze_tls_service_changes(
                     ),
                     severity=("high" if cipher_regression else "info"),
                     summary=(
-                        "Negotiated TLS cipher regressed from known modern AEAD to a known legacy cipher."
+                        "Negotiated TLS cipher regressed from modern AEAD to a known legacy cipher."
                         if cipher_regression
                         else "Negotiated TLS cipher changed between observations."
                     ),
