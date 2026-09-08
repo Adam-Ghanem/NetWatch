@@ -18,6 +18,12 @@ _PCAP_MAGICS = {
     b"\x4d\x3c\xb2\xa1",
     b"\xa1\xb2\x3c\x4d",
 }
+_TCP_TERMINATIONS = (
+    "graceful_close",
+    "partial_close",
+    "reset",
+    "not_observed",
+)
 
 
 def analyze_capture_bytes(
@@ -133,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--flow-service", default="", help="Match a service hint")
     parser.add_argument("--flow-state", default="", help="Match a canonical flow state")
     parser.add_argument(
+        "--tcp-termination",
+        choices=_TCP_TERMINATIONS,
+        default="",
+        help="Match exact capture-evidence TCP termination quality",
+    )
+    parser.add_argument(
         "--min-bytes",
         type=int,
         default=0,
@@ -160,6 +172,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             protocol=args.flow_protocol,
             service=args.flow_service,
             state=args.flow_state,
+            tcp_termination=args.tcp_termination,
             min_bytes=args.min_bytes,
             sort_by=args.sort_by,
             limit=args.flow_limit,

@@ -97,6 +97,52 @@ def test_analyze_applies_bounded_flow_controls_after_import(
     }
 
 
+def test_analyze_applies_tcp_termination_pivot_after_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_import(data: bytes, *, max_packets: int) -> dict[str, object]:
+        assert data.startswith(b"\xd4\xc3\xb2\xa1")
+        assert max_packets == 25
+        return {
+            "source": "pcap",
+            "flows": [
+                {
+                    "flow_id": "reset-flow",
+                    "protocol": "TCP",
+                    "service": "https",
+                    "tcp_termination": "reset",
+                    "bytes": 512,
+                    "packets": 5,
+                    "originator": {"ip": "10.0.0.5", "port": 54000},
+                    "responder": {"ip": "10.0.0.10", "port": 443},
+                },
+                {
+                    "flow_id": "graceful-flow",
+                    "protocol": "TCP",
+                    "service": "ssh",
+                    "tcp_termination": "graceful_close",
+                    "bytes": 256,
+                    "packets": 4,
+                    "originator": {"ip": "10.0.0.6", "port": 55000},
+                    "responder": {"ip": "10.0.0.11", "port": 22},
+                },
+            ],
+            "flow_count": 2,
+            "payload_retained": False,
+        }
+
+    monkeypatch.setattr(capture_cli, "import_pcap_metadata", fake_import)
+
+    result = capture_cli.analyze_capture_bytes(
+        b"\xd4\xc3\xb2\xa1example",
+        packet_limit=25,
+        controls=TrafficFlowControls(tcp_termination="reset"),
+    )
+
+    assert result["flow_count"] == 1
+    assert result["flows"][0]["flow_id"] == "reset-flow"
+
+
 def test_analyze_rejects_unknown_capture_format() -> None:
     with pytest.raises(ValueError, match="Unsupported capture format"):
         capture_cli.analyze_capture_bytes(b"not-a-capture")
@@ -158,6 +204,19 @@ def test_parser_accepts_ndjson_output_format() -> None:
     args = capture_cli.build_parser().parse_args(["capture.pcap", "--format", "ndjson"])
 
     assert args.output_format == "ndjson"
+
+
+def test_parser_accepts_tcp_termination_pivot() -> None:
+    args = capture_cli.build_parser().parse_args(
+        ["capture.pcap", "--tcp-termination", "partial_close"]
+    )
+
+    assert args.tcp_termination == "partial_close"
+
+
+def test_parser_rejects_unknown_tcp_termination_pivot() -> None:
+    with pytest.raises(SystemExit):
+        capture_cli.build_parser().parse_args(["capture.pcap", "--tcp-termination", "failed"])
 
 
 def test_csv_render_reuses_formula_safe_flow_export() -> None:
