@@ -11,6 +11,16 @@ _TLS_PROTOCOL_RANK = {
     "tlsv1.2": 3,
     "tlsv1.3": 4,
 }
+_TLS_CHANGE_TYPES = {
+    "certificate_rotated",
+    "tls_protocol_downgrade",
+    "tls_protocol_changed",
+    "tls_cipher_changed",
+    "certificate_validity_risk",
+    "certificate_expiry_risk",
+}
+_TLS_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+_TLS_TRANSPORT_PROTOCOLS = {"TCP", "UDP"}
 
 
 def _text(value: object) -> str:
@@ -90,12 +100,74 @@ def _apply_alert_policy(
         change["alert_reason"] = summary if recommended else ""
 
 
+def _normalize_investigator_filters(
+    *,
+    port: int | None,
+    protocol: str | None,
+    change_type: str | None,
+    severity: str | None,
+) -> tuple[int | None, str | None, str | None, str | None]:
+    normalized_port = port
+    if normalized_port is not None and not 1 <= normalized_port <= 65535:
+        raise ValueError("TLS investigator port must be between 1 and 65535.")
+
+    normalized_protocol: str | None = None
+    if protocol is not None:
+        normalized_protocol = _text(protocol).upper()
+        if normalized_protocol not in _TLS_TRANSPORT_PROTOCOLS:
+            raise ValueError("TLS investigator protocol must be TCP or UDP.")
+
+    normalized_change_type: str | None = None
+    if change_type is not None:
+        normalized_change_type = _text(change_type).lower()
+        if normalized_change_type not in _TLS_CHANGE_TYPES:
+            raise ValueError("TLS investigator change type is not supported.")
+
+    normalized_severity: str | None = None
+    if severity is not None:
+        normalized_severity = _text(severity).lower()
+        if normalized_severity not in _TLS_SEVERITIES:
+            raise ValueError("TLS investigator severity is not supported.")
+
+    return normalized_port, normalized_protocol, normalized_change_type, normalized_severity
+
+
+def _filter_investigator_changes(
+    changes: list[dict[str, object]],
+    *,
+    port: int | None,
+    protocol: str | None,
+    change_type: str | None,
+    severity: str | None,
+    alerts_only: bool,
+) -> list[dict[str, object]]:
+    filtered: list[dict[str, object]] = []
+    for change in changes:
+        if port is not None and _integer(change.get("port")) != port:
+            continue
+        if protocol is not None and _text(change.get("protocol")).upper() != protocol:
+            continue
+        if change_type is not None and _text(change.get("change_type")).lower() != change_type:
+            continue
+        if severity is not None and _text(change.get("severity")).lower() != severity:
+            continue
+        if alerts_only and change.get("alert_recommended") is not True:
+            continue
+        filtered.append(change)
+    return filtered
+
+
 def analyze_tls_service_changes(
     history: list[dict[str, object]],
     *,
     limit: int = 100,
     expiry_warning_days: int = 30,
     alert_min_severity: str = "medium",
+    port: int | None = None,
+    protocol: str | None = None,
+    change_type: str | None = None,
+    severity: str | None = None,
+    alerts_only: bool = False,
 ) -> list[dict[str, object]]:
     """Derive evidence-safe TLS transitions from normalized historical observations.
 
@@ -103,9 +175,21 @@ def analyze_tls_service_changes(
     for the same IP/protocol/port tuple and does not infer certificate identity, compromise,
     or cipher weakness from names alone. Alert recommendations are derived only from the
     already-classified evidence and never turn neutral rotation/cipher changes into risks.
+    Optional investigator pivots filter only derived evidence; they never trigger new probes.
     """
     safe_limit = max(1, min(int(limit), 1_000))
     warning_days = max(1, min(int(expiry_warning_days), 365))
+    (
+        normalized_port,
+        normalized_protocol,
+        normalized_change_type,
+        normalized_severity,
+    ) = _normalize_investigator_filters(
+        port=port,
+        protocol=protocol,
+        change_type=change_type,
+        severity=severity,
+    )
     previous_by_service: dict[tuple[str, str, int], dict[str, object]] = {}
     changes: list[dict[str, object]] = []
 
@@ -117,12 +201,12 @@ def analyze_tls_service_changes(
         ),
     )
     for current in ordered:
-        port = _integer(current.get("port", 0))
+        current_port = _integer(current.get("port", 0))
         ip_address = _text(current.get("ip_address"))
-        protocol = (_text(current.get("protocol")) or "TCP").upper()
-        if not ip_address or not 1 <= port <= 65535:
+        current_protocol = (_text(current.get("protocol")) or "TCP").upper()
+        if not ip_address or not 1 <= current_port <= 65535:
             continue
-        key = (ip_address, protocol, port)
+        key = (ip_address, current_protocol, current_port)
         previous = previous_by_service.get(key)
         previous_by_service[key] = current
         if previous is None:
@@ -146,11 +230,15 @@ def analyze_tls_service_changes(
                 )
             )
 
-        previous_protocol = _text(previous.get("tls_protocol"))
-        current_protocol = _text(current.get("tls_protocol"))
-        if previous_protocol and current_protocol and previous_protocol != current_protocol:
-            previous_rank = _TLS_PROTOCOL_RANK.get(previous_protocol.lower())
-            current_rank = _TLS_PROTOCOL_RANK.get(current_protocol.lower())
+        previous_tls_protocol = _text(previous.get("tls_protocol"))
+        current_tls_protocol = _text(current.get("tls_protocol"))
+        if (
+            previous_tls_protocol
+            and current_tls_protocol
+            and previous_tls_protocol != current_tls_protocol
+        ):
+            previous_rank = _TLS_PROTOCOL_RANK.get(previous_tls_protocol.lower())
+            current_rank = _TLS_PROTOCOL_RANK.get(current_tls_protocol.lower())
             downgrade = (
                 previous_rank is not None
                 and current_rank is not None
@@ -166,8 +254,8 @@ def analyze_tls_service_changes(
                         if downgrade
                         else "Negotiated TLS protocol changed between observations."
                     ),
-                    previous=previous_protocol,
-                    current_value=current_protocol,
+                    previous=previous_tls_protocol,
+                    current_value=current_tls_protocol,
                 )
             )
 
@@ -220,6 +308,14 @@ def analyze_tls_service_changes(
             )
 
     _apply_alert_policy(changes, minimum_severity=alert_min_severity)
+    changes = _filter_investigator_changes(
+        changes,
+        port=normalized_port,
+        protocol=normalized_protocol,
+        change_type=normalized_change_type,
+        severity=normalized_severity,
+        alerts_only=alerts_only,
+    )
     changes.sort(
         key=lambda event: (
             _text(event.get("observed_at")),
@@ -236,6 +332,11 @@ def recent_tls_service_changes(
     ip_address: str | None = None,
     expiry_warning_days: int = 30,
     alert_min_severity: str = "medium",
+    port: int | None = None,
+    protocol: str | None = None,
+    change_type: str | None = None,
+    severity: str | None = None,
+    alerts_only: bool = False,
 ) -> list[dict[str, object]]:
     """Return bounded TLS rotation, negotiation-change, expiry-risk and alert evidence."""
     safe_limit = max(1, min(int(limit), 1_000))
@@ -246,4 +347,9 @@ def recent_tls_service_changes(
         limit=safe_limit,
         expiry_warning_days=expiry_warning_days,
         alert_min_severity=alert_min_severity,
+        port=port,
+        protocol=protocol,
+        change_type=change_type,
+        severity=severity,
+        alerts_only=alerts_only,
     )
