@@ -45,6 +45,7 @@ def tls_cipher_posture(cipher: object) -> CipherPosture:
 
 def is_confirmed_cipher_regression(previous: object, current: object) -> bool:
     """Return true only for a known-modern AEAD -> known-legacy transition."""
-    return tls_cipher_posture(previous) == "modern_aead" and tls_cipher_posture(
-        current
-    ) == "legacy_unsafe"
+    return (
+        tls_cipher_posture(previous) == "modern_aead"
+        and tls_cipher_posture(current) == "legacy_unsafe"
+    )
