@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 FlowSort = Literal["bytes", "packets", "duration", "recent"]
+_TCP_TERMINATIONS = {"graceful_close", "partial_close", "reset", "not_observed"}
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class FlowQuery:
     protocol: str = ""
     service: str = ""
     state: str = ""
+    tcp_termination: str = ""
     min_bytes: int = 0
     sort_by: FlowSort = "bytes"
     limit: int = 100
@@ -26,6 +28,12 @@ class FlowQuery:
             raise ValueError("Flow query limit must be between 1 and 1000.")
         if self.sort_by not in {"bytes", "packets", "duration", "recent"}:
             raise ValueError("Unsupported flow sort order.")
+        termination = _text(self.tcp_termination)
+        if termination and termination not in _TCP_TERMINATIONS:
+            raise ValueError(
+                "TCP termination must be one of: graceful_close, partial_close, "
+                "reset, not_observed."
+            )
 
 
 def _int(value: object) -> int:
@@ -63,6 +71,10 @@ def _matches(flow: dict[str, object], query: FlowQuery) -> bool:
     if query.service and _text(flow.get("service")) != _text(query.service):
         return False
     if query.state and _flow_state(flow) != _text(query.state):
+        return False
+    if query.tcp_termination and _text(flow.get("tcp_termination")) != _text(
+        query.tcp_termination
+    ):
         return False
     if _int(flow.get("bytes")) < query.min_bytes:
         return False
