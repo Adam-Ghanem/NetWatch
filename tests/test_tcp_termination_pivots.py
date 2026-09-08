@@ -100,8 +100,9 @@ def test_capture_controls_recompute_conversations_for_reset_pivot():
     )
 
     assert result["flow_count"] == 1
-    assert [flow["flow_id"] for flow in cast(list[dict[str, object]], result["flows"])] == [
-        "reset-flow"
-    ]
+    assert [
+        flow["flow_id"]
+        for flow in cast(list[dict[str, object]], result["flows"])
+    ] == ["reset-flow"]
     conversations = cast(list[dict[str, object]], result["conversations"])
     assert [row["flow_id"] for row in conversations] == ["reset-flow"]
