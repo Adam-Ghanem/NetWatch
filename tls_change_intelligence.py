@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import alert_policy
 from intelligence_store import recent_tls_service_history
+from tls_cipher_posture import is_confirmed_cipher_regression
 
 _TLS_PROTOCOL_RANK = {
     "sslv3": 0,
@@ -15,6 +16,7 @@ _TLS_CHANGE_TYPES = {
     "certificate_rotated",
     "tls_protocol_downgrade",
     "tls_protocol_changed",
+    "tls_cipher_regression",
     "tls_cipher_changed",
     "tls_alpn_changed",
     "certificate_validity_risk",
@@ -174,10 +176,10 @@ def analyze_tls_service_changes(
 
     The analyzer is intentionally conservative: it only compares consecutive observations
     for the same IP/protocol/port tuple and does not infer certificate identity, compromise,
-    or cipher weakness from names alone. Alert recommendations are derived only from the
-    already-classified evidence and never turn neutral rotation/cipher/ALPN changes into
-    risks. Optional investigator pivots filter only derived evidence; they never trigger
-    new probes.
+    or cipher weakness from unfamiliar names. A cipher regression is raised only for a
+    known-modern AEAD -> known-legacy transition. Alert recommendations are derived only
+    from the already-classified evidence. Optional investigator pivots filter only derived
+    evidence; they never trigger new probes.
     """
     safe_limit = max(1, min(int(limit), 1_000))
     warning_days = max(1, min(int(expiry_warning_days), 365))
@@ -264,12 +266,17 @@ def analyze_tls_service_changes(
         previous_cipher = _text(previous.get("tls_cipher"))
         current_cipher = _text(current.get("tls_cipher"))
         if previous_cipher and current_cipher and previous_cipher != current_cipher:
+            cipher_regression = is_confirmed_cipher_regression(previous_cipher, current_cipher)
             changes.append(
                 _change_event(
                     current,
-                    change_type="tls_cipher_changed",
-                    severity="info",
-                    summary="Negotiated TLS cipher changed between observations.",
+                    change_type=("tls_cipher_regression" if cipher_regression else "tls_cipher_changed"),
+                    severity=("high" if cipher_regression else "info"),
+                    summary=(
+                        "Negotiated TLS cipher regressed from known modern AEAD to a known legacy cipher."
+                        if cipher_regression
+                        else "Negotiated TLS cipher changed between observations."
+                    ),
                     previous=previous_cipher,
                     current_value=current_cipher,
                 )
