@@ -79,7 +79,10 @@ def test_selected_profile_and_timeout_are_forwarded(monkeypatch, capsys) -> None
 
 
 def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(netwatch_udp, "scan_udp_services", lambda *args, **kwargs: _rows())
+    def fake_scan(*args, **kwargs):
+        return _rows()
+
+    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
 
     assert (
         netwatch_udp.main(
