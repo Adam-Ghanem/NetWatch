@@ -45,7 +45,9 @@ def _pcap_header(data: bytes) -> tuple[str, float, int, str]:
     return byte_order, timestamp_scale, linktype, f"{major}.{minor}"
 
 
-def import_pcap_metadata(data: bytes, *, max_packets: int = 1_000) -> dict[str, Any]:
+def import_pcap_metadata(
+    data: bytes, *, max_packets: int = 1_000
+) -> dict[str, Any]:
     """Parse bounded classic-PCAP Ethernet records without retaining frame payload bytes."""
     if max_packets < 1 or max_packets > MAX_PCAP_PACKETS:
         raise ValueError(f"PCAP packet limit must be between 1 and {MAX_PCAP_PACKETS}.")
