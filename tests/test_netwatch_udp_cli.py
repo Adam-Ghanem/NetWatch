@@ -143,9 +143,7 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
 
 def test_scanner_validation_error_becomes_cli_usage_error(monkeypatch) -> None:
     def fake_scan(*args, **kwargs):
-        raise ValueError(
-            "UDP timeout must be between 0.05 and 1.0 seconds."
-        )
+        raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
 
     monkeypatch.setattr(
         netwatch_udp,
