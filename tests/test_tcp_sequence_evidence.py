@@ -60,9 +60,7 @@ def _pcap(frames: list[bytes]) -> bytes:
 
 
 def test_extracts_sequence_ack_and_segment_length_without_payload_retention():
-    metadata = extract_tcp_sequence_metadata(
-        _tcp_frame(100, b"hello", acknowledgement=77)
-    )
+    metadata = extract_tcp_sequence_metadata(_tcp_frame(100, b"hello", acknowledgement=77))
 
     assert metadata == {
         "tcp_sequence": 100,
