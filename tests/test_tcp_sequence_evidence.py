@@ -73,10 +73,7 @@ def test_extracts_sequence_ack_and_segment_length_without_payload_retention():
 
 
 def test_fragmented_ipv4_tcp_is_not_used_for_sequence_evidence():
-    assert (
-        extract_tcp_sequence_metadata(_tcp_frame(100, b"hello", fragment_field=0x2000))
-        is None
-    )
+    assert extract_tcp_sequence_metadata(_tcp_frame(100, b"hello", fragment_field=0x2000)) is None
 
 
 def test_sequence_summary_reports_gap_and_overlap_as_capture_evidence_only():
