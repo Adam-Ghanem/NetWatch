@@ -12,6 +12,48 @@ function valueOf(selector) {
   return String(document.querySelector(selector).value || '').trim();
 }
 
+const shareableScope = [
+  ['#filter-ip', 'ip_address'],
+  ['#filter-port', 'port'],
+  ['#filter-protocol', 'protocol'],
+  ['#filter-change', 'change_type'],
+  ['#filter-severity', 'severity'],
+  ['#filter-limit', 'limit'],
+];
+
+function setScopeValue(selector, value) {
+  const node = document.querySelector(selector);
+  if (!node || !value) return;
+  if (node.tagName === 'SELECT' && !Array.from(node.options).some((option) => option.value === value)) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = labelize(value);
+    node.appendChild(option);
+  }
+  node.value = value;
+}
+
+function loadScopeFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  for (const [selector, name] of shareableScope) {
+    const value = String(params.get(name) || '').trim();
+    if (value) setScopeValue(selector, value);
+  }
+  document.querySelector('#alerts-only').checked = params.get('alerts_only') === 'true';
+}
+
+function syncScopeToUrl() {
+  const params = new URLSearchParams();
+  for (const [selector, name] of shareableScope) {
+    const value = valueOf(selector);
+    if (value && !(name === 'limit' && value === '100')) params.set(name, value);
+  }
+  if (document.querySelector('#alerts-only').checked) params.set('alerts_only', 'true');
+  const query = params.toString();
+  const nextUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+  window.history.replaceState(null, '', nextUrl);
+}
+
 function investigatorUrl() {
   const params = new URLSearchParams({
     history_limit: '400',
@@ -180,6 +222,7 @@ async function loadEvidence() {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return setStatus('Result limit must be between 1 and 1,000.', 'error');
   const port = valueOf('#filter-port');
   if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) return setStatus('Port must be between 1 and 65,535.', 'error');
+  syncScopeToUrl();
   setStatus('Loading bounded retained TLS evidence…');
   try {
     const response = await fetch(investigatorUrl(), {
@@ -216,4 +259,5 @@ document.querySelector('#clear').addEventListener('click', () => {
 for (const selector of ['#filter-protocol', '#filter-change', '#filter-severity', '#alerts-only']) {
   document.querySelector(selector).addEventListener('change', () => { if (keyInput.value.trim()) loadEvidence(); });
 }
+loadScopeFromUrl();
 if (savedKey) loadEvidence();

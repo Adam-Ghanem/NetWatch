@@ -49,3 +49,25 @@ def test_tls_investigator_dashboard_is_csp_safe_and_uses_text_only_rendering() -
     assert "certificate bodies" in html
     assert "subject/issuer strings" in html
     assert "sessionStorage.getItem('netwatchApiKey')" in javascript
+
+
+def test_tls_investigator_dashboard_persists_shareable_scope_without_secrets() -> None:
+    javascript = _javascript()
+
+    assert "new URLSearchParams(window.location.search)" in javascript
+    assert "window.history.replaceState" in javascript
+    for parameter in (
+        "ip_address",
+        "port",
+        "protocol",
+        "change_type",
+        "severity",
+        "alerts_only",
+        "limit",
+    ):
+        assert parameter in javascript
+
+    sync_scope = javascript[
+        javascript.index("function syncScopeToUrl") : javascript.index("function labelize")
+    ]
+    assert "netwatchApiKey" not in sync_scope
