@@ -28,14 +28,7 @@ def test_tls_investigator_dashboard_uses_bounded_authenticated_read_api() -> Non
 def test_tls_investigator_dashboard_exposes_safe_investigator_pivots() -> None:
     source = _html() + _javascript()
 
-    for pivot in (
-        "ip_address",
-        "port",
-        "protocol",
-        "change_type",
-        "severity",
-        "alerts_only",
-    ):
+    for pivot in ("ip_address", "port", "protocol", "change_type", "severity", "alerts_only"):
         assert pivot in source
 
     assert "change-facets" in source
