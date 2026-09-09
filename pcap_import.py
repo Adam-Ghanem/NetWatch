@@ -35,9 +35,7 @@ def _pcap_header(data: bytes) -> tuple[str, float, int, str]:
         f"{byte_order}HHIIII", data, 4
     )
     if (major, minor) != (2, 4):
-        raise ValueError(
-            f"Unsupported PCAP version {major}.{minor}; version 2.4 is required."
-        )
+        raise ValueError(f"Unsupported PCAP version {major}.{minor}; version 2.4 is required.")
     if linktype != LINKTYPE_ETHERNET:
         raise ValueError("Only Ethernet (LINKTYPE_ETHERNET) PCAP files are supported.")
     if snaplen < 1 or snaplen > MAX_CAPTURED_FRAME_BYTES:
@@ -67,13 +65,9 @@ def import_pcap_metadata(data: bytes, *, max_packets: int = 1_000) -> dict[str, 
         )
         offset += _RECORD_HEADER_BYTES
         if included_length > MAX_CAPTURED_FRAME_BYTES:
-            raise ValueError(
-                "PCAP packet record exceeds the supported frame-size safety bound."
-            )
+            raise ValueError("PCAP packet record exceeds the supported frame-size safety bound.")
         if included_length > original_length:
-            raise ValueError(
-                "PCAP packet record has an invalid captured/original length pair."
-            )
+            raise ValueError("PCAP packet record has an invalid captured/original length pair.")
         if len(data) - offset < included_length:
             raise ValueError("PCAP packet record data is truncated.")
 
