@@ -100,9 +100,7 @@ def summarize_tcp_sequence_evidence(
     caused by reordering or retransmission. This function never labels either cause.
     """
     if finding_limit < 1 or finding_limit > _MAX_FINDINGS:
-        raise ValueError(
-            f"TCP sequence finding limit must be between 1 and {_MAX_FINDINGS}."
-        )
+        raise ValueError(f"TCP sequence finding limit must be between 1 and {_MAX_FINDINGS}.")
 
     expected_by_direction: dict[tuple[str, int, str, int], int] = {}
     findings: list[dict[str, object]] = []
