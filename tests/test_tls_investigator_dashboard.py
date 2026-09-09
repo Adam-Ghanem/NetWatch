@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 DASHBOARD = Path("frontend/tls-investigator.html")
 SCRIPT = Path("frontend/tls-investigator.js")
 
