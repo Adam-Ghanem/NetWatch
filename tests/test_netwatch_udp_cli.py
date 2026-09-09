@@ -31,66 +31,100 @@ def test_requires_explicit_authorization() -> None:
     assert exc.value.code == 2
 
 
-def test_default_profiles_are_bounded_and_json_serialized(monkeypatch, capsys) -> None:
+def test_default_profiles_are_bounded_and_json_serialized(
+    monkeypatch,
+    capsys,
+) -> None:
     observed: dict[str, object] = {}
 
     def fake_scan(target, *, services, timeout):
-        observed.update(target=target, services=services, timeout=timeout)
+        observed.update(
+            target=target,
+            services=services,
+            timeout=timeout,
+        )
         return _rows()
 
-    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
+    monkeypatch.setattr(
+        netwatch_udp,
+        "scan_udp_services",
+        fake_scan,
+    )
 
     assert netwatch_udp.main(["192.168.1.10", "--authorized"]) == 0
-
     assert observed == {
         "target": "192.168.1.10",
         "services": ("dns", "ntp"),
         "timeout": 0.35,
     }
+
     payload = json.loads(capsys.readouterr().out)
     assert payload["count"] == 1
     assert payload["items"][0]["Status"] == "Open"
 
 
-def test_selected_profile_and_timeout_are_forwarded(monkeypatch, capsys) -> None:
+def test_selected_profile_and_timeout_are_forwarded(
+    monkeypatch,
+    capsys,
+) -> None:
     observed: dict[str, object] = {}
 
     def fake_scan(target, *, services, timeout):
-        observed.update(target=target, services=services, timeout=timeout)
+        observed.update(
+            target=target,
+            services=services,
+            timeout=timeout,
+        )
         return _rows()
 
-    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
-
-    assert (
-        netwatch_udp.main(
-            [
-                "fd00::10",
-                "--authorized",
-                "--service",
-                "dns",
-                "--timeout",
-                "0.5",
-            ]
-        )
-        == 0
+    monkeypatch.setattr(
+        netwatch_udp,
+        "scan_udp_services",
+        fake_scan,
     )
+
+    result = netwatch_udp.main(
+        [
+            "fd00::10",
+            "--authorized",
+            "--service",
+            "dns",
+            "--timeout",
+            "0.5",
+        ]
+    )
+
+    assert result == 0
     capsys.readouterr()
-    assert observed == {"target": "fd00::10", "services": ("dns",), "timeout": 0.5}
+    assert observed == {
+        "target": "fd00::10",
+        "services": ("dns",),
+        "timeout": 0.5,
+    }
 
 
 def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     def fake_scan(*args, **kwargs):
         return _rows()
 
-    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
-
-    assert (
-        netwatch_udp.main(
-            ["192.168.1.10", "--authorized", "--service", "dns", "--format", "csv"]
-        )
-        == 0
+    monkeypatch.setattr(
+        netwatch_udp,
+        "scan_udp_services",
+        fake_scan,
     )
 
+    result = netwatch_udp.main(
+        [
+            "192.168.1.10",
+            "--authorized",
+            "--service",
+            "dns",
+            "--format",
+            "csv",
+        ]
+    )
+
+    assert result == 0
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
     assert rows == [
         {
@@ -109,10 +143,23 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
 
 def test_scanner_validation_error_becomes_cli_usage_error(monkeypatch) -> None:
     def fake_scan(*args, **kwargs):
-        raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
+        raise ValueError(
+            "UDP timeout must be between 0.05 and 1.0 seconds."
+        )
 
-    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
+    monkeypatch.setattr(
+        netwatch_udp,
+        "scan_udp_services",
+        fake_scan,
+    )
 
     with pytest.raises(SystemExit) as exc:
-        netwatch_udp.main(["192.168.1.10", "--authorized", "--timeout", "2"])
+        netwatch_udp.main(
+            [
+                "192.168.1.10",
+                "--authorized",
+                "--timeout",
+                "2",
+            ]
+        )
     assert exc.value.code == 2
