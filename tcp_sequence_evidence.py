@@ -77,7 +77,9 @@ def extract_tcp_sequence_metadata(frame: bytes) -> dict[str, int] | None:
 
     flags = frame[transport_offset + 13]
     segment_length = max(0, packet_end - transport_offset - header_length)
-    sequence_advance = segment_length + int(bool(flags & 0x02)) + int(bool(flags & 0x01))
+    sequence_advance = (
+        segment_length + int(bool(flags & 0x02)) + int(bool(flags & 0x01))
+    )
     return {
         "tcp_sequence": sequence,
         "tcp_ack": acknowledgement,
@@ -108,7 +110,9 @@ def summarize_tcp_sequence_evidence(
     caused by reordering or retransmission. This function never labels either cause.
     """
     if finding_limit < 1 or finding_limit > _MAX_FINDINGS:
-        raise ValueError(f"TCP sequence finding limit must be between 1 and {_MAX_FINDINGS}.")
+        raise ValueError(
+            f"TCP sequence finding limit must be between 1 and {_MAX_FINDINGS}."
+        )
 
     expected_by_direction: dict[tuple[str, int, str, int], int] = {}
     findings: list[dict[str, object]] = []
