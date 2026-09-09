@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>NetWatch · TLS Investigator</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #071018; color: #e8f0f6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, rgba(40, 180, 145, .12), transparent 34rem), #071018; }
+    button, input, select { font: inherit; }
+    button, input, select { border: 1px solid #263a49; border-radius: 10px; background: #0d1923; color: #e8f0f6; min-height: 40px; padding: 8px 11px; }
+    button { cursor: pointer; }
+    button:hover { border-color: #4d8078; }
+    a { color: #91ddcc; }
+    .shell { width: min(1480px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 48px; }
+    .topbar, .panel, .metric { border: 1px solid #1d313e; background: rgba(9, 20, 29, .92); box-shadow: 0 18px 50px rgba(0, 0, 0, .16); }
+    .topbar { display: flex; gap: 20px; justify-content: space-between; align-items: flex-start; border-radius: 18px; padding: 22px; }
+    .brand { display: flex; gap: 14px; align-items: center; }
+    .brand-mark { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #14382f; color: #9ef0d9; font-weight: 800; letter-spacing: -.04em; }
+    .eyebrow { margin: 0 0 4px; color: #77b8aa; font-size: 12px; text-transform: uppercase; letter-spacing: .14em; font-weight: 800; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: clamp(24px, 3vw, 34px); letter-spacing: -.035em; }
+    h2 { margin-bottom: 4px; font-size: 18px; }
+    .muted { color: #8fa5b4; }
+    .privacy { max-width: 470px; font-size: 13px; line-height: 1.5; }
+    .privacy strong { color: #a6dfd1; }
+    .connection { margin-top: 18px; display: grid; grid-template-columns: minmax(230px, 1fr) auto auto; gap: 10px; }
+    .grid { display: grid; gap: 14px; }
+    .metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 18px; }
+    .metric { border-radius: 14px; padding: 16px; }
+    .metric span { display: block; color: #8197a5; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .metric strong { display: block; margin-top: 8px; font-size: 28px; }
+    .panel { margin-top: 16px; border-radius: 18px; padding: 18px; }
+    .panel-head { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .filter-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    label { display: grid; gap: 6px; color: #9db0bd; font-size: 12px; font-weight: 700; }
+    .check { display: flex; align-items: center; gap: 8px; min-height: 40px; padding-top: 21px; }
+    .check input { min-height: 0; width: 18px; height: 18px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+    .primary { background: #1b6757; border-color: #2c8c77; color: white; font-weight: 750; }
+    .status { color: #8fa5b4; font-size: 13px; }
+    .status.error { color: #ffaaa5; }
+    .status.success { color: #98e5c9; }
+    .facet-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .facet { min-height: 32px; padding: 5px 9px; border-radius: 999px; color: #afc0cb; background: #0b1720; font-size: 12px; }
+    .facet.active { border-color: #57aa96; color: #c8f5e9; background: #113128; }
+    .timeline { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(60px, 1fr); align-items: end; gap: 8px; min-height: 160px; overflow-x: auto; padding: 8px 2px 2px; }
+    .day { display: grid; grid-template-rows: 110px auto auto; gap: 5px; align-items: end; min-width: 58px; }
+    .bar-wrap { height: 110px; display: flex; align-items: end; gap: 3px; justify-content: center; }
+    .bar { width: 14px; min-height: 2px; border-radius: 5px 5px 2px 2px; background: #3b8c7a; }
+    .bar.alert { background: #b77b55; }
+    .day small { text-align: center; color: #748a98; font-size: 10px; white-space: nowrap; }
+    .day strong { text-align: center; font-size: 11px; }
+    .table-wrap { overflow: auto; border: 1px solid #1c2d39; border-radius: 13px; }
+    table { width: 100%; min-width: 1050px; border-collapse: collapse; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid #172833; text-align: left; vertical-align: top; font-size: 12px; }
+    th { position: sticky; top: 0; background: #0d1a23; color: #8ea5b3; text-transform: uppercase; letter-spacing: .06em; font-size: 10px; }
+    td { color: #cad6de; }
+    .pill { display: inline-block; padding: 3px 7px; border-radius: 999px; border: 1px solid #2c4352; font-size: 10px; text-transform: uppercase; }
+    .pill.high { border-color: #9c574f; color: #ffb2aa; }
+    .pill.medium { border-color: #826944; color: #f1ce8a; }
+    .pill.alert { border-color: #8a6044; color: #ffc08e; }
+    .empty { padding: 30px; text-align: center; color: #718896; }
+    @media (max-width: 1000px) { .metrics { grid-template-columns: repeat(2, 1fr); } .filter-grid { grid-template-columns: repeat(2, 1fr); } .topbar { flex-direction: column; } }
+    @media (max-width: 620px) { .shell { width: min(100% - 18px, 1480px); padding-top: 10px; } .metrics, .filter-grid, .connection { grid-template-columns: 1fr; } .check { padding-top: 0; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div class="brand">
+        <div class="brand-mark">NW</div>
+        <div>
+          <p class="eyebrow">Evidence workspace</p>
+          <h1>TLS Investigator</h1>
+          <p class="muted">Pivot through retained TLS service changes without adding probes or retaining certificate identities.</p>
+        </div>
+      </div>
+      <p class="privacy"><strong>Privacy boundary:</strong> this view reads normalized TLS metadata already retained by NetWatch. It does not request certificate bodies, subject/issuer strings, packet payloads, or new network handshakes.</p>
+    </section>
+
+    <section class="connection">
+      <input id="api-key" type="password" autocomplete="off" placeholder="Viewer / Operator / Admin API key" aria-label="NetWatch API key">
+      <button id="save-key" type="button">Use key</button>
+      <a href="/" style="align-self:center">Back to dashboard</a>
+    </section>
+
+    <section class="grid metrics" aria-label="TLS investigator summary">
+      <article class="metric"><span>Retained observations</span><strong id="history-count">—</strong></article>
+      <article class="metric"><span>Services in scope</span><strong id="service-count">—</strong></article>
+      <article class="metric"><span>Changes in scope</span><strong id="change-count">—</strong></article>
+      <article class="metric"><span>Recommended alerts</span><strong id="alert-count">—</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Investigator pivots</p><h2>Scope retained evidence</h2></div><span class="muted">Hard API bounds stay ≤ 1,000 rows</span></div>
+      <div class="grid filter-grid">
+        <label>IP address<input id="filter-ip" maxlength="64" placeholder="10.0.0.15 or 2001:db8::15"></label>
+        <label>Port<input id="filter-port" type="number" min="1" max="65535" placeholder="443"></label>
+        <label>Protocol<select id="filter-protocol"><option value="">All</option><option value="TCP">TCP</option></select></label>
+        <label>Change type<select id="filter-change"><option value="">All</option></select></label>
+        <label>Severity<select id="filter-severity"><option value="">All</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+        <label>Result limit<input id="filter-limit" type="number" min="1" max="1000" value="100"></label>
+      </div>
+      <div class="actions">
+        <label class="check"><input id="alerts-only" type="checkbox"><span>Recommended alerts only</span></label>
+        <button id="apply" class="primary" type="button">Refresh evidence</button>
+        <button id="clear" type="button">Clear pivots</button>
+        <span id="status" class="status" role="status">Enter an API key, then load retained TLS evidence.</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Facets</p><h2>Change distribution</h2></div><span id="facet-summary" class="muted">No evidence loaded</span></div>
+      <div id="change-facets" class="facet-row"></div>
+      <div id="severity-facets" class="facet-row" style="margin-top:8px"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Timeline</p><h2>Observed TLS changes by day</h2></div><span class="muted">Change count + alert-recommended subset</span></div>
+      <div id="timeline" class="timeline"><div class="empty">No timeline evidence loaded.</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Evidence</p><h2>Change ledger</h2></div><span id="row-count" class="muted">0 rows</span></div>
+      <div id="changes" class="table-wrap"><div class="empty">No TLS change evidence loaded.</div></div>
+    </section>
+  </main>
+
+  <script>
+    const keyInput = document.querySelector('#api-key');
+    const statusNode = document.querySelector('#status');
+    const savedKey = sessionStorage.getItem('netwatchApiKey') || '';
+    keyInput.value = savedKey;
+
+    function setStatus(message, kind = '') {
+      statusNode.textContent = message;
+      statusNode.className = `status ${kind}`.trim();
+    }
+
+    function filterValue(id) {
+      return String(document.querySelector(id).value || '').trim();
+    }
+
+    function investigatorUrl() {
+      const params = new URLSearchParams({
+        history_limit: '400',
+        limit: filterValue('#filter-limit') || '100',
+        expiry_warning_days: '30',
+        alert_min_severity: 'medium',
+      });
+      const optional = [
+        ['#filter-ip', 'ip_address'], ['#filter-port', 'port'], ['#filter-protocol', 'protocol'],
+        ['#filter-change', 'change_type'], ['#filter-severity', 'severity'],
+      ];
+      optional.forEach(([selector, name]) => {
+        const value = filterValue(selector);
+        if (value) params.set(name, value);
+      });
+      if (document.querySelector('#alerts-only').checked) params.set('alerts_only', 'true');
+      return `/api/tls/investigator?${params.toString()}`;
+    }
+
+    function labelize(value) {
+      return String(value || '—').replaceAll('_', ' ');
+    }
+
+    function setMetric(id, value) {
+      document.querySelector(id).textContent = String(Number(value || 0));
+    }
+
+    function makeFacet(container, entries, filterSelector) {
+      container.replaceChildren();
+      const selected = filterValue(filterSelector).toLowerCase();
+      Object.entries(entries || {}).forEach(([name, count]) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `facet${selected === name.toLowerCase() ? ' active' : ''}`;
+        button.textContent = `${labelize(name)} · ${Number(count || 0)}`;
+        button.addEventListener('click', () => {
+          const select = document.querySelector(filterSelector);
+          if (!Array.from(select.options).some((option) => option.value === name)) {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = labelize(name);
+            select.appendChild(option);
+          }
+          select.value = selected === name.toLowerCase() ? '' : name;
+          loadEvidence();
+        });
+        container.appendChild(button);
+      });
+    }
+
+    function syncChangeTypeOptions(entries) {
+      const select = document.querySelector('#filter-change');
+      const selected = select.value;
+      while (select.options.length > 1) select.remove(1);
+      Object.keys(entries || {}).sort().forEach((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = labelize(name);
+        select.appendChild(option);
+      });
+      if (Array.from(select.options).some((option) => option.value === selected)) select.value = selected;
+    }
+
+    function renderTimeline(points) {
+      const timeline = document.querySelector('#timeline');
+      timeline.replaceChildren();
+      if (!Array.isArray(points) || points.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No dated TLS changes matched this scope.';
+        timeline.appendChild(empty);
+        return;
+      }
+      const maxCount = Math.max(1, ...points.map((point) => Number(point.change_count || 0)));
+      points.slice(-60).forEach((point) => {
+        const day = document.createElement('div');
+        day.className = 'day';
+        const bars = document.createElement('div');
+        bars.className = 'bar-wrap';
+        const total = document.createElement('div');
+        total.className = 'bar';
+        total.style.height = `${Math.max(2, Math.round((Number(point.change_count || 0) / maxCount) * 100))}%`;
+        total.title = `${point.day}: ${Number(point.change_count || 0)} TLS changes`;
+        const alerts = document.createElement('div');
+        alerts.className = 'bar alert';
+        alerts.style.height = `${Math.max(2, Math.round((Number(point.alert_recommended_count || 0) / maxCount) * 100))}%`;
+        alerts.title = `${point.day}: ${Number(point.alert_recommended_count || 0)} recommended alerts`;
+        bars.append(total, alerts);
+        const date = document.createElement('small');
+        date.textContent = String(point.day || '').slice(5);
+        const count = document.createElement('strong');
+        count.textContent = String(Number(point.change_count || 0));
+        day.append(bars, date, count);
+        timeline.appendChild(day);
+      });
+    }
+
+    function renderChanges(items) {
+      const container = document.querySelector('#changes');
+      container.replaceChildren();
+      const rows = Array.isArray(items) ? items.slice(0, 1000) : [];
+      document.querySelector('#row-count').textContent = `${rows.length} row${rows.length === 1 ? '' : 's'}`;
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No TLS changes matched the selected retained-evidence pivots.';
+        container.appendChild(empty);
+        return;
+      }
+      const table = document.createElement('table');
+      const head = document.createElement('thead');
+      const hr = document.createElement('tr');
+      ['Observed', 'Service', 'Change', 'Severity', 'Before', 'After', 'Alert', 'Evidence'].forEach((label) => {
+        const th = document.createElement('th'); th.textContent = label; hr.appendChild(th);
+      });
+      head.appendChild(hr);
+      const body = document.createElement('tbody');
+      rows.forEach((item) => {
+        const tr = document.createElement('tr');
+        const values = [
+          item.observed_at || '—',
+          `${item.ip_address || '—'}:${Number(item.port || 0) || '—'} / ${item.protocol || 'TCP'}`,
+          labelize(item.change_type),
+          item.severity || '—',
+          item.previous_value ?? item.before ?? '—',
+          item.current_value ?? item.after ?? '—',
+          item.alert_recommended === true ? 'recommended' : 'no',
+          item.explanation || item.evidence || item.reason || 'capture/service metadata transition',
+        ];
+        values.forEach((value, index) => {
+          const td = document.createElement('td');
+          if (index === 3 || index === 6) {
+            const pill = document.createElement('span');
+            pill.className = `pill ${index === 6 && value === 'recommended' ? 'alert' : String(value).toLowerCase()}`;
+            pill.textContent = String(value);
+            td.appendChild(pill);
+          } else {
+            td.textContent = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          }
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+      table.append(head, body);
+      container.appendChild(table);
+    }
+
+    function renderSnapshot(payload) {
+      setMetric('#history-count', payload.history_count);
+      setMetric('#service-count', payload.service_count);
+      setMetric('#change-count', payload.change_count);
+      setMetric('#alert-count', payload.alert_recommended_count);
+      const changeTypes = payload.facets?.change_types || {};
+      const severities = payload.facets?.severities || {};
+      syncChangeTypeOptions(changeTypes);
+      makeFacet(document.querySelector('#change-facets'), changeTypes, '#filter-change');
+      makeFacet(document.querySelector('#severity-facets'), severities, '#filter-severity');
+      document.querySelector('#facet-summary').textContent = `${Object.keys(changeTypes).length} change types · ${Object.keys(severities).length} severities`;
+      renderTimeline(payload.timeline || []);
+      renderChanges(payload.items || []);
+    }
+
+    async function loadEvidence() {
+      const key = String(keyInput.value || '').trim();
+      if (!key) { setStatus('A Viewer, Operator, or Admin API key is required.', 'error'); return; }
+      const limit = Number(filterValue('#filter-limit') || 100);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) { setStatus('Result limit must be between 1 and 1,000.', 'error'); return; }
+      const port = filterValue('#filter-port');
+      if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) { setStatus('Port must be between 1 and 65,535.', 'error'); return; }
+      setStatus('Loading bounded retained TLS evidence…');
+      try {
+        const response = await fetch(investigatorUrl(), {
+          headers: { 'X-NetWatch-Key': key, 'Accept': 'application/json' },
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) {
+          let detail = `Request failed (${response.status}).`;
+          try { const error = await response.json(); detail = String(error.detail || detail); } catch (_) { /* response was not JSON */ }
+          throw new Error(detail);
+        }
+        const payload = await response.json();
+        renderSnapshot(payload);
+        setStatus(`Loaded ${Number(payload.change_count || 0)} retained TLS change record(s).`, 'success');
+      } catch (error) {
+        setStatus(error.message || 'TLS investigator request failed.', 'error');
+      }
+    }
+
+    document.querySelector('#save-key').addEventListener('click', () => {
+      const value = String(keyInput.value || '').trim();
+      if (value) sessionStorage.setItem('netwatchApiKey', value);
+      else sessionStorage.removeItem('netwatchApiKey');
+      loadEvidence();
+    });
+    document.querySelector('#apply').addEventListener('click', loadEvidence);
+    document.querySelector('#clear').addEventListener('click', () => {
+      ['#filter-ip', '#filter-port', '#filter-change', '#filter-severity'].forEach((selector) => { document.querySelector(selector).value = ''; });
+      document.querySelector('#filter-protocol').value = '';
+      document.querySelector('#filter-limit').value = '100';
+      document.querySelector('#alerts-only').checked = false;
+      loadEvidence();
+    });
+    ['#filter-protocol', '#filter-change', '#filter-severity', '#alerts-only'].forEach((selector) => {
+      document.querySelector(selector).addEventListener('change', () => { if (keyInput.value.trim()) loadEvidence(); });
+    });
+    if (savedKey) loadEvidence();
+  </script>
+</body>
+</html>
