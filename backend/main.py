@@ -141,6 +141,7 @@ from report_builder import build_html_report, build_markdown_report, build_pdf_r
 from retention_store import cleanup_retention, retention_status
 from risk_engine import summarize_exposure, top_recommendations
 from security import validate_cidr, validate_target_ip
+from tls_investigator import recent_tls_investigator_snapshot
 from traffic_capture import (
     CAPTURE_PROTOCOLS,
     CapturePermissionError,
@@ -2015,6 +2016,37 @@ def service_findings(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"count": len(items), "items": items}
+
+
+@app.get("/api/tls/investigator")
+def tls_investigator_snapshot(
+    history_limit: int = Query(default=400, ge=2, le=1_000),
+    limit: int = Query(default=100, ge=1, le=1_000),
+    ip_address: str | None = Query(default=None, max_length=45),
+    expiry_warning_days: int = Query(default=30, ge=1, le=3_650),
+    alert_min_severity: str = Query(default="medium", max_length=16),
+    port: int | None = Query(default=None, ge=1, le=65_535),
+    protocol: str | None = Query(default=None, max_length=16),
+    change_type: str | None = Query(default=None, max_length=64),
+    severity: str | None = Query(default=None, max_length=16),
+    alerts_only: bool = Query(default=False),
+    _: AuthContext = Depends(require_api_access),
+) -> dict[str, Any]:
+    try:
+        return recent_tls_investigator_snapshot(
+            history_limit=history_limit,
+            limit=limit,
+            ip_address=ip_address,
+            expiry_warning_days=expiry_warning_days,
+            alert_min_severity=alert_min_severity,
+            port=port,
+            protocol=protocol,
+            change_type=change_type,
+            severity=severity,
+            alerts_only=alerts_only,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/audit-log")
