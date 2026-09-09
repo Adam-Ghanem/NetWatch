@@ -4,6 +4,10 @@ import struct
 from datetime import datetime, timezone
 from typing import Any
 
+from tcp_sequence_evidence import (
+    extract_tcp_sequence_metadata,
+    summarize_tcp_sequence_evidence,
+)
 from traffic_capture import CaptureFilter, parse_ethernet_frame, summarize_capture
 
 MAX_PCAP_BYTES = 32 * 1024 * 1024
@@ -76,6 +80,9 @@ def import_pcap_metadata(data: bytes, *, max_packets: int = 1_000) -> dict[str, 
         last_timestamp = timestamp
         record = parse_ethernet_frame(frame, packet_number, captured_at=captured_at)
         if record is not None:
+            sequence_metadata = extract_tcp_sequence_metadata(frame)
+            if sequence_metadata is not None:
+                record.update(sequence_metadata)
             records.append(record)
 
     if first_timestamp is None or last_timestamp is None:
@@ -97,6 +104,7 @@ def import_pcap_metadata(data: bytes, *, max_packets: int = 1_000) -> dict[str, 
             "processed_records": packet_number,
             "truncated_by_limit": offset < len(data),
             "payload_retained": False,
+            "tcp_sequence_evidence": summarize_tcp_sequence_evidence(records),
         }
     )
     return result
