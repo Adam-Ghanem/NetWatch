@@ -43,16 +43,8 @@ def _transport_bounds(frame: bytes) -> tuple[int, int] | None:
         if len(frame) < offset + 40 or frame[offset] >> 4 != 6:
             return None
         payload_length = struct.unpack("!H", frame[offset + 4 : offset + 6])[0]
-        location = locate_ipv6_transport(
-            frame,
-            ipv6_offset=offset,
-            next_header=frame[offset + 6],
-        )
-        if (
-            not location.complete
-            or location.protocol_number != 6
-            or location.fragmented
-        ):
+        location = locate_ipv6_transport(frame, ipv6_offset=offset, next_header=frame[offset + 6])
+        if not location.complete or location.protocol_number != 6 or location.fragmented:
             return None
         return location.transport_offset, min(len(frame), offset + 40 + payload_length)
 
@@ -77,9 +69,7 @@ def extract_tcp_sequence_metadata(frame: bytes) -> dict[str, int] | None:
 
     flags = frame[transport_offset + 13]
     segment_length = max(0, packet_end - transport_offset - header_length)
-    sequence_advance = (
-        segment_length + int(bool(flags & 0x02)) + int(bool(flags & 0x01))
-    )
+    sequence_advance = segment_length + int(bool(flags & 0x02)) + int(bool(flags & 0x01))
     return {
         "tcp_sequence": sequence,
         "tcp_ack": acknowledgement,
