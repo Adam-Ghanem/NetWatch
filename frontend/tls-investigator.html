@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>NetWatch · TLS Investigator</title>
+  <link rel="stylesheet" href="/tls-investigator.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="topbar">
+      <div class="brand">
+        <div class="brand-mark">NW</div>
+        <div>
+          <p class="eyebrow">Evidence workspace</p>
+          <h1>TLS Investigator</h1>
+          <p class="muted">Pivot through retained TLS service changes without adding probes or retaining certificate identities.</p>
+        </div>
+      </div>
+      <p class="privacy"><strong>Privacy boundary:</strong> this view reads normalized TLS metadata already retained by NetWatch. It does not request certificate bodies, subject/issuer strings, packet payloads, or new network handshakes.</p>
+    </section>
+
+    <section class="connection">
+      <input id="api-key" type="password" autocomplete="off" placeholder="Viewer / Operator / Admin API key" aria-label="NetWatch API key">
+      <button id="save-key" type="button">Use key</button>
+      <a class="dashboard-link" href="/">Back to dashboard</a>
+    </section>
+
+    <section class="grid metrics" aria-label="TLS investigator summary">
+      <article class="metric"><span>Retained observations</span><strong id="history-count">—</strong></article>
+      <article class="metric"><span>Services in scope</span><strong id="service-count">—</strong></article>
+      <article class="metric"><span>Changes in scope</span><strong id="change-count">—</strong></article>
+      <article class="metric"><span>Recommended alerts</span><strong id="alert-count">—</strong></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Investigator pivots</p><h2>Scope retained evidence</h2></div><span class="muted">Hard API bounds stay ≤ 1,000 rows</span></div>
+      <div class="grid filter-grid">
+        <label>IP address<input id="filter-ip" maxlength="64" placeholder="10.0.0.15 or 2001:db8::15"></label>
+        <label>Port<input id="filter-port" type="number" min="1" max="65535" placeholder="443"></label>
+        <label>Protocol<select id="filter-protocol"><option value="">All</option><option value="TCP">TCP</option></select></label>
+        <label>Change type<select id="filter-change"><option value="">All</option></select></label>
+        <label>Severity<select id="filter-severity"><option value="">All</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+        <label>Result limit<input id="filter-limit" type="number" min="1" max="1000" value="100"></label>
+      </div>
+      <div class="actions">
+        <label class="check"><input id="alerts-only" type="checkbox"><span>Recommended alerts only</span></label>
+        <button id="apply" class="primary" type="button">Refresh evidence</button>
+        <button id="clear" type="button">Clear pivots</button>
+        <span id="status" class="status" role="status">Enter an API key, then load retained TLS evidence.</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Facets</p><h2>Change distribution</h2></div><span id="facet-summary" class="muted">No evidence loaded</span></div>
+      <div id="change-facets" class="facet-row"></div>
+      <div id="severity-facets" class="facet-row secondary"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Timeline</p><h2>Observed TLS changes by day</h2></div><span class="muted">Change count + alert-recommended subset</span></div>
+      <div id="timeline" class="timeline"><div class="empty">No timeline evidence loaded.</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><p class="eyebrow">Evidence</p><h2>Change ledger</h2></div><span id="row-count" class="muted">0 rows</span></div>
+      <div id="changes" class="table-wrap"><div class="empty">No TLS change evidence loaded.</div></div>
+    </section>
+  </main>
+  <script src="/tls-investigator.js" defer></script>
+</body>
+</html>
