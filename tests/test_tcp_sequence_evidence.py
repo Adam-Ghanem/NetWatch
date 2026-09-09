@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import socket
 import struct
+from typing import Any, cast
 
 import pytest
 
@@ -113,7 +114,7 @@ def test_sequence_summary_reports_gap_and_overlap_as_capture_evidence_only():
         },
     ]
 
-    summary = summarize_tcp_sequence_evidence(records)
+    summary = cast(dict[str, Any], summarize_tcp_sequence_evidence(records))
 
     assert summary["counts"] == {"sequence_gap": 1, "sequence_overlap": 1}
     assert summary["finding_count"] == 2
@@ -133,12 +134,13 @@ def test_classic_pcap_import_exposes_bounded_sequence_evidence():
         )
     )
 
-    evidence = result["tcp_sequence_evidence"]
+    evidence = cast(dict[str, Any], result["tcp_sequence_evidence"])
+    packets = cast(list[dict[str, Any]], result["packets"])
     assert evidence["observed_tcp_segments"] == 2
     assert evidence["counts"]["sequence_gap"] == 1
     assert evidence["findings"][0]["offset_bytes"] == 7
-    assert result["packets"][0]["tcp_sequence"] == 100
-    assert result["packets"][0]["tcp_ack"] == 1
+    assert packets[0]["tcp_sequence"] == 100
+    assert packets[0]["tcp_ack"] == 1
     assert result["payload_retained"] is False
     assert b"abc" not in str(result).encode()
 
