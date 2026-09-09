@@ -67,4 +67,7 @@ def test_tls_investigator_dashboard_persists_shareable_scope_without_secrets() -
     ):
         assert parameter in javascript
 
-    assert "netwatchApiKey" not in javascript[javascript.index("function syncScopeToUrl"):javascript.index("function labelize")]
+    sync_scope = javascript[
+        javascript.index("function syncScopeToUrl") : javascript.index("function labelize")
+    ]
+    assert "netwatchApiKey" not in sync_scope
