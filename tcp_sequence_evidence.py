@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import socket
 import struct
 from collections import Counter
 from typing import Iterable, Mapping
@@ -125,23 +124,30 @@ def summarize_tcp_sequence_evidence(
         destination_port = _int_value(record.get("destination_port"))
         source_ip = str(record.get("source_ip") or "")
         destination_ip = str(record.get("destination_ip") or "")
-        if None in {sequence, advance, source_port, destination_port} or not source_ip or not destination_ip:
+        if (
+            sequence is None
+            or advance is None
+            or source_port is None
+            or destination_port is None
+            or not source_ip
+            or not destination_ip
+        ):
             continue
 
         observed_segments += 1
-        direction = (source_ip, int(source_port), destination_ip, int(destination_port))
+        direction = (source_ip, source_port, destination_ip, destination_port)
         flags = str(record.get("tcp_flags") or "")
         if "SYN" in flags and "ACK" not in flags:
-            expected_by_direction[direction] = (int(sequence) + int(advance)) % _SEQUENCE_MODULUS
+            expected_by_direction[direction] = (sequence + advance) % _SEQUENCE_MODULUS
             continue
 
         expected = expected_by_direction.get(direction)
-        next_sequence = (int(sequence) + int(advance)) % _SEQUENCE_MODULUS
+        next_sequence = (sequence + advance) % _SEQUENCE_MODULUS
         if expected is None:
             expected_by_direction[direction] = next_sequence
             continue
 
-        forward = (int(sequence) - expected) % _SEQUENCE_MODULUS
+        forward = (sequence - expected) % _SEQUENCE_MODULUS
         if forward == 0:
             expected_by_direction[direction] = next_sequence
             continue
@@ -152,8 +158,8 @@ def summarize_tcp_sequence_evidence(
             expected_by_direction[direction] = next_sequence
         else:
             evidence_type = "sequence_overlap"
-            offset_bytes = (expected - int(sequence)) % _SEQUENCE_MODULUS
-            if int(advance) > offset_bytes:
+            offset_bytes = (expected - sequence) % _SEQUENCE_MODULUS
+            if advance > offset_bytes:
                 expected_by_direction[direction] = next_sequence
 
         counts[evidence_type] += 1
@@ -164,19 +170,20 @@ def summarize_tcp_sequence_evidence(
                     "packet_number": record.get("number"),
                     "captured_at": record.get("captured_at"),
                     "source_ip": source_ip,
-                    "source_port": int(source_port),
+                    "source_port": source_port,
                     "destination_ip": destination_ip,
-                    "destination_port": int(destination_port),
-                    "observed_sequence": int(sequence),
+                    "destination_port": destination_port,
+                    "observed_sequence": sequence,
                     "expected_sequence": expected,
                     "offset_bytes": offset_bytes,
                 }
             )
 
+    finding_count = sum(counts.values())
     return {
         "observed_tcp_segments": observed_segments,
-        "finding_count": sum(counts.values()),
-        "findings_truncated": sum(counts.values()) > len(findings),
+        "finding_count": finding_count,
+        "findings_truncated": finding_count > len(findings),
         "counts": {
             "sequence_gap": counts["sequence_gap"],
             "sequence_overlap": counts["sequence_overlap"],
