@@ -33,7 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --check .
+          black --diff --check .
           isort --check-only .
 
       - name: Lint and type-check
