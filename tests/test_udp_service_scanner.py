@@ -147,9 +147,16 @@ def test_connection_refused_is_reported_closed():
     assert rows[0]["Service Detection"] == "ICMP/OS refusal"
 
 
+def _ntp_correlation(monkeypatch):
+    unix_time = 1_700_000_000
+    monkeypatch.setattr(udp_service_scanner.time, "time", lambda: unix_time)
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"RND4")
+    seconds = unix_time + udp_service_scanner._NTP_UNIX_EPOCH_OFFSET
+    return seconds.to_bytes(4, "big") + b"RND4"
+
+
 def test_ntp_response_extracts_protocol_version_and_header_evidence_only(monkeypatch):
-    correlation = b"12345678"
-    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: correlation)
+    correlation = _ntp_correlation(monkeypatch)
     # LI=1, VN=4, mode=4 (server), stratum=2; originate timestamp echoes our token.
     response = bytearray(48)
     response[0] = 0x64
@@ -178,8 +185,7 @@ def test_ntp_response_extracts_protocol_version_and_header_evidence_only(monkeyp
 
 
 def test_ntp_mismatched_originate_timestamp_does_not_claim_service_identity(monkeypatch):
-    correlation = b"12345678"
-    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: correlation)
+    correlation = _ntp_correlation(monkeypatch)
     response = bytearray(48)
     response[0] = 0x24  # LI=0, VN=4, mode=4
     response[1] = 0x02
@@ -196,6 +202,7 @@ def test_ntp_mismatched_originate_timestamp_does_not_claim_service_identity(monk
     assert row["Service Detection"] == "Unexpected UDP response"
     assert row["Service Product"] == ""
     assert row["Service Confidence"] == "Low"
+    assert sock.sent[0][40:48] == correlation
 
 
 def test_unexpected_udp_response_proves_port_open_without_claiming_service_identity():
