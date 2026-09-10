@@ -44,18 +44,21 @@ def _tcp_frame(*, sequence: int, payload: bytes = b"", flags: int = 0x10) -> byt
     ethernet = bytes.fromhex("00112233445566778899aabb0800")
     source = ipaddress.ip_address("10.0.0.10").packed
     destination = ipaddress.ip_address("10.0.0.20").packed
-    tcp = struct.pack(
-        "!HHIIBBHHH",
-        50_000,
-        443,
-        sequence,
-        1,
-        5 << 4,
-        flags,
-        8192,
-        0,
-        0,
-    ) + payload
+    tcp = (
+        struct.pack(
+            "!HHIIBBHHH",
+            50_000,
+            443,
+            sequence,
+            1,
+            5 << 4,
+            flags,
+            8192,
+            0,
+            0,
+        )
+        + payload
+    )
     ipv4 = struct.pack(
         "!BBHHHBBH4s4s",
         0x45,
