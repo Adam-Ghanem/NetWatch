@@ -244,3 +244,41 @@ def test_unknown_service_profile_is_rejected_before_network_activity():
 def test_timeout_is_tightly_bounded():
     with pytest.raises(ValueError, match="between 0.05 and 1.0 seconds"):
         udp_service_scanner.scan_udp_services("192.168.1.10", timeout=2.0)
+
+
+def test_dns_nonstandard_opcode_does_not_claim_service_identity(monkeypatch):
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
+    # QR=1 with OPCODE=2 (STATUS), but NetWatch sent a standard QUERY (OPCODE=0).
+    response = b"\x4e\x57\x90\x00" + (b"\x00" * 8)
+    sock = FakeDatagramSocket(response=response)
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("dns",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "Unexpected UDP response"
+    assert row["Service Product"] == ""
+    assert row["Service Confidence"] == "Low"
+
+
+def test_ntp_broadcast_mode_does_not_claim_client_server_response(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
+    response = bytearray(48)
+    response[0] = 0x25  # LI=0, VN=4, mode=5 broadcast
+    response[1] = 0x02
+    response[24:32] = correlation
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "Unexpected UDP response"
+    assert row["Service Product"] == ""
+    assert row["Service Confidence"] == "Low"
