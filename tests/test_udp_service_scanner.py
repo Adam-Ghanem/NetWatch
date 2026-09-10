@@ -46,7 +46,10 @@ def _factory(sock):
 
 def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
     monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
-    response = b"\x4e\x57\x80\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+    response = (
+        b"\x4e\x57\x80\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+        b"\x00\x00\x02\x00\x01"
+    )
     sock = FakeDatagramSocket(response=response)
 
     rows = udp_service_scanner.scan_udp_services(
@@ -90,7 +93,11 @@ def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
 def test_dns_response_extracts_bounded_header_flags_without_payload_retention(monkeypatch):
     monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
     # QR=1, AA=1, RA=1, RCODE=3 (NXDOMAIN); remaining bytes are intentionally ignored.
-    response = b"\x4e\x57\x84\x83" + (b"\x00" * 8) + b"private-answer-material"
+    response = (
+        b"\x4e\x57\x84\x83\x00\x01\x00\x00\x00\x00\x00\x00"
+        b"\x00\x00\x02\x00\x01"
+        b"private-answer-material"
+    )
     sock = FakeDatagramSocket(response=response)
 
     row = udp_service_scanner.scan_udp_services(
