@@ -16,7 +16,8 @@ _UDP_TIMEOUT_MAX = 1.0
 _UDP_RECV_BYTES = 512
 # Standard QUERY with one root-name NS/IN question. The question section is:
 # QNAME=root (zero-length label), QTYPE=NS (2), QCLASS=IN (1).
-_DNS_QUERY_SUFFIX = b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x01"
+_DNS_QUESTION = b"\x00\x00\x02\x00\x01"
+_DNS_QUERY_SUFFIX = b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00" + _DNS_QUESTION
 _NTP_UNIX_EPOCH_OFFSET = 2_208_988_800
 
 _ServiceProfile = tuple[int, str]
@@ -76,11 +77,13 @@ def _base_row(port: int, service: str) -> dict[str, object]:
 def _classify_dns_response(
     payload: bytes, correlation: bytes
 ) -> tuple[bool, str, dict[str, object]]:
-    if len(payload) < 12 or payload[:2] != correlation:
+    if len(payload) < 17 or payload[:2] != correlation:
         return False, "", {}
     flags = int.from_bytes(payload[2:4], "big")
     opcode = (flags >> 11) & 0x0F
     if not flags & 0x8000 or opcode != 0:
+        return False, "", {}
+    if payload[4:6] != b"\x00\x01" or payload[12:17] != _DNS_QUESTION:
         return False, "", {}
     return (
         True,
