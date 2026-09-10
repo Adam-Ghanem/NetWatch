@@ -28,7 +28,9 @@ def _factory(sock):
     return lambda *_args, **_kwargs: sock
 
 
-def test_dns_response_without_echoed_question_does_not_claim_high_confidence(monkeypatch):
+def test_dns_response_without_echoed_question_does_not_claim_high_confidence(
+    monkeypatch,
+):
     monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
     # Matching transaction ID and QUERY response bit, but the declared question
     # is absent. This must prove only UDP openness, not DNS service identity.
