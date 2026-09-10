@@ -15,6 +15,7 @@ _UDP_TIMEOUT_MIN = 0.05
 _UDP_TIMEOUT_MAX = 1.0
 _UDP_RECV_BYTES = 512
 _DNS_QUERY_SUFFIX = b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x01"
+_NTP_UNIX_EPOCH_OFFSET = 2_208_988_800
 
 _ServiceProfile = tuple[int, str]
 _SERVICE_PROFILES: dict[str, _ServiceProfile] = {
@@ -34,12 +35,17 @@ def _socket_target(target: str, port: int) -> tuple[int, tuple[Any, ...]]:
     return socket.AF_INET, (host, port)
 
 
+def _ntp_transmit_timestamp() -> bytes:
+    seconds = int(time.time()) + _NTP_UNIX_EPOCH_OFFSET
+    return (seconds & 0xFFFFFFFF).to_bytes(4, "big") + secrets.token_bytes(4)
+
+
 def _build_probe(profile_name: str) -> tuple[bytes, bytes]:
     if profile_name == "dns":
         correlation = secrets.token_bytes(2)
         return correlation + _DNS_QUERY_SUFFIX, correlation
 
-    correlation = secrets.token_bytes(8)
+    correlation = _ntp_transmit_timestamp()
     payload = bytearray(48)
     payload[0] = 0x23  # LI=0, VN=4, mode=3 client
     payload[40:48] = correlation
