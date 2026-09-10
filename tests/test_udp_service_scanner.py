@@ -44,7 +44,8 @@ def _factory(sock):
     return make_socket
 
 
-def test_dns_response_marks_service_open_and_retains_only_metadata():
+def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
     response = b"\x4e\x57\x80\x00\x00\x01\x00\x00\x00\x00\x00\x00"
     sock = FakeDatagramSocket(response=response)
 
@@ -78,10 +79,12 @@ def test_dns_response_marks_service_open_and_retains_only_metadata():
     assert 0 <= response_time <= 1000
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 17
+    assert sock.sent[0][:2] == b"NW"
     assert sock.timeout == 0.2
 
 
-def test_dns_response_extracts_bounded_header_flags_without_payload_retention():
+def test_dns_response_extracts_bounded_header_flags_without_payload_retention(monkeypatch):
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
     # QR=1, AA=1, RA=1, RCODE=3 (NXDOMAIN); remaining bytes are intentionally ignored.
     response = b"\x4e\x57\x84\x83" + (b"\x00" * 8) + b"private-answer-material"
     sock = FakeDatagramSocket(response=response)
@@ -96,6 +99,24 @@ def test_dns_response_extracts_bounded_header_flags_without_payload_retention():
     assert row["DNS Authoritative"] is True
     assert row["DNS Recursion Available"] is True
     assert "private-answer-material" not in repr(row)
+    assert "NW" not in repr(row)
+
+
+def test_dns_mismatched_transaction_id_does_not_claim_service_identity(monkeypatch):
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
+    response = b"\x00\x01\x80\x00" + (b"\x00" * 8)
+    sock = FakeDatagramSocket(response=response)
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("dns",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "Unexpected UDP response"
+    assert row["Service Product"] == ""
+    assert row["Service Confidence"] == "Low"
 
 
 def test_timeout_is_reported_as_open_filtered_without_retry():
@@ -126,10 +147,15 @@ def test_connection_refused_is_reported_closed():
     assert rows[0]["Service Detection"] == "ICMP/OS refusal"
 
 
-def test_ntp_response_extracts_protocol_version_and_header_evidence_only():
-    # LI=1, VN=4, mode=4 (server), stratum=2.
-    response = bytes([0x64, 0x02]) + (b"\x00" * 46)
-    sock = FakeDatagramSocket(response=response)
+def test_ntp_response_extracts_protocol_version_and_header_evidence_only(monkeypatch):
+    correlation = b"12345678"
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: correlation)
+    # LI=1, VN=4, mode=4 (server), stratum=2; originate timestamp echoes our token.
+    response = bytearray(48)
+    response[0] = 0x64
+    response[1] = 0x02
+    response[24:32] = correlation
+    sock = FakeDatagramSocket(response=bytes(response))
 
     rows = udp_service_scanner.scan_udp_services(
         "192.168.1.10",
@@ -147,6 +173,29 @@ def test_ntp_response_extracts_protocol_version_and_header_evidence_only():
     assert rows[0]["DNS RCODE"] == ""
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 48
+    assert sock.sent[0][40:48] == correlation
+    assert correlation not in repr(rows[0]).encode()
+
+
+def test_ntp_mismatched_originate_timestamp_does_not_claim_service_identity(monkeypatch):
+    correlation = b"12345678"
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: correlation)
+    response = bytearray(48)
+    response[0] = 0x24  # LI=0, VN=4, mode=4
+    response[1] = 0x02
+    response[24:32] = b"87654321"
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "Unexpected UDP response"
+    assert row["Service Product"] == ""
+    assert row["Service Confidence"] == "Low"
 
 
 def test_unexpected_udp_response_proves_port_open_without_claiming_service_identity():
