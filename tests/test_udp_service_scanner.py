@@ -69,11 +69,33 @@ def test_dns_response_marks_service_open_and_retains_only_metadata():
         "Service Product": "DNS",
         "Service Version": "",
         "Service Confidence": "High",
+        "DNS RCODE": 0,
+        "DNS Authoritative": False,
+        "DNS Recursion Available": False,
+        "NTP Stratum": "",
+        "NTP Leap Indicator": "",
     }
     assert 0 <= response_time <= 1000
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 17
     assert sock.timeout == 0.2
+
+
+def test_dns_response_extracts_bounded_header_flags_without_payload_retention():
+    # QR=1, AA=1, RA=1, RCODE=3 (NXDOMAIN); remaining bytes are intentionally ignored.
+    response = b"\x4e\x57\x84\x83" + (b"\x00" * 8) + b"private-answer-material"
+    sock = FakeDatagramSocket(response=response)
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("dns",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["DNS RCODE"] == 3
+    assert row["DNS Authoritative"] is True
+    assert row["DNS Recursion Available"] is True
+    assert "private-answer-material" not in repr(row)
 
 
 def test_timeout_is_reported_as_open_filtered_without_retry():
@@ -104,8 +126,9 @@ def test_connection_refused_is_reported_closed():
     assert rows[0]["Service Detection"] == "ICMP/OS refusal"
 
 
-def test_ntp_response_extracts_protocol_version_only():
-    response = bytes([0x24]) + (b"\x00" * 47)  # LI=0, VN=4, mode=4 (server)
+def test_ntp_response_extracts_protocol_version_and_header_evidence_only():
+    # LI=1, VN=4, mode=4 (server), stratum=2.
+    response = bytes([0x64, 0x02]) + (b"\x00" * 46)
     sock = FakeDatagramSocket(response=response)
 
     rows = udp_service_scanner.scan_udp_services(
@@ -119,6 +142,9 @@ def test_ntp_response_extracts_protocol_version_only():
     assert rows[0]["Service Detection"] == "NTP response"
     assert rows[0]["Service Product"] == "NTP"
     assert rows[0]["Service Version"] == "v4"
+    assert rows[0]["NTP Stratum"] == 2
+    assert rows[0]["NTP Leap Indicator"] == 1
+    assert rows[0]["DNS RCODE"] == ""
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 48
 
@@ -137,6 +163,8 @@ def test_unexpected_udp_response_proves_port_open_without_claiming_service_ident
     assert rows[0]["Service Product"] == ""
     assert rows[0]["Service Version"] == ""
     assert rows[0]["Service Confidence"] == "Low"
+    assert rows[0]["DNS RCODE"] == ""
+    assert rows[0]["NTP Stratum"] == ""
 
 
 def test_unknown_service_profile_is_rejected_before_network_activity():
