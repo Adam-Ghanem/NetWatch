@@ -77,7 +77,8 @@ def _classify_dns_response(
     if len(payload) < 12 or payload[:2] != correlation:
         return False, "", {}
     flags = int.from_bytes(payload[2:4], "big")
-    if not flags & 0x8000:
+    opcode = (flags >> 11) & 0x0F
+    if not flags & 0x8000 or opcode != 0:
         return False, "", {}
     return (
         True,
@@ -99,7 +100,7 @@ def _classify_ntp_response(
     leap = (first >> 6) & 0x03
     version = (first >> 3) & 0x07
     mode = first & 0x07
-    if version not in {3, 4} or mode not in {4, 5}:
+    if version not in {3, 4} or mode != 4:
         return False, "", {}
     return (
         True,
