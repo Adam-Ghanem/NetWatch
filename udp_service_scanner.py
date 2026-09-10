@@ -46,25 +46,48 @@ def _base_row(port: int, service: str) -> dict[str, object]:
         "Service Product": "",
         "Service Version": "",
         "Service Confidence": "Low",
+        "DNS RCODE": "",
+        "DNS Authoritative": "",
+        "DNS Recursion Available": "",
+        "NTP Stratum": "",
+        "NTP Leap Indicator": "",
     }
 
 
-def _classify_dns_response(payload: bytes) -> tuple[bool, str]:
+def _classify_dns_response(payload: bytes) -> tuple[bool, str, dict[str, object]]:
     if len(payload) < 12 or payload[:2] != _DNS_TXID:
-        return False, ""
+        return False, "", {}
     flags = int.from_bytes(payload[2:4], "big")
-    return bool(flags & 0x8000), ""
+    if not flags & 0x8000:
+        return False, "", {}
+    return (
+        True,
+        "",
+        {
+            "DNS RCODE": flags & 0x000F,
+            "DNS Authoritative": bool(flags & 0x0400),
+            "DNS Recursion Available": bool(flags & 0x0080),
+        },
+    )
 
 
-def _classify_ntp_response(payload: bytes) -> tuple[bool, str]:
+def _classify_ntp_response(payload: bytes) -> tuple[bool, str, dict[str, object]]:
     if len(payload) < 48:
-        return False, ""
+        return False, "", {}
     first = payload[0]
+    leap = (first >> 6) & 0x03
     version = (first >> 3) & 0x07
     mode = first & 0x07
     if version not in {3, 4} or mode not in {4, 5}:
-        return False, ""
-    return True, f"v{version}"
+        return False, "", {}
+    return (
+        True,
+        f"v{version}",
+        {
+            "NTP Stratum": payload[1],
+            "NTP Leap Indicator": leap,
+        },
+    )
 
 
 def _probe_one(
@@ -99,9 +122,9 @@ def _probe_one(
 
     row["Response Time (ms)"] = round((time.perf_counter() - started) * 1000, 2)
     if profile_name == "dns":
-        valid, version = _classify_dns_response(response)
+        valid, version, metadata = _classify_dns_response(response)
     else:
-        valid, version = _classify_ntp_response(response)
+        valid, version, metadata = _classify_ntp_response(response)
 
     if not valid:
         row["Status"] = "Open"
@@ -113,6 +136,7 @@ def _probe_one(
     row["Service Product"] = service
     row["Service Version"] = version
     row["Service Confidence"] = "High"
+    row.update(metadata)
     return row
 
 
@@ -127,7 +151,8 @@ def scan_udp_services(
 
     Only DNS and NTP are supported. Each selected profile sends exactly one small
     datagram, performs no retry, receives at most 512 bytes, and treats silence as
-    ``Open|Filtered`` rather than claiming the service is closed.
+    ``Open|Filtered`` rather than claiming the service is closed. Valid responses
+    expose only bounded protocol-header metadata; response payloads are not retained.
     """
     if not math.isfinite(timeout) or not _UDP_TIMEOUT_MIN <= timeout <= _UDP_TIMEOUT_MAX:
         raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
@@ -152,6 +177,11 @@ def scan_udp_services(
                 "Service Product": "",
                 "Service Version": "",
                 "Service Confidence": "Low",
+                "DNS RCODE": "",
+                "DNS Authoritative": "",
+                "DNS Recursion Available": "",
+                "NTP Stratum": "",
+                "NTP Leap Indicator": "",
             }
         ]
 
