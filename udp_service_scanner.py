@@ -104,6 +104,7 @@ def _probe_one(
         valid, version = _classify_ntp_response(response)
 
     if not valid:
+        row["Status"] = "Open"
         row["Service Detection"] = "Unexpected UDP response"
         return row
 

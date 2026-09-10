@@ -123,7 +123,7 @@ def test_ntp_response_extracts_protocol_version_only():
     assert len(sock.sent[0]) == 48
 
 
-def test_invalid_response_does_not_claim_service_open():
+def test_unexpected_udp_response_proves_port_open_without_claiming_service_identity():
     sock = FakeDatagramSocket(response=b"not-a-dns-response")
 
     rows = udp_service_scanner.scan_udp_services(
@@ -132,8 +132,10 @@ def test_invalid_response_does_not_claim_service_open():
         socket_factory=_factory(sock),
     )
 
-    assert rows[0]["Status"] == "Open|Filtered"
+    assert rows[0]["Status"] == "Open"
     assert rows[0]["Service Detection"] == "Unexpected UDP response"
+    assert rows[0]["Service Product"] == ""
+    assert rows[0]["Service Version"] == ""
     assert rows[0]["Service Confidence"] == "Low"
 
 
