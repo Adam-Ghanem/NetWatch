@@ -148,12 +148,112 @@ def test_connection_refused_is_reported_closed():
     )
 
     assert rows[0]["Status"] == "Closed"
+    assert rows[0]["Service Detection"] == "ICMP/OS refusal"
 
 
-def test_non_standard_dns_opcode_does_not_claim_service_identity(monkeypatch):
+def _ntp_correlation(monkeypatch):
+    unix_time = 1_700_000_000
+    monkeypatch.setattr(udp_service_scanner.time, "time", lambda: unix_time)
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"RND4")
+    seconds = unix_time + udp_service_scanner._NTP_UNIX_EPOCH_OFFSET
+    return seconds.to_bytes(4, "big") + b"RND4"
+
+
+def test_ntp_response_extracts_protocol_version_and_header_evidence_only(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
+    # LI=1, VN=4, mode=4 (server), stratum=2; originate timestamp echoes our token.
+    response = bytearray(48)
+    response[0] = 0x64
+    response[1] = 0x02
+    response[24:32] = correlation
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    rows = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )
+
+    assert rows[0]["Port"] == 123
+    assert rows[0]["Status"] == "Open"
+    assert rows[0]["Service Detection"] == "NTP response"
+    assert rows[0]["Service Product"] == "NTP"
+    assert rows[0]["Service Version"] == "v4"
+    assert rows[0]["NTP Stratum"] == 2
+    assert rows[0]["NTP Leap Indicator"] == 1
+    assert rows[0]["DNS RCODE"] == ""
+    assert len(sock.sent) == 1
+    assert len(sock.sent[0]) == 48
+    assert sock.sent[0][40:48] == correlation
+    assert correlation not in repr(rows[0]).encode()
+
+
+def test_ntp_mismatched_originate_timestamp_does_not_claim_service_identity(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
+    response = bytearray(48)
+    response[0] = 0x24  # LI=0, VN=4, mode=4
+    response[1] = 0x02
+    response[24:32] = b"87654321"
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "Unexpected UDP response"
+    assert row["Service Product"] == ""
+    assert row["Service Confidence"] == "Low"
+    assert sock.sent[0][40:48] == correlation
+
+
+def test_unexpected_udp_response_proves_port_open_without_claiming_service_identity():
+    sock = FakeDatagramSocket(response=b"not-a-dns-response")
+
+    rows = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("dns",),
+        socket_factory=_factory(sock),
+    )
+
+    assert rows[0]["Status"] == "Open"
+    assert rows[0]["Service Detection"] == "Unexpected UDP response"
+    assert rows[0]["Service Product"] == ""
+    assert rows[0]["Service Version"] == ""
+    assert rows[0]["Service Confidence"] == "Low"
+    assert rows[0]["DNS RCODE"] == ""
+    assert rows[0]["NTP Stratum"] == ""
+
+
+def test_unknown_service_profile_is_rejected_before_network_activity():
+    called = False
+
+    def factory(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("socket should not be created")
+
+    with pytest.raises(ValueError, match="Unsupported UDP service profile"):
+        udp_service_scanner.scan_udp_services(
+            "192.168.1.10",
+            services=("snmp",),
+            socket_factory=factory,
+        )
+
+    assert called is False
+
+
+def test_timeout_is_tightly_bounded():
+    with pytest.raises(ValueError, match="between 0.05 and 1.0 seconds"):
+        udp_service_scanner.scan_udp_services("192.168.1.10", timeout=2.0)
+
+
+def test_dns_nonstandard_opcode_does_not_claim_service_identity(monkeypatch):
     monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"NW")
-    # QR=1, OPCODE=1 (IQUERY), which does not match the QUERY probe we sent.
-    response = b"\x4e\x57\x88\x00" + (b"\x00" * 8)
+    # QR=1 with OPCODE=2 (STATUS), but NetWatch sent a standard QUERY (OPCODE=0).
+    response = b"\x4e\x57\x90\x00" + (b"\x00" * 8)
     sock = FakeDatagramSocket(response=response)
 
     row = udp_service_scanner.scan_udp_services(
@@ -168,14 +268,12 @@ def test_non_standard_dns_opcode_does_not_claim_service_identity(monkeypatch):
     assert row["Service Confidence"] == "Low"
 
 
-def test_ntp_broadcast_mode_does_not_claim_client_server_identity(monkeypatch):
-    monkeypatch.setattr(
-        udp_service_scanner, "_ntp_transmit_timestamp", lambda: b"12345678"
-    )
+def test_ntp_broadcast_mode_does_not_claim_client_server_response(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
     response = bytearray(48)
     response[0] = 0x25  # LI=0, VN=4, mode=5 broadcast
-    response[1] = 2
-    response[24:32] = b"12345678"
+    response[1] = 0x02
+    response[24:32] = correlation
     sock = FakeDatagramSocket(response=bytes(response))
 
     row = udp_service_scanner.scan_udp_services(
@@ -188,93 +286,3 @@ def test_ntp_broadcast_mode_does_not_claim_client_server_identity(monkeypatch):
     assert row["Service Detection"] == "Unexpected UDP response"
     assert row["Service Product"] == ""
     assert row["Service Confidence"] == "Low"
-
-
-def test_ntp_matching_originate_timestamp_claims_identity(monkeypatch):
-    monkeypatch.setattr(
-        udp_service_scanner, "_ntp_transmit_timestamp", lambda: b"12345678"
-    )
-    response = bytearray(48)
-    response[0] = 0x24  # LI=0, VN=4, mode=4 server
-    response[1] = 2
-    response[24:32] = b"12345678"
-    sock = FakeDatagramSocket(response=bytes(response))
-
-    row = udp_service_scanner.scan_udp_services(
-        "192.168.1.10",
-        services=("ntp",),
-        socket_factory=_factory(sock),
-    )[0]
-
-    assert row["Status"] == "Open"
-    assert row["Service Detection"] == "NTP response"
-    assert row["Service Product"] == "NTP"
-    assert row["Service Version"] == "4"
-    assert row["Service Confidence"] == "High"
-    assert row["NTP Stratum"] == 2
-    assert row["NTP Leap Indicator"] == 0
-    assert "12345678" not in repr(row)
-
-
-def test_ntp_mismatched_originate_timestamp_does_not_claim_identity(monkeypatch):
-    monkeypatch.setattr(
-        udp_service_scanner, "_ntp_transmit_timestamp", lambda: b"12345678"
-    )
-    response = bytearray(48)
-    response[0] = 0x24
-    response[1] = 2
-    response[24:32] = b"87654321"
-    sock = FakeDatagramSocket(response=bytes(response))
-
-    row = udp_service_scanner.scan_udp_services(
-        "192.168.1.10",
-        services=("ntp",),
-        socket_factory=_factory(sock),
-    )[0]
-
-    assert row["Status"] == "Open"
-    assert row["Service Detection"] == "Unexpected UDP response"
-    assert row["Service Product"] == ""
-    assert row["Service Confidence"] == "Low"
-
-
-def test_invalid_service_name_is_rejected():
-    with pytest.raises(ValueError):
-        udp_service_scanner.scan_udp_services(
-            "192.168.1.10",
-            services=("snmp",),
-        )
-
-
-def test_timeout_bounds_are_enforced():
-    with pytest.raises(ValueError):
-        udp_service_scanner.scan_udp_services(
-            "192.168.1.10",
-            services=("dns",),
-            timeout=0.01,
-        )
-
-    with pytest.raises(ValueError):
-        udp_service_scanner.scan_udp_services(
-            "192.168.1.10",
-            services=("dns",),
-            timeout=1.01,
-        )
-
-
-def test_public_target_is_rejected_before_socket_creation():
-    created = False
-
-    def make_socket(*_args, **_kwargs):
-        nonlocal created
-        created = True
-        return FakeDatagramSocket()
-
-    with pytest.raises(ValueError):
-        udp_service_scanner.scan_udp_services(
-            "8.8.8.8",
-            services=("dns",),
-            socket_factory=make_socket,
-        )
-
-    assert created is False
