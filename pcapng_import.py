@@ -10,6 +10,10 @@ from pcap_import import (
     MAX_PCAP_BYTES,
     MAX_PCAP_PACKETS,
 )
+from tcp_sequence_evidence import (
+    extract_tcp_sequence_metadata,
+    summarize_tcp_sequence_evidence,
+)
 from traffic_capture import (
     CaptureFilter,
     packet_matches,
@@ -162,6 +166,9 @@ def _append_packet_record(
     )
     if record is None:
         return
+    sequence_metadata = extract_tcp_sequence_metadata(frame)
+    if sequence_metadata is not None:
+        record.update(sequence_metadata)
     if not timestamp_available:
         record["captured_at"] = None
     record["timestamp_available"] = timestamp_available
@@ -364,6 +371,7 @@ def import_pcapng_bytes(
             "interface_statistics_count": len(interface_statistics),
             "interface_statistics": interface_statistics,
             "payload_retained": False,
+            "tcp_sequence_evidence": summarize_tcp_sequence_evidence(records),
         }
     )
     return summary
