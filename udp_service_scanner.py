@@ -14,6 +14,8 @@ _UDP_TIMEOUT_DEFAULT = 0.35
 _UDP_TIMEOUT_MIN = 0.05
 _UDP_TIMEOUT_MAX = 1.0
 _UDP_RECV_BYTES = 512
+# Standard QUERY with one root-name NS/IN question. The question section is:
+# QNAME=root (zero-length label), QTYPE=NS (2), QCLASS=IN (1).
 _DNS_QUERY_SUFFIX = b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x01"
 _NTP_UNIX_EPOCH_OFFSET = 2_208_988_800
 

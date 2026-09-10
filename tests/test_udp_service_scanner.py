@@ -80,6 +80,10 @@ def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 17
     assert sock.sent[0][:2] == b"NW"
+    # Header: QUERY, QDCOUNT=1, no answer/authority/additional records.
+    assert sock.sent[0][2:12] == b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00"
+    # Question: root QNAME, QTYPE=NS (2), QCLASS=IN (1).
+    assert sock.sent[0][12:] == b"\x00\x00\x02\x00\x01"
     assert sock.timeout == 0.2
 
 
