@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
+import secrets
 import socket
 import time
 from collections.abc import Callable, Iterable
@@ -13,14 +14,13 @@ _UDP_TIMEOUT_DEFAULT = 0.35
 _UDP_TIMEOUT_MIN = 0.05
 _UDP_TIMEOUT_MAX = 1.0
 _UDP_RECV_BYTES = 512
-_DNS_TXID = b"NW"
-_DNS_QUERY = _DNS_TXID + b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x01"
-_NTP_QUERY = bytes([0x23]) + (b"\x00" * 47)  # LI=0, VN=4, mode=3 client
+_DNS_QUERY_SUFFIX = b"\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x01"
+_NTP_UNIX_EPOCH_OFFSET = 2_208_988_800
 
-_ServiceProfile = tuple[int, str, bytes]
+_ServiceProfile = tuple[int, str]
 _SERVICE_PROFILES: dict[str, _ServiceProfile] = {
-    "dns": (53, "DNS", _DNS_QUERY),
-    "ntp": (123, "NTP", _NTP_QUERY),
+    "dns": (53, "DNS"),
+    "ntp": (123, "NTP"),
 }
 
 
@@ -33,6 +33,23 @@ def _socket_target(target: str, port: int) -> tuple[int, tuple[Any, ...]]:
             scope_id = int(scope) if scope.isdigit() else socket.if_nametoindex(scope)
         return socket.AF_INET6, (host, port, 0, scope_id)
     return socket.AF_INET, (host, port)
+
+
+def _ntp_transmit_timestamp() -> bytes:
+    seconds = int(time.time()) + _NTP_UNIX_EPOCH_OFFSET
+    return (seconds & 0xFFFFFFFF).to_bytes(4, "big") + secrets.token_bytes(4)
+
+
+def _build_probe(profile_name: str) -> tuple[bytes, bytes]:
+    if profile_name == "dns":
+        correlation = secrets.token_bytes(2)
+        return correlation + _DNS_QUERY_SUFFIX, correlation
+
+    correlation = _ntp_transmit_timestamp()
+    payload = bytearray(48)
+    payload[0] = 0x23  # LI=0, VN=4, mode=3 client
+    payload[40:48] = correlation
+    return bytes(payload), correlation
 
 
 def _base_row(port: int, service: str) -> dict[str, object]:
@@ -54,8 +71,10 @@ def _base_row(port: int, service: str) -> dict[str, object]:
     }
 
 
-def _classify_dns_response(payload: bytes) -> tuple[bool, str, dict[str, object]]:
-    if len(payload) < 12 or payload[:2] != _DNS_TXID:
+def _classify_dns_response(
+    payload: bytes, correlation: bytes
+) -> tuple[bool, str, dict[str, object]]:
+    if len(payload) < 12 or payload[:2] != correlation:
         return False, "", {}
     flags = int.from_bytes(payload[2:4], "big")
     if not flags & 0x8000:
@@ -71,8 +90,10 @@ def _classify_dns_response(payload: bytes) -> tuple[bool, str, dict[str, object]
     )
 
 
-def _classify_ntp_response(payload: bytes) -> tuple[bool, str, dict[str, object]]:
-    if len(payload) < 48:
+def _classify_ntp_response(
+    payload: bytes, correlation: bytes
+) -> tuple[bool, str, dict[str, object]]:
+    if len(payload) < 48 or payload[24:32] != correlation:
         return False, "", {}
     first = payload[0]
     leap = (first >> 6) & 0x03
@@ -96,7 +117,8 @@ def _probe_one(
     timeout: float,
     socket_factory: Callable[..., Any],
 ) -> dict[str, object]:
-    port, service, payload = _SERVICE_PROFILES[profile_name]
+    port, service = _SERVICE_PROFILES[profile_name]
+    payload, correlation = _build_probe(profile_name)
     row = _base_row(port, service)
     family, socket_address = _socket_target(target, port)
     started = time.perf_counter()
@@ -122,9 +144,9 @@ def _probe_one(
 
     row["Response Time (ms)"] = round((time.perf_counter() - started) * 1000, 2)
     if profile_name == "dns":
-        valid, version, metadata = _classify_dns_response(response)
+        valid, version, metadata = _classify_dns_response(response, correlation)
     else:
-        valid, version, metadata = _classify_ntp_response(response)
+        valid, version, metadata = _classify_ntp_response(response, correlation)
 
     if not valid:
         row["Status"] = "Open"
@@ -152,7 +174,8 @@ def scan_udp_services(
     Only DNS and NTP are supported. Each selected profile sends exactly one small
     datagram, performs no retry, receives at most 512 bytes, and treats silence as
     ``Open|Filtered`` rather than claiming the service is closed. Valid responses
-    expose only bounded protocol-header metadata; response payloads are not retained.
+    must correlate to the exact request and expose only bounded protocol-header
+    metadata; response payloads and correlation tokens are not retained.
     """
     if not math.isfinite(timeout) or not _UDP_TIMEOUT_MIN <= timeout <= _UDP_TIMEOUT_MAX:
         raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
