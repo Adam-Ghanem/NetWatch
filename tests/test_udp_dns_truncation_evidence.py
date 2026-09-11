@@ -4,7 +4,7 @@ import udp_service_scanner
 class FakeDatagramSocket:
     def __init__(self, response: bytes):
         self.response = response
-        self.sent = []
+        self.sent: list[bytes] = []
 
     def __enter__(self):
         return self
