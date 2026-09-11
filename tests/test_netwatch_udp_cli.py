@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from datetime import datetime
 
 import pytest
 
@@ -23,6 +24,12 @@ def _rows() -> list[dict[str, object]]:
             "Service Confidence": "High",
         }
     ]
+
+
+def _assert_utc_timestamp(value: str) -> None:
+    assert value.endswith("Z")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    assert parsed.utcoffset() is not None
 
 
 def test_requires_explicit_authorization() -> None:
@@ -61,9 +68,11 @@ def test_default_profiles_are_bounded_and_json_serialized(
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == "netwatch.udp-service-evidence"
     assert payload["schema_version"] == 1
+    _assert_utc_timestamp(payload["observed_at"])
     assert payload["target"] == "192.168.1.10"
     assert payload["address_family"] == "IPv4"
     assert payload["count"] == 1
+    assert payload["items"][0]["Observed At"] == payload["observed_at"]
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Status"] == "Open"
 
@@ -131,25 +140,26 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
 
     assert result == 0
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
-    assert rows == [
-        {
-            "Evidence Schema": "netwatch.udp-service-evidence",
-            "Schema Version": "1",
-            "Target": "192.168.1.10",
-            "Address Family": "IPv4",
-            "Evidence Source": "active_udp_probe",
-            "Evidence Semantics": "response_observed",
-            "Port": "53",
-            "Protocol": "UDP",
-            "Service": "DNS",
-            "Status": "Open",
-            "Response Time (ms)": "1.2",
-            "Service Detection": "DNS response",
-            "Service Product": "DNS",
-            "Service Version": "",
-            "Service Confidence": "High",
-        }
-    ]
+    assert len(rows) == 1
+    _assert_utc_timestamp(rows[0]["Observed At"])
+    assert rows[0] == {
+        "Evidence Schema": "netwatch.udp-service-evidence",
+        "Schema Version": "1",
+        "Observed At": rows[0]["Observed At"],
+        "Target": "192.168.1.10",
+        "Address Family": "IPv4",
+        "Evidence Source": "active_udp_probe",
+        "Evidence Semantics": "response_observed",
+        "Port": "53",
+        "Protocol": "UDP",
+        "Service": "DNS",
+        "Status": "Open",
+        "Response Time (ms)": "1.2",
+        "Service Detection": "DNS response",
+        "Service Product": "DNS",
+        "Service Version": "",
+        "Service Confidence": "High",
+    }
 
 
 def test_scanner_validation_error_becomes_cli_usage_error(monkeypatch) -> None:
