@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import ipaddress
 import json
 import sys
 from collections.abc import Sequence
@@ -11,6 +12,8 @@ from udp_service_scanner import scan_udp_services
 
 _ALLOWED_SERVICES = ("dns", "ntp")
 _ALLOWED_FORMATS = ("json", "csv")
+_EVIDENCE_SCHEMA = "netwatch.udp-service-evidence"
+_EVIDENCE_SCHEMA_VERSION = 1
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -50,6 +53,42 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _address_family(target: str) -> str:
+    host = target.strip().partition("%")[0]
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return "Unknown"
+    return "IPv6" if address.version == 6 else "IPv4"
+
+
+def _evidence_semantics(status: object) -> str:
+    return {
+        "Open": "response_observed",
+        "Closed": "explicit_refusal",
+        "Open|Filtered": "no_response",
+        "Blocked": "validation_blocked",
+    }.get(str(status), "unknown")
+
+
+def _normalized_rows(target: str, rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    family = _address_family(target)
+    normalized: list[dict[str, object]] = []
+    for row in rows:
+        normalized.append(
+            {
+                "Evidence Schema": _EVIDENCE_SCHEMA,
+                "Schema Version": _EVIDENCE_SCHEMA_VERSION,
+                "Target": target,
+                "Address Family": family,
+                "Evidence Source": "active_udp_probe",
+                "Evidence Semantics": _evidence_semantics(row.get("Status")),
+                **row,
+            }
+        )
+    return normalized
+
+
 def _csv_text(rows: list[dict[str, object]]) -> str:
     if not rows:
         return ""
@@ -72,10 +111,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    normalized_rows = _normalized_rows(args.target, rows)
     if args.format == "csv":
-        sys.stdout.write(_csv_text(rows))
+        sys.stdout.write(_csv_text(normalized_rows))
     else:
-        json.dump({"count": len(rows), "items": rows}, sys.stdout, indent=2)
+        json.dump(
+            {
+                "schema": _EVIDENCE_SCHEMA,
+                "schema_version": _EVIDENCE_SCHEMA_VERSION,
+                "target": args.target,
+                "address_family": _address_family(args.target),
+                "count": len(normalized_rows),
+                "items": normalized_rows,
+            },
+            sys.stdout,
+            indent=2,
+        )
         sys.stdout.write("\n")
     return 0
 
