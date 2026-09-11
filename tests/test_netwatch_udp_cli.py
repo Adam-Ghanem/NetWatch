@@ -59,7 +59,12 @@ def test_default_profiles_are_bounded_and_json_serialized(
     }
 
     payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "netwatch.udp-service-evidence"
+    assert payload["schema_version"] == 1
+    assert payload["target"] == "192.168.1.10"
+    assert payload["address_family"] == "IPv4"
     assert payload["count"] == 1
+    assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Status"] == "Open"
 
 
@@ -128,6 +133,12 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
     assert rows == [
         {
+            "Evidence Schema": "netwatch.udp-service-evidence",
+            "Schema Version": "1",
+            "Target": "192.168.1.10",
+            "Address Family": "IPv4",
+            "Evidence Source": "active_udp_probe",
+            "Evidence Semantics": "response_observed",
             "Port": "53",
             "Protocol": "UDP",
             "Service": "DNS",
