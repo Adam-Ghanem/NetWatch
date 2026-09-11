@@ -46,9 +46,7 @@ def test_dns_truncation_flag_is_exposed_as_bounded_header_evidence(monkeypatch):
 def test_non_dns_rows_keep_dns_truncation_evidence_empty(monkeypatch):
     unix_time = 1_700_000_000
     monkeypatch.setattr(udp_service_scanner.time, "time", lambda: unix_time)
-    monkeypatch.setattr(
-        udp_service_scanner.secrets, "token_bytes", lambda size: b"RND4"
-    )
+    monkeypatch.setattr(udp_service_scanner.secrets, "token_bytes", lambda size: b"RND4")
     seconds = unix_time + udp_service_scanner._NTP_UNIX_EPOCH_OFFSET
     correlation = seconds.to_bytes(4, "big") + b"RND4"
     response = bytearray(48)
