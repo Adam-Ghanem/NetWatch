@@ -75,6 +75,7 @@ def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
         "DNS Recursion Available": False,
         "NTP Stratum": "",
         "NTP Leap Indicator": "",
+        "NTP Kiss Code": "",
     }
     assert 0 <= response_time <= 1000
     assert len(sock.sent) == 1
@@ -181,11 +182,59 @@ def test_ntp_response_extracts_protocol_version_and_header_evidence_only(monkeyp
     assert rows[0]["Service Version"] == "v4"
     assert rows[0]["NTP Stratum"] == 2
     assert rows[0]["NTP Leap Indicator"] == 1
+    assert rows[0]["NTP Kiss Code"] == ""
     assert rows[0]["DNS RCODE"] == ""
     assert len(sock.sent) == 1
     assert len(sock.sent[0]) == 48
     assert sock.sent[0][40:48] == correlation
     assert correlation not in repr(rows[0]).encode()
+
+
+def test_ntp_kiss_of_death_exposes_only_bounded_ascii_code(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
+    response = bytearray(48)
+    response[0] = 0x24  # LI=0, VN=4, mode=4 server
+    response[1] = 0  # Stratum zero marks a Kiss-o'-Death packet.
+    response[12:16] = b"RATE"
+    response[24:32] = correlation
+    response[32:40] = b"ignored!"
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "NTP Kiss-o'-Death response"
+    assert row["Service Product"] == "NTP"
+    assert row["Service Confidence"] == "High"
+    assert row["NTP Stratum"] == 0
+    assert row["NTP Kiss Code"] == "RATE"
+    assert "ignored!" not in repr(row)
+    assert correlation not in repr(row).encode()
+
+
+def test_ntp_non_ascii_kiss_code_is_not_retained(monkeypatch):
+    correlation = _ntp_correlation(monkeypatch)
+    response = bytearray(48)
+    response[0] = 0x24
+    response[1] = 0
+    response[12:16] = b"\xffBAD"
+    response[24:32] = correlation
+    sock = FakeDatagramSocket(response=bytes(response))
+
+    row = udp_service_scanner.scan_udp_services(
+        "192.168.1.10",
+        services=("ntp",),
+        socket_factory=_factory(sock),
+    )[0]
+
+    assert row["Status"] == "Open"
+    assert row["Service Detection"] == "NTP response"
+    assert row["NTP Stratum"] == 0
+    assert row["NTP Kiss Code"] == ""
 
 
 def test_ntp_mismatched_originate_timestamp_does_not_claim_service_identity(monkeypatch):
@@ -225,6 +274,7 @@ def test_unexpected_udp_response_proves_port_open_without_claiming_service_ident
     assert rows[0]["Service Confidence"] == "Low"
     assert rows[0]["DNS RCODE"] == ""
     assert rows[0]["NTP Stratum"] == ""
+    assert rows[0]["NTP Kiss Code"] == ""
 
 
 def test_unknown_service_profile_is_rejected_before_network_activity():

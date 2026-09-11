@@ -71,6 +71,7 @@ def _base_row(port: int, service: str) -> dict[str, object]:
         "DNS Recursion Available": "",
         "NTP Stratum": "",
         "NTP Leap Indicator": "",
+        "NTP Kiss Code": "",
     }
 
 
@@ -96,6 +97,15 @@ def _classify_dns_response(
     )
 
 
+def _ntp_kiss_code(payload: bytes) -> str:
+    if payload[1] != 0:
+        return ""
+    raw_code = payload[12:16].rstrip(b"\x00")
+    if not raw_code or any(byte < 0x20 or byte > 0x7E for byte in raw_code):
+        return ""
+    return raw_code.decode("ascii")
+
+
 def _classify_ntp_response(
     payload: bytes, correlation: bytes
 ) -> tuple[bool, str, dict[str, object]]:
@@ -113,6 +123,7 @@ def _classify_ntp_response(
         {
             "NTP Stratum": payload[1],
             "NTP Leap Indicator": leap,
+            "NTP Kiss Code": _ntp_kiss_code(payload),
         },
     )
 
@@ -165,6 +176,8 @@ def _probe_one(
     row["Service Version"] = version
     row["Service Confidence"] = "High"
     row.update(metadata)
+    if service == "NTP" and row["NTP Kiss Code"]:
+        row["Service Detection"] = "NTP Kiss-o'-Death response"
     return row
 
 
@@ -211,6 +224,7 @@ def scan_udp_services(
                 "DNS Recursion Available": "",
                 "NTP Stratum": "",
                 "NTP Leap Indicator": "",
+                "NTP Kiss Code": "",
             }
         ]
 
