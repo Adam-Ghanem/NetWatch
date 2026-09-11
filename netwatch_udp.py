@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from udp_service_scanner import scan_udp_services
 
 _ALLOWED_SERVICES = ("dns", "ntp")
-_ALLOWED_FORMATS = ("json", "csv")
+_ALLOWED_FORMATS = ("json", "jsonl", "csv")
 _EVIDENCE_SCHEMA = "netwatch.udp-service-evidence"
 _EVIDENCE_SCHEMA_VERSION = 1
 
@@ -119,6 +119,12 @@ def _csv_text(rows: list[dict[str, object]]) -> str:
     return output.getvalue()
 
 
+def _jsonl_text(rows: list[dict[str, object]]) -> str:
+    if not rows:
+        return ""
+    return "".join(f"{json.dumps(row, separators=(',', ':'))}\n" for row in rows)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -141,6 +147,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     if args.format == "csv":
         sys.stdout.write(_csv_text(normalized_rows))
+    elif args.format == "jsonl":
+        sys.stdout.write(_jsonl_text(normalized_rows))
     else:
         json.dump(
             {
