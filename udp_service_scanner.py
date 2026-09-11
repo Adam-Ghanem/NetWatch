@@ -69,6 +69,7 @@ def _base_row(port: int, service: str) -> dict[str, object]:
         "DNS RCODE": "",
         "DNS Authoritative": "",
         "DNS Recursion Available": "",
+        "DNS Truncated": "",
         "NTP Stratum": "",
         "NTP Leap Indicator": "",
         "NTP Kiss Code": "",
@@ -93,6 +94,7 @@ def _classify_dns_response(
             "DNS RCODE": flags & 0x000F,
             "DNS Authoritative": bool(flags & 0x0400),
             "DNS Recursion Available": bool(flags & 0x0080),
+            "DNS Truncated": bool(flags & 0x0200),
         },
     )
 
@@ -222,6 +224,7 @@ def scan_udp_services(
                 "DNS RCODE": "",
                 "DNS Authoritative": "",
                 "DNS Recursion Available": "",
+                "DNS Truncated": "",
                 "NTP Stratum": "",
                 "NTP Leap Indicator": "",
                 "NTP Kiss Code": "",
