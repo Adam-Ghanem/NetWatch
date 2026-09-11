@@ -1,0 +1,55 @@
+import csv
+import io
+import json
+
+import netwatch_udp
+
+
+def _rows(status: str) -> list[dict[str, object]]:
+    return [{"Port": 53, "Protocol": "UDP", "Service": "DNS", "Status": status}]
+
+
+def test_normalized_rows_preserve_open_filtered_semantics():
+    row = netwatch_udp._normalized_rows("192.168.1.10", _rows("Open|Filtered"))[0]
+    assert row["Evidence Schema"] == "netwatch.udp-service-evidence"
+    assert row["Schema Version"] == 1
+    assert row["Address Family"] == "IPv4"
+    assert row["Evidence Source"] == "active_udp_probe"
+    assert row["Evidence Semantics"] == "no_response"
+    assert row["Status"] == "Open|Filtered"
+
+
+def test_normalized_rows_mark_ipv6_and_explicit_refusal():
+    row = netwatch_udp._normalized_rows("fd00::10", _rows("Closed"))[0]
+    assert row["Address Family"] == "IPv6"
+    assert row["Evidence Semantics"] == "explicit_refusal"
+
+
+def test_json_envelope_is_self_describing(monkeypatch, capsys):
+    monkeypatch.setattr(netwatch_udp, "scan_udp_services", lambda *_args, **_kwargs: _rows("Open"))
+    assert netwatch_udp.main(["192.168.1.10", "--authorized"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == "netwatch.udp-service-evidence"
+    assert payload["schema_version"] == 1
+    assert payload["address_family"] == "IPv4"
+    assert payload["items"][0]["Evidence Semantics"] == "response_observed"
+
+
+def test_csv_export_carries_schema_and_semantics(monkeypatch, capsys):
+    monkeypatch.setattr(
+        netwatch_udp,
+        "scan_udp_services",
+        lambda *_args, **_kwargs: _rows("Open|Filtered"),
+    )
+    assert netwatch_udp.main(["fd00::10", "--authorized", "--format", "csv"]) == 0
+    rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
+    assert rows[0]["Evidence Schema"] == "netwatch.udp-service-evidence"
+    assert rows[0]["Schema Version"] == "1"
+    assert rows[0]["Address Family"] == "IPv6"
+    assert rows[0]["Evidence Semantics"] == "no_response"
+
+
+def test_invalid_target_family_is_unknown_without_reinterpreting_status():
+    row = netwatch_udp._normalized_rows("not-an-ip", _rows("Blocked"))[0]
+    assert row["Address Family"] == "Unknown"
+    assert row["Evidence Semantics"] == "validation_blocked"
