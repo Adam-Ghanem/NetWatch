@@ -187,16 +187,12 @@ def test_jsonl_output_emits_one_self_describing_record_per_row(monkeypatch, caps
 
     monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
 
-    result = netwatch_udp.main(
-        ["192.168.1.10", "--authorized", "--format", "jsonl"]
-    )
+    result = netwatch_udp.main(["192.168.1.10", "--authorized", "--format", "jsonl"])
 
     assert result == 0
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert len(records) == 2
-    assert {record["Evidence Schema"] for record in records} == {
-        "netwatch.udp-service-evidence"
-    }
+    assert {record["Evidence Schema"] for record in records} == {"netwatch.udp-service-evidence"}
     assert {record["Schema Version"] for record in records} == {1}
     assert len({record["Run ID"] for record in records}) == 1
     assert len({record["Observed At"] for record in records}) == 1
