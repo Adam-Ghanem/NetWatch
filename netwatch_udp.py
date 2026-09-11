@@ -6,6 +6,7 @@ import io
 import ipaddress
 import json
 import sys
+import uuid
 from collections.abc import Sequence
 from datetime import datetime, timezone
 
@@ -76,20 +77,27 @@ def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _run_id() -> str:
+    return str(uuid.uuid4())
+
+
 def _normalized_rows(
     target: str,
     rows: list[dict[str, object]],
     *,
     observed_at: str | None = None,
+    run_id: str | None = None,
 ) -> list[dict[str, object]]:
     family = _address_family(target)
     timestamp = observed_at or _utc_timestamp()
+    correlation_id = run_id or _run_id()
     normalized: list[dict[str, object]] = []
     for row in rows:
         normalized.append(
             {
                 "Evidence Schema": _EVIDENCE_SCHEMA,
                 "Schema Version": _EVIDENCE_SCHEMA_VERSION,
+                "Run ID": correlation_id,
                 "Observed At": timestamp,
                 "Target": target,
                 "Address Family": family,
@@ -124,7 +132,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(str(exc))
 
     observed_at = _utc_timestamp()
-    normalized_rows = _normalized_rows(args.target, rows, observed_at=observed_at)
+    run_id = _run_id()
+    normalized_rows = _normalized_rows(
+        args.target,
+        rows,
+        observed_at=observed_at,
+        run_id=run_id,
+    )
     if args.format == "csv":
         sys.stdout.write(_csv_text(normalized_rows))
     else:
@@ -132,6 +146,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             {
                 "schema": _EVIDENCE_SCHEMA,
                 "schema_version": _EVIDENCE_SCHEMA_VERSION,
+                "run_id": run_id,
                 "observed_at": observed_at,
                 "target": args.target,
                 "address_family": _address_family(args.target),
