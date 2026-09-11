@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import uuid
 from datetime import datetime
 
 import pytest
@@ -30,6 +31,10 @@ def _assert_utc_timestamp(value: str) -> None:
     assert value.endswith("Z")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     assert parsed.utcoffset() is not None
+
+
+def _assert_run_id(value: str) -> None:
+    assert str(uuid.UUID(value)) == value
 
 
 def test_requires_explicit_authorization() -> None:
@@ -68,10 +73,12 @@ def test_default_profiles_are_bounded_and_json_serialized(
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == "netwatch.udp-service-evidence"
     assert payload["schema_version"] == 1
+    _assert_run_id(payload["run_id"])
     _assert_utc_timestamp(payload["observed_at"])
     assert payload["target"] == "192.168.1.10"
     assert payload["address_family"] == "IPv4"
     assert payload["count"] == 1
+    assert payload["items"][0]["Run ID"] == payload["run_id"]
     assert payload["items"][0]["Observed At"] == payload["observed_at"]
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Status"] == "Open"
@@ -141,10 +148,12 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     assert result == 0
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
     assert len(rows) == 1
+    _assert_run_id(rows[0]["Run ID"])
     _assert_utc_timestamp(rows[0]["Observed At"])
     assert rows[0] == {
         "Evidence Schema": "netwatch.udp-service-evidence",
         "Schema Version": "1",
+        "Run ID": rows[0]["Run ID"],
         "Observed At": rows[0]["Observed At"],
         "Target": "192.168.1.10",
         "Address Family": "IPv4",
