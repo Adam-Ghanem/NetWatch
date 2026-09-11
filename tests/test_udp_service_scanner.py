@@ -73,6 +73,7 @@ def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
         "DNS RCODE": 0,
         "DNS Authoritative": False,
         "DNS Recursion Available": False,
+        "DNS Truncated": False,
         "NTP Stratum": "",
         "NTP Leap Indicator": "",
         "NTP Kiss Code": "",
