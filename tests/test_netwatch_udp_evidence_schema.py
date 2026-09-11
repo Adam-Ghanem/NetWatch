@@ -10,9 +10,14 @@ def _rows(status: str) -> list[dict[str, object]]:
 
 
 def test_normalized_rows_preserve_open_filtered_semantics():
-    row = netwatch_udp._normalized_rows("192.168.1.10", _rows("Open|Filtered"))[0]
+    row = netwatch_udp._normalized_rows(
+        "192.168.1.10",
+        _rows("Open|Filtered"),
+        observed_at="2026-09-11T17:49:06.000Z",
+    )[0]
     assert row["Evidence Schema"] == "netwatch.udp-service-evidence"
     assert row["Schema Version"] == 1
+    assert row["Observed At"] == "2026-09-11T17:49:06.000Z"
     assert row["Address Family"] == "IPv4"
     assert row["Evidence Source"] == "active_udp_probe"
     assert row["Evidence Semantics"] == "no_response"
@@ -23,6 +28,7 @@ def test_normalized_rows_mark_ipv6_and_explicit_refusal():
     row = netwatch_udp._normalized_rows("fd00::10", _rows("Closed"))[0]
     assert row["Address Family"] == "IPv6"
     assert row["Evidence Semantics"] == "explicit_refusal"
+    assert str(row["Observed At"]).endswith("Z")
 
 
 def test_json_envelope_is_self_describing(monkeypatch, capsys):
@@ -31,11 +37,13 @@ def test_json_envelope_is_self_describing(monkeypatch, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == "netwatch.udp-service-evidence"
     assert payload["schema_version"] == 1
+    assert payload["observed_at"].endswith("Z")
     assert payload["address_family"] == "IPv4"
+    assert payload["items"][0]["Observed At"] == payload["observed_at"]
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
 
 
-def test_csv_export_carries_schema_and_semantics(monkeypatch, capsys):
+def test_csv_export_carries_schema_semantics_and_timestamp(monkeypatch, capsys):
     monkeypatch.setattr(
         netwatch_udp,
         "scan_udp_services",
@@ -45,6 +53,7 @@ def test_csv_export_carries_schema_and_semantics(monkeypatch, capsys):
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
     assert rows[0]["Evidence Schema"] == "netwatch.udp-service-evidence"
     assert rows[0]["Schema Version"] == "1"
+    assert rows[0]["Observed At"].endswith("Z")
     assert rows[0]["Address Family"] == "IPv6"
     assert rows[0]["Evidence Semantics"] == "no_response"
 
