@@ -21,6 +21,7 @@ _EVIDENCE_METADATA_FIELDS = frozenset(
         "Evidence Schema",
         "Schema Version",
         "Evidence ID",
+        "Service Key",
         "Run ID",
         "Observed At",
         "Target",
@@ -73,6 +74,19 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _canonical_target(target: str) -> str:
+    stripped = target.strip()
+    host, separator, scope = stripped.partition("%")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return stripped
+    canonical = address.compressed
+    if separator:
+        return f"{canonical}%{scope}"
+    return canonical
+
+
 def _address_family(target: str) -> str:
     host = target.strip().partition("%")[0]
     try:
@@ -94,6 +108,11 @@ def _evidence_semantics(status: object) -> str:
 def _network_protocol(service: object) -> str:
     protocol = str(service or "").strip().lower()
     return protocol if protocol in _ALLOWED_SERVICES else "unknown"
+
+
+def _service_key(*, target: str, protocol: str, port: object) -> str:
+    identity = f"{_EVIDENCE_SCHEMA}:{_canonical_target(target)}:{protocol}:{port}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
 
 
 def _evidence_id(
@@ -142,6 +161,7 @@ def _normalized_rows(
                     protocol=protocol,
                     port=port,
                 ),
+                "Service Key": _service_key(target=target, protocol=protocol, port=port),
                 "Run ID": correlation_id,
                 "Observed At": timestamp,
                 "Target": target,
