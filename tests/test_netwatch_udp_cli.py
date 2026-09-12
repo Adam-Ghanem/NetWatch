@@ -67,7 +67,8 @@ def test_duplicate_profiles_are_rejected_before_scanner_call(monkeypatch) -> Non
 
     assert exc.value.code == 2
     assert called is False
-    assert "distinct profile" in netwatch_udp._parser().format_help()
+    help_text = " ".join(netwatch_udp._parser().format_help().split())
+    assert "distinct profile" in help_text
 
 
 def test_default_profiles_are_bounded_and_json_serialized(
