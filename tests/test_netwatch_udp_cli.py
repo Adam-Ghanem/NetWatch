@@ -81,6 +81,10 @@ def test_default_profiles_are_bounded_and_json_serialized(
     assert payload["items"][0]["Run ID"] == payload["run_id"]
     assert payload["items"][0]["Observed At"] == payload["observed_at"]
     assert payload["items"][0]["Event Type"] == "udp_service_evidence"
+    assert payload["items"][0]["Destination Address"] == "192.168.1.10"
+    assert payload["items"][0]["Destination Port"] == 53
+    assert payload["items"][0]["Network Transport"] == "udp"
+    assert payload["items"][0]["Network Protocol"] == "dns"
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Status"] == "Open"
 
@@ -157,7 +161,11 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
         "Run ID": rows[0]["Run ID"],
         "Observed At": rows[0]["Observed At"],
         "Target": "192.168.1.10",
+        "Destination Address": "192.168.1.10",
+        "Destination Port": "53",
         "Address Family": "IPv4",
+        "Network Transport": "udp",
+        "Network Protocol": "dns",
         "Evidence Source": "active_udp_probe",
         "Event Type": "udp_service_evidence",
         "Evidence Semantics": "response_observed",
@@ -197,6 +205,9 @@ def test_jsonl_output_emits_one_self_describing_record_per_row(monkeypatch, caps
     assert {record["Evidence Schema"] for record in records} == {"netwatch.udp-service-evidence"}
     assert {record["Schema Version"] for record in records} == {1}
     assert {record["Event Type"] for record in records} == {"udp_service_evidence"}
+    assert {record["Network Transport"] for record in records} == {"udp"}
+    assert [record["Network Protocol"] for record in records] == ["dns", "ntp"]
+    assert [record["Destination Port"] for record in records] == [53, 123]
     assert len({record["Run ID"] for record in records}) == 1
     assert len({record["Observed At"] for record in records}) == 1
     assert [record["Evidence Semantics"] for record in records] == [

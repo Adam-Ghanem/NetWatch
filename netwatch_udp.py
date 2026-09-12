@@ -73,6 +73,11 @@ def _evidence_semantics(status: object) -> str:
     }.get(str(status), "unknown")
 
 
+def _network_protocol(service: object) -> str:
+    protocol = str(service or "").strip().lower()
+    return protocol if protocol in _ALLOWED_SERVICES else "unknown"
+
+
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -100,7 +105,11 @@ def _normalized_rows(
                 "Run ID": correlation_id,
                 "Observed At": timestamp,
                 "Target": target,
+                "Destination Address": target,
+                "Destination Port": row.get("Port"),
                 "Address Family": family,
+                "Network Transport": "udp",
+                "Network Protocol": _network_protocol(row.get("Service")),
                 "Evidence Source": "active_udp_probe",
                 "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
