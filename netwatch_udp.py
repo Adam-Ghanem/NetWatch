@@ -20,6 +20,7 @@ _EVIDENCE_METADATA_FIELDS = frozenset(
     {
         "Evidence Schema",
         "Schema Version",
+        "Evidence ID",
         "Run ID",
         "Observed At",
         "Target",
@@ -95,6 +96,17 @@ def _network_protocol(service: object) -> str:
     return protocol if protocol in _ALLOWED_SERVICES else "unknown"
 
 
+def _evidence_id(
+    *,
+    run_id: str,
+    target: str,
+    protocol: str,
+    port: object,
+) -> str:
+    identity = f"{_EVIDENCE_SCHEMA}:{run_id}:{target}:{protocol}:{port}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
+
+
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -115,6 +127,8 @@ def _normalized_rows(
     correlation_id = run_id or _run_id()
     normalized: list[dict[str, object]] = []
     for row in rows:
+        protocol = _network_protocol(row.get("Service"))
+        port = row.get("Port")
         scanner_evidence = {
             key: value for key, value in row.items() if key not in _EVIDENCE_METADATA_FIELDS
         }
@@ -122,14 +136,20 @@ def _normalized_rows(
             {
                 "Evidence Schema": _EVIDENCE_SCHEMA,
                 "Schema Version": _EVIDENCE_SCHEMA_VERSION,
+                "Evidence ID": _evidence_id(
+                    run_id=correlation_id,
+                    target=target,
+                    protocol=protocol,
+                    port=port,
+                ),
                 "Run ID": correlation_id,
                 "Observed At": timestamp,
                 "Target": target,
                 "Destination Address": target,
-                "Destination Port": row.get("Port"),
+                "Destination Port": port,
                 "Address Family": family,
                 "Network Transport": "udp",
-                "Network Protocol": _network_protocol(row.get("Service")),
+                "Network Protocol": protocol,
                 "Evidence Source": "active_udp_probe",
                 "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
