@@ -182,10 +182,12 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     rows = list(csv.DictReader(io.StringIO(capsys.readouterr().out)))
     assert len(rows) == 1
     _assert_run_id(rows[0]["Run ID"])
+    _assert_run_id(rows[0]["Evidence ID"])
     _assert_utc_timestamp(rows[0]["Observed At"])
     assert rows[0] == {
         "Evidence Schema": "netwatch.udp-service-evidence",
         "Schema Version": "1",
+        "Evidence ID": rows[0]["Evidence ID"],
         "Run ID": rows[0]["Run ID"],
         "Observed At": rows[0]["Observed At"],
         "Target": "192.168.1.10",
