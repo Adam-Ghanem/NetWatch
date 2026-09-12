@@ -115,6 +115,7 @@ def test_default_profiles_are_bounded_and_json_serialized(
     assert payload["items"][0]["Network Protocol"] == "dns"
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Status"] == "Open"
+    assert uuid.UUID(payload["items"][0]["Service Key"]).version == 5
 
 
 def test_selected_profile_and_timeout_are_forwarded(
@@ -183,11 +184,13 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     assert len(rows) == 1
     _assert_run_id(rows[0]["Run ID"])
     _assert_run_id(rows[0]["Evidence ID"])
+    _assert_run_id(rows[0]["Service Key"])
     _assert_utc_timestamp(rows[0]["Observed At"])
     assert rows[0] == {
         "Evidence Schema": "netwatch.udp-service-evidence",
         "Schema Version": "1",
         "Evidence ID": rows[0]["Evidence ID"],
+        "Service Key": rows[0]["Service Key"],
         "Run ID": rows[0]["Run ID"],
         "Observed At": rows[0]["Observed At"],
         "Target": "192.168.1.10",
@@ -240,6 +243,7 @@ def test_jsonl_output_emits_one_self_describing_record_per_row(monkeypatch, caps
     assert [record["Destination Port"] for record in records] == [53, 123]
     assert len({record["Run ID"] for record in records}) == 1
     assert len({record["Observed At"] for record in records}) == 1
+    assert len({record["Service Key"] for record in records}) == 2
     assert [record["Evidence Semantics"] for record in records] == [
         "response_observed",
         "no_response",
