@@ -35,5 +35,5 @@ def test_udp_evidence_ids_are_stable_unique_and_authoritative() -> None:
     assert first[1]["Evidence ID"] == second[1]["Evidence ID"]
     assert first[0]["Evidence ID"] != first[1]["Evidence ID"]
     assert first[0]["Evidence ID"] != "spoofed"
-    uuid.UUID(str(first[0]["Evidence ID"]), version=5)
-    uuid.UUID(str(first[1]["Evidence ID"]), version=5)
+    assert uuid.UUID(str(first[0]["Evidence ID"])).version == 5
+    assert uuid.UUID(str(first[1]["Evidence ID"])).version == 5
