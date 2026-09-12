@@ -16,6 +16,23 @@ _ALLOWED_SERVICES = ("dns", "ntp")
 _ALLOWED_FORMATS = ("json", "jsonl", "csv")
 _EVIDENCE_SCHEMA = "netwatch.udp-service-evidence"
 _EVIDENCE_SCHEMA_VERSION = 1
+_EVIDENCE_METADATA_FIELDS = frozenset(
+    {
+        "Evidence Schema",
+        "Schema Version",
+        "Run ID",
+        "Observed At",
+        "Target",
+        "Destination Address",
+        "Destination Port",
+        "Address Family",
+        "Network Transport",
+        "Network Protocol",
+        "Evidence Source",
+        "Event Type",
+        "Evidence Semantics",
+    }
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -98,6 +115,9 @@ def _normalized_rows(
     correlation_id = run_id or _run_id()
     normalized: list[dict[str, object]] = []
     for row in rows:
+        scanner_evidence = {
+            key: value for key, value in row.items() if key not in _EVIDENCE_METADATA_FIELDS
+        }
         normalized.append(
             {
                 "Evidence Schema": _EVIDENCE_SCHEMA,
@@ -113,7 +133,7 @@ def _normalized_rows(
                 "Evidence Source": "active_udp_probe",
                 "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
-                **row,
+                **scanner_evidence,
             }
         )
     return normalized
