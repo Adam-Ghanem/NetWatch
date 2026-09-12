@@ -62,3 +62,40 @@ def test_invalid_target_family_is_unknown_without_reinterpreting_status():
     row = netwatch_udp._normalized_rows("not-an-ip", _rows("Blocked"))[0]
     assert row["Address Family"] == "Unknown"
     assert row["Evidence Semantics"] == "validation_blocked"
+
+
+def test_normalized_rows_keep_export_provenance_authoritative():
+    row = netwatch_udp._normalized_rows(
+        "192.168.1.10",
+        [
+            {
+                "Port": 53,
+                "Protocol": "UDP",
+                "Service": "DNS",
+                "Status": "Open",
+                "Run ID": "spoofed",
+                "Observed At": "1900-01-01T00:00:00Z",
+                "Target": "203.0.113.99",
+                "Destination Address": "203.0.113.99",
+                "Address Family": "IPv6",
+                "Network Transport": "tcp",
+                "Network Protocol": "http",
+                "Evidence Source": "untrusted",
+                "Event Type": "other",
+                "Evidence Semantics": "unknown",
+            }
+        ],
+        observed_at="2026-09-12T15:00:00.000Z",
+        run_id="run-123",
+    )[0]
+
+    assert row["Run ID"] == "run-123"
+    assert row["Observed At"] == "2026-09-12T15:00:00.000Z"
+    assert row["Target"] == "192.168.1.10"
+    assert row["Destination Address"] == "192.168.1.10"
+    assert row["Address Family"] == "IPv4"
+    assert row["Network Transport"] == "udp"
+    assert row["Network Protocol"] == "dns"
+    assert row["Evidence Source"] == "active_udp_probe"
+    assert row["Event Type"] == "udp_service_evidence"
+    assert row["Evidence Semantics"] == "response_observed"
