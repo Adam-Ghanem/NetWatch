@@ -122,7 +122,7 @@ def _evidence_id(
     protocol: str,
     port: object,
 ) -> str:
-    identity = f"{_EVIDENCE_SCHEMA}:{run_id}:{target}:{protocol}:{port}"
+    identity = f"{_EVIDENCE_SCHEMA}:{run_id}:{_canonical_target(target)}:{protocol}:{port}"
     return str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
 
 
