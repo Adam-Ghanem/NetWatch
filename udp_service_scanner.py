@@ -198,7 +198,10 @@ def scan_udp_services(
     must correlate to the exact request and expose only bounded protocol-header
     metadata; response payloads and correlation tokens are not retained.
     """
-    if not math.isfinite(timeout) or not _UDP_TIMEOUT_MIN <= timeout <= _UDP_TIMEOUT_MAX:
+    if (
+        not math.isfinite(timeout)
+        or not _UDP_TIMEOUT_MIN <= timeout <= _UDP_TIMEOUT_MAX
+    ):
         raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
 
     selected = tuple(str(item).strip().lower() for item in services)
