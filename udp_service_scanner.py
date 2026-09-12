@@ -205,6 +205,8 @@ def scan_udp_services(
     unknown = sorted(set(selected) - set(_SERVICE_PROFILES))
     if unknown:
         raise ValueError(f"Unsupported UDP service profile: {unknown[0]}")
+    if len(selected) != len(set(selected)):
+        raise ValueError("UDP service profiles must be unique.")
     if len(selected) > len(_SERVICE_PROFILES):
         raise ValueError("At most two UDP service profiles may be checked per call.")
 
