@@ -171,6 +171,37 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
     }
 
 
+def test_jsonl_output_emits_one_self_describing_record_per_row(monkeypatch, capsys) -> None:
+    def fake_scan(*args, **kwargs):
+        return _rows() + [
+            {
+                **_rows()[0],
+                "Port": 123,
+                "Service": "NTP",
+                "Status": "Open|Filtered",
+                "Service Detection": "No UDP response",
+                "Service Product": "",
+                "Service Confidence": "Low",
+            }
+        ]
+
+    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
+
+    result = netwatch_udp.main(["192.168.1.10", "--authorized", "--format", "jsonl"])
+
+    assert result == 0
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert len(records) == 2
+    assert {record["Evidence Schema"] for record in records} == {"netwatch.udp-service-evidence"}
+    assert {record["Schema Version"] for record in records} == {1}
+    assert len({record["Run ID"] for record in records}) == 1
+    assert len({record["Observed At"] for record in records}) == 1
+    assert [record["Evidence Semantics"] for record in records] == [
+        "response_observed",
+        "no_response",
+    ]
+
+
 def test_scanner_validation_error_becomes_cli_usage_error(monkeypatch) -> None:
     def fake_scan(*args, **kwargs):
         raise ValueError("UDP timeout must be between 0.05 and 1.0 seconds.")
