@@ -43,6 +43,34 @@ def test_requires_explicit_authorization() -> None:
     assert exc.value.code == 2
 
 
+def test_duplicate_profiles_are_rejected_before_scanner_call(monkeypatch) -> None:
+    called = False
+
+    def fake_scan(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("scanner should not be called")
+
+    monkeypatch.setattr(netwatch_udp, "scan_udp_services", fake_scan)
+
+    with pytest.raises(SystemExit) as exc:
+        netwatch_udp.main(
+            [
+                "192.168.1.10",
+                "--authorized",
+                "--service",
+                "dns",
+                "--service",
+                "dns",
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert called is False
+    help_text = " ".join(netwatch_udp._parser().format_help().split())
+    assert "distinct profile" in help_text
+
+
 def test_default_profiles_are_bounded_and_json_serialized(
     monkeypatch,
     capsys,
