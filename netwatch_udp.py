@@ -33,7 +33,7 @@ def _parser() -> argparse.ArgumentParser:
         dest="services",
         action="append",
         choices=_ALLOWED_SERVICES,
-        help="UDP service profile to check; may be supplied twice (default: dns and ntp)",
+        help="UDP service profile to check; select each distinct profile at most once",
     )
     parser.add_argument(
         "--timeout",
@@ -142,6 +142,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--authorized is required for UDP service checks")
 
     services = tuple(args.services) if args.services else _ALLOWED_SERVICES
+    if len(services) != len(set(services)):
+        parser.error("UDP service profiles must be unique")
+
     try:
         rows = scan_udp_services(args.target, services=services, timeout=args.timeout)
     except ValueError as exc:
