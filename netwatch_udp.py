@@ -102,6 +102,7 @@ def _normalized_rows(
                 "Target": target,
                 "Address Family": family,
                 "Evidence Source": "active_udp_probe",
+                "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
                 **row,
             }
