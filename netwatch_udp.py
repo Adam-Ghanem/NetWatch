@@ -165,7 +165,7 @@ def _normalized_rows(
                 "Run ID": correlation_id,
                 "Observed At": timestamp,
                 "Target": target,
-                "Destination Address": target,
+                "Destination Address": _canonical_target(target),
                 "Destination Port": port,
                 "Address Family": family,
                 "Network Transport": "udp",
