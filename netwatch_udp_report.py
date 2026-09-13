@@ -105,7 +105,8 @@ def _rows_from_csv(text: str) -> list[dict[str, object]]:
     for row in reader:
         if len(rows) >= _MAX_RECORDS:
             raise ValueError("UDP evidence exceeds the 10,000-record reporting limit")
-        rows.append(dict(row))
+        normalized_row: dict[str, object] = dict(row)
+        rows.append(normalized_row)
     return rows
 
 
