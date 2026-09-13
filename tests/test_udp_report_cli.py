@@ -24,6 +24,12 @@ def test_csv_reader_preserves_exported_fields() -> None:
     assert rows == [{"Status": "Closed", "Evidence Verdict": "port_closed"}]
 
 
+def test_csv_reader_rejects_extra_columns() -> None:
+    text = "Status,Evidence Verdict\nClosed,port_closed,unexpected\n"
+    with pytest.raises(ValueError, match="row 2 contains extra columns"):
+        netwatch_udp_report._load_rows(text, "csv")
+
+
 def test_summary_envelope_does_not_return_source_records() -> None:
     rows = [
         {
