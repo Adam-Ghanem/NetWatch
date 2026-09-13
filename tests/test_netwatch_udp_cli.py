@@ -115,6 +115,7 @@ def test_default_profiles_are_bounded_and_json_serialized(
     assert payload["items"][0]["Network Protocol"] == "dns"
     assert payload["items"][0]["Evidence Semantics"] == "response_observed"
     assert payload["items"][0]["Evidence Verdict"] == "service_identity_verified"
+    assert payload["items"][0]["Port State Verified"] is True
     assert payload["items"][0]["Service Identity Verified"] is True
     assert payload["items"][0]["Status"] == "Open"
     assert uuid.UUID(payload["items"][0]["Service Key"]).version == 5
@@ -205,6 +206,7 @@ def test_csv_output_is_machine_readable(monkeypatch, capsys) -> None:
         "Event Type": "udp_service_evidence",
         "Evidence Semantics": "response_observed",
         "Evidence Verdict": "service_identity_verified",
+        "Port State Verified": "True",
         "Service Identity Verified": "True",
         "Port": "53",
         "Protocol": "UDP",
@@ -256,6 +258,7 @@ def test_jsonl_output_emits_one_self_describing_record_per_row(monkeypatch, caps
         "service_identity_verified",
         "no_response",
     ]
+    assert [record["Port State Verified"] for record in records] == [True, False]
     assert [record["Service Identity Verified"] for record in records] == [True, False]
 
 
@@ -276,6 +279,49 @@ def test_unexpected_udp_response_does_not_verify_service_identity() -> None:
 
     assert record["Evidence Semantics"] == "response_observed"
     assert record["Evidence Verdict"] == "port_open_service_unverified"
+    assert record["Port State Verified"] is True
+    assert record["Service Identity Verified"] is False
+
+
+def test_silent_udp_result_does_not_verify_port_state() -> None:
+    row = {
+        **_rows()[0],
+        "Status": "Open|Filtered",
+        "Service Detection": "No UDP response",
+        "Service Product": "",
+        "Service Confidence": "Low",
+    }
+
+    record = netwatch_udp._normalized_rows(
+        "192.168.1.10",
+        [row],
+        observed_at="2026-09-13T05:00:00.000Z",
+        run_id="run-123",
+    )[0]
+
+    assert record["Evidence Verdict"] == "no_response"
+    assert record["Port State Verified"] is False
+    assert record["Service Identity Verified"] is False
+
+
+def test_explicit_closed_result_verifies_port_state() -> None:
+    row = {
+        **_rows()[0],
+        "Status": "Closed",
+        "Service Detection": "ICMP port unreachable",
+        "Service Product": "",
+        "Service Confidence": "High",
+    }
+
+    record = netwatch_udp._normalized_rows(
+        "192.168.1.10",
+        [row],
+        observed_at="2026-09-13T05:00:00.000Z",
+        run_id="run-123",
+    )[0]
+
+    assert record["Evidence Verdict"] == "port_closed"
+    assert record["Port State Verified"] is True
     assert record["Service Identity Verified"] is False
 
 
@@ -283,6 +329,7 @@ def test_scanner_cannot_override_evidence_verdict() -> None:
     row = {
         **_rows()[0],
         "Evidence Verdict": "spoofed",
+        "Port State Verified": False,
         "Service Identity Verified": False,
     }
 
@@ -294,6 +341,7 @@ def test_scanner_cannot_override_evidence_verdict() -> None:
     )[0]
 
     assert record["Evidence Verdict"] == "service_identity_verified"
+    assert record["Port State Verified"] is True
     assert record["Service Identity Verified"] is True
 
 
