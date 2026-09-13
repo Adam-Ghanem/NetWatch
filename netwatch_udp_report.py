@@ -102,10 +102,14 @@ def _rows_from_csv(text: str) -> list[dict[str, object]]:
     if reader.fieldnames is None:
         raise ValueError("UDP evidence CSV must contain a header row")
     rows: list[dict[str, object]] = []
-    for row in reader:
+    for row_number, row in enumerate(reader, start=2):
         if len(rows) >= _MAX_RECORDS:
             raise ValueError("UDP evidence exceeds the 10,000-record reporting limit")
-        normalized_row: dict[str, object] = dict(row)
+        if None in row:
+            raise ValueError(f"UDP evidence CSV row {row_number} contains extra columns")
+        normalized_row: dict[str, object] = {
+            key: value for key, value in row.items() if key is not None
+        }
         rows.append(normalized_row)
     return rows
 
