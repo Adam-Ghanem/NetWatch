@@ -212,6 +212,46 @@ def _normalized_rows(
     return normalized
 
 
+def _run_summary(rows: list[dict[str, object]]) -> dict[str, object]:
+    status_counts: dict[str, int] = {}
+    verdict_counts: dict[str, int] = {}
+    verified_port_states = 0
+    verified_service_identities = 0
+    responses_observed = 0
+    response_bytes_total = 0
+
+    for row in rows:
+        status = str(row.get("Status") or "Unknown").strip() or "Unknown"
+        verdict = str(row.get("Evidence Verdict") or "unknown").strip() or "unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
+        verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
+
+        if row.get("Port State Verified") is True:
+            verified_port_states += 1
+        if row.get("Service Identity Verified") is True:
+            verified_service_identities += 1
+        if row.get("Evidence Semantics") == "response_observed":
+            responses_observed += 1
+
+        response_bytes = row.get("UDP Response Bytes")
+        if (
+            isinstance(response_bytes, int)
+            and not isinstance(response_bytes, bool)
+            and response_bytes >= 0
+        ):
+            response_bytes_total += response_bytes
+
+    return {
+        "records": len(rows),
+        "verified_port_states": verified_port_states,
+        "verified_service_identities": verified_service_identities,
+        "responses_observed": responses_observed,
+        "udp_response_bytes_total": response_bytes_total,
+        "status_counts": status_counts,
+        "verdict_counts": verdict_counts,
+    }
+
+
 def _csv_text(rows: list[dict[str, object]]) -> str:
     if not rows:
         return ""
@@ -265,6 +305,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "target": args.target,
                 "address_family": _address_family(args.target),
                 "count": len(normalized_rows),
+                "summary": _run_summary(normalized_rows),
                 "items": normalized_rows,
             },
             sys.stdout,
