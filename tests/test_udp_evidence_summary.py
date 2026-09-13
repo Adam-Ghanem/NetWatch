@@ -51,6 +51,9 @@ def test_run_summary_aggregates_evidence_without_payload_material() -> None:
         "verified_service_identities": 1,
         "responses_observed": 2,
         "udp_response_bytes_total": 101,
+        "ambiguous_port_states": 1,
+        "open_ports_with_unverified_service_identity": 1,
+        "blocked_records": 0,
         "status_counts": {
             "Open": 2,
             "Open|Filtered": 1,
@@ -89,6 +92,9 @@ def test_run_summary_tolerates_missing_or_non_numeric_response_size() -> None:
 
     assert summary["records"] == 2
     assert summary["udp_response_bytes_total"] == 0
+    assert summary["ambiguous_port_states"] == 0
+    assert summary["open_ports_with_unverified_service_identity"] == 1
+    assert summary["blocked_records"] == 1
     assert summary["status_counts"] == {"Blocked": 1, "Open": 1}
     assert summary["verdict_counts"] == {
         "validation_blocked": 1,
