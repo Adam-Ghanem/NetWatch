@@ -34,6 +34,7 @@ _EVIDENCE_METADATA_FIELDS = frozenset(
         "Event Type",
         "Evidence Semantics",
         "Evidence Verdict",
+        "Port State Verified",
         "Service Identity Verified",
     }
 )
@@ -129,6 +130,10 @@ def _evidence_verdict(status: object, detection: object) -> str:
     return "port_open_evidence_unclassified"
 
 
+def _port_state_verified(status: object) -> bool:
+    return str(status or "").strip() in {"Open", "Closed"}
+
+
 def _network_protocol(service: object) -> str:
     protocol = str(service or "").strip().lower()
     return protocol if protocol in _ALLOWED_SERVICES else "unknown"
@@ -199,6 +204,7 @@ def _normalized_rows(
                 "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
                 "Evidence Verdict": verdict,
+                "Port State Verified": _port_state_verified(row.get("Status")),
                 "Service Identity Verified": verdict == "service_identity_verified",
                 **scanner_evidence,
             }
