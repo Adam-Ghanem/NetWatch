@@ -219,6 +219,9 @@ def _run_summary(rows: list[dict[str, object]]) -> dict[str, object]:
     verified_service_identities = 0
     responses_observed = 0
     response_bytes_total = 0
+    ambiguous_port_states = 0
+    open_ports_with_unverified_service_identity = 0
+    blocked_records = 0
 
     for row in rows:
         status = str(row.get("Status") or "Unknown").strip() or "Unknown"
@@ -232,6 +235,12 @@ def _run_summary(rows: list[dict[str, object]]) -> dict[str, object]:
             verified_service_identities += 1
         if row.get("Evidence Semantics") == "response_observed":
             responses_observed += 1
+        if status == "Open|Filtered":
+            ambiguous_port_states += 1
+        if status == "Open" and row.get("Service Identity Verified") is not True:
+            open_ports_with_unverified_service_identity += 1
+        if status == "Blocked":
+            blocked_records += 1
 
         response_bytes = row.get("UDP Response Bytes")
         if (
@@ -247,6 +256,9 @@ def _run_summary(rows: list[dict[str, object]]) -> dict[str, object]:
         "verified_service_identities": verified_service_identities,
         "responses_observed": responses_observed,
         "udp_response_bytes_total": response_bytes_total,
+        "ambiguous_port_states": ambiguous_port_states,
+        "open_ports_with_unverified_service_identity": open_ports_with_unverified_service_identity,
+        "blocked_records": blocked_records,
         "status_counts": status_counts,
         "verdict_counts": verdict_counts,
     }
