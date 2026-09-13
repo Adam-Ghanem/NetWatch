@@ -5,7 +5,7 @@ import hashlib
 import ipaddress
 import struct
 
-_PROTOCOL_NUMBERS = {"TCP": 6, "UDP": 17}
+_PROTOCOL_NUMBERS = {"TCP": 6, "UDP": 17, "SCTP": 132}
 
 
 def community_flow_id(
@@ -17,11 +17,16 @@ def community_flow_id(
     *,
     seed: int = 0,
 ) -> str:
-    """Return a Community ID v1 hash for a TCP/UDP flow tuple.
+    """Return a Community ID v1 hash for a port-bearing IP flow tuple.
 
-    This intentionally supports only TCP and UDP because NetWatch flow summaries
-    do not currently retain the ICMP type/code fields required for standards-
-    compliant ICMP Community IDs. Invalid or unsupported tuples return an empty
+    TCP, UDP, and SCTP are supported because Community ID v1 hashes those
+    protocols using the same address/port tuple shape. NetWatch does not yet
+    emit SCTP flow summaries, but accepting SCTP here keeps the interoperable
+    identifier helper standards-compatible for future bounded analyzers.
+
+    ICMP/ICMPv6 intentionally remain unsupported because standards-compliant
+    Community IDs require type/code endpoint mapping that NetWatch flow records
+    do not currently retain. Invalid or unsupported tuples return an empty
     string rather than producing a misleading identifier.
     """
 

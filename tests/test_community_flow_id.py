@@ -26,6 +26,14 @@ def test_udp_ipv6_is_supported_and_direction_independent():
     assert forward.startswith("1:")
 
 
+def test_sctp_is_supported_and_direction_independent():
+    forward = community_flow_id("SCTP", "10.0.0.1", "10.0.0.2", 5000, 5001)
+    reverse = community_flow_id("sctp", "10.0.0.2", "10.0.0.1", 5001, 5000)
+
+    assert forward == "1:WwajlBibC4b9CuV+rHnHjKoJONc="
+    assert reverse == forward
+
+
 def test_unsupported_or_invalid_tuples_fail_closed():
     assert community_flow_id("ICMP", "10.0.0.1", "10.0.0.2", 0, 0) == ""
     assert community_flow_id("TCP", "not-an-ip", "10.0.0.2", 10, 20) == ""
