@@ -66,6 +66,7 @@ def test_dns_response_marks_service_open_and_retains_only_metadata(monkeypatch):
         "Service": "DNS",
         "Status": "Open",
         "Response Time (ms)": response_time,
+        "UDP Response Bytes": len(response),
         "Service Detection": "DNS response",
         "Service Product": "DNS",
         "Service Version": "",
