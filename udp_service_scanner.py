@@ -62,6 +62,7 @@ def _base_row(port: int, service: str) -> dict[str, object]:
         "Service": service,
         "Status": "Open|Filtered",
         "Response Time (ms)": "-",
+        "UDP Response Bytes": 0,
         "Service Detection": "No UDP response",
         "Service Product": "",
         "Service Version": "",
@@ -162,6 +163,7 @@ def _probe_one(
         return row
 
     row["Response Time (ms)"] = round((time.perf_counter() - started) * 1000, 2)
+    row["UDP Response Bytes"] = len(response)
     if profile_name == "dns":
         valid, version, metadata = _classify_dns_response(response, correlation)
     else:
@@ -219,6 +221,7 @@ def scan_udp_services(
                 "Service": "Validation",
                 "Status": "Blocked",
                 "Response Time (ms)": "-",
+                "UDP Response Bytes": 0,
                 "Service Detection": "Target validation",
                 "Service Product": "",
                 "Service Version": "",
