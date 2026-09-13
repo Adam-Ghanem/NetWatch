@@ -33,6 +33,8 @@ _EVIDENCE_METADATA_FIELDS = frozenset(
         "Evidence Source",
         "Event Type",
         "Evidence Semantics",
+        "Evidence Verdict",
+        "Service Identity Verified",
     }
 )
 
@@ -105,6 +107,28 @@ def _evidence_semantics(status: object) -> str:
     }.get(str(status), "unknown")
 
 
+def _evidence_verdict(status: object, detection: object) -> str:
+    normalized_status = str(status or "").strip()
+    normalized_detection = str(detection or "").strip()
+    if normalized_status == "Blocked":
+        return "validation_blocked"
+    if normalized_status == "Closed":
+        return "port_closed"
+    if normalized_status == "Open|Filtered":
+        return "no_response"
+    if normalized_status != "Open":
+        return "unknown"
+    if normalized_detection in {
+        "DNS response",
+        "NTP response",
+        "NTP Kiss-o'-Death response",
+    }:
+        return "service_identity_verified"
+    if normalized_detection == "Unexpected UDP response":
+        return "port_open_service_unverified"
+    return "port_open_evidence_unclassified"
+
+
 def _network_protocol(service: object) -> str:
     protocol = str(service or "").strip().lower()
     return protocol if protocol in _ALLOWED_SERVICES else "unknown"
@@ -148,6 +172,7 @@ def _normalized_rows(
     for row in rows:
         protocol = _network_protocol(row.get("Service"))
         port = row.get("Port")
+        verdict = _evidence_verdict(row.get("Status"), row.get("Service Detection"))
         scanner_evidence = {
             key: value for key, value in row.items() if key not in _EVIDENCE_METADATA_FIELDS
         }
@@ -173,6 +198,8 @@ def _normalized_rows(
                 "Evidence Source": "active_udp_probe",
                 "Event Type": "udp_service_evidence",
                 "Evidence Semantics": _evidence_semantics(row.get("Status")),
+                "Evidence Verdict": verdict,
+                "Service Identity Verified": verdict == "service_identity_verified",
                 **scanner_evidence,
             }
         )
