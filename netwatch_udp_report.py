@@ -20,9 +20,16 @@ _FORMATS = ("auto", "json", "jsonl", "csv")
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="netwatch-udp-report",
-        description="Summarize previously exported NetWatch UDP evidence. Input is bounded.",
+        description=(
+            "Summarize previously exported NetWatch UDP evidence. Input is bounded."
+        ),
     )
-    parser.add_argument("input", nargs="?", default="-", help="Evidence file, or '-' for stdin")
+    parser.add_argument(
+        "input",
+        nargs="?",
+        default="-",
+        help="Evidence file, or '-' for stdin",
+    )
     parser.add_argument(
         "--format",
         choices=_FORMATS,
@@ -117,7 +124,9 @@ def _detect_format(text: str) -> str:
     if stripped.startswith("["):
         return "json"
     if stripped.startswith("{"):
-        first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+        first_line = next(
+            (line.strip() for line in text.splitlines() if line.strip()), ""
+        )
         try:
             json.loads(text)
         except json.JSONDecodeError:
