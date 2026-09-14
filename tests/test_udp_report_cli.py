@@ -74,8 +74,6 @@ def test_json_envelope_requires_items() -> None:
 
 
 def test_record_limit_is_enforced() -> None:
-    rows: list[dict[str, object]] = [
-        {} for _ in range(netwatch_udp_report._MAX_RECORDS + 1)
-    ]
+    rows: list[dict[str, object]] = [{} for _ in range(netwatch_udp_report._MAX_RECORDS + 1)]
     with pytest.raises(ValueError, match="10,000-record"):
         netwatch_udp_report._validate_rows(rows)
