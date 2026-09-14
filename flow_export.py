@@ -9,6 +9,8 @@ import pandas as pd
 from export_utils import safe_csv_bytes
 
 FLOW_EXPORT_MAX_ROWS = 1000
+FLOW_EXPORT_SCHEMA_VERSION = "netwatch.flow.v1"
+FLOW_EXPORT_EVIDENCE_SOURCE = "netwatch.flow_analysis"
 
 _SCALAR_FIELDS = (
     "flow_id",
@@ -33,6 +35,8 @@ _SCALAR_FIELDS = (
 )
 _ENDPOINT_FIELDS = ("endpoint_a", "endpoint_b", "originator", "responder")
 _CSV_COLUMNS = (
+    "schema_version",
+    "evidence_source",
     "flow_id",
     "community_id",
     "address_family",
@@ -102,6 +106,8 @@ def _address_family(*endpoints: dict[str, object]) -> str:
 
 def _metadata(flow: dict[str, object]) -> dict[str, object]:
     exported = {field: flow.get(field) for field in _SCALAR_FIELDS}
+    exported["schema_version"] = FLOW_EXPORT_SCHEMA_VERSION
+    exported["evidence_source"] = FLOW_EXPORT_EVIDENCE_SOURCE
     endpoints: dict[str, dict[str, object]] = {}
     for field in _ENDPOINT_FIELDS:
         endpoints[field] = _endpoint(flow.get(field))
@@ -132,6 +138,8 @@ def export_flows_json(
     """Serialize canonical flow metadata without exporting packet payload fields."""
     rows = _bounded_metadata(flows, limit=limit)
     payload = {
+        "schema_version": FLOW_EXPORT_SCHEMA_VERSION,
+        "evidence_source": FLOW_EXPORT_EVIDENCE_SOURCE,
         "count": len(rows),
         "payload_retained": False,
         "flows": rows,
@@ -168,7 +176,11 @@ def export_flows_csv(
     rows = _bounded_metadata(flows, limit=limit)
     flattened: list[dict[str, object]] = []
     for row in rows:
-        item = {field: row.get(field) for field in _SCALAR_FIELDS}
+        item = {
+            "schema_version": row.get("schema_version"),
+            "evidence_source": row.get("evidence_source"),
+            **{field: row.get(field) for field in _SCALAR_FIELDS},
+        }
         for field in _ENDPOINT_FIELDS:
             endpoint = _endpoint(row.get(field))
             item[f"{field}_ip"] = endpoint["ip"]
