@@ -1,6 +1,7 @@
 from pathlib import Path
 
 DASHBOARD = Path("frontend/tls-investigator.html")
+MAIN_DASHBOARD = Path("frontend/index.html")
 SCRIPT = Path("frontend/tls-investigator.js")
 
 
@@ -71,3 +72,11 @@ def test_tls_investigator_dashboard_persists_shareable_scope_without_secrets() -
         javascript.index("function syncScopeToUrl") : javascript.index("function labelize")
     ]
     assert "netwatchApiKey" not in sync_scope
+
+
+def test_primary_dashboard_links_tls_investigator_without_serializing_credentials() -> None:
+    html = MAIN_DASHBOARD.read_text(encoding="utf-8")
+
+    assert 'href="/tls-investigator.html"' in html
+    assert '>TLS investigator<' in html
+    assert "netwatchApiKey" not in html
