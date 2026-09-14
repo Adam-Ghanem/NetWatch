@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from service_evidence import (
-    SERVICE_EVIDENCE_SOURCE,
     SERVICE_EVIDENCE_SCHEMA_VERSION,
+    SERVICE_EVIDENCE_SOURCE,
     normalize_service_evidence,
 )
 
