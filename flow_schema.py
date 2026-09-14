@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 FLOW_SCHEMA_VERSION = "netwatch.flow.v1"
 _SCHEMA_DIR = Path(__file__).resolve().parent / "schemas"
@@ -12,7 +12,7 @@ _SCHEMA_FILES = {
 }
 
 
-def load_flow_schema(format_name: Literal["json", "ndjson"]) -> dict[str, object]:
+def load_flow_schema(format_name: Literal["json", "ndjson"]) -> dict[str, Any]:
     """Load the machine-readable schema for a supported NetWatch flow export format."""
     schema_path = _SCHEMA_DIR / _SCHEMA_FILES[format_name]
     with schema_path.open("r", encoding="utf-8") as handle:
