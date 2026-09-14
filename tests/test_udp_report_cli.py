@@ -62,7 +62,9 @@ def test_summary_envelope_does_not_return_source_records() -> None:
     payload = netwatch_udp_report._summary_envelope(rows)
     assert payload["schema"] == "netwatch.udp-service-evidence-summary"
     assert payload["count"] == 1
-    assert payload["summary"]["verified_port_states"] == 1
+    summary = payload["summary"]
+    assert isinstance(summary, dict)
+    assert summary["verified_port_states"] == 1
     assert "items" not in payload
 
 
@@ -72,6 +74,8 @@ def test_json_envelope_requires_items() -> None:
 
 
 def test_record_limit_is_enforced() -> None:
-    rows = [{} for _ in range(netwatch_udp_report._MAX_RECORDS + 1)]
+    rows: list[dict[str, object]] = [
+        {} for _ in range(netwatch_udp_report._MAX_RECORDS + 1)
+    ]
     with pytest.raises(ValueError, match="10,000-record"):
         netwatch_udp_report._validate_rows(rows)
