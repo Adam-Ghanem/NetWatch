@@ -10,10 +10,10 @@ SERVICE_EVIDENCE_SOURCE = "netwatch.service_observation"
 
 def _required_int(row: Mapping[str, object], field: str) -> int:
     value = row.get(field)
-    if isinstance(value, bool):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str, bytes, bytearray)):
         raise ValueError(f"{field} must be an integer")
     try:
-        return int(value)  # type: ignore[arg-type]
+        return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field} must be an integer") from exc
 
