@@ -20,22 +20,14 @@ _FORMATS = ("auto", "json", "jsonl", "csv")
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="netwatch-udp-report",
-        description=(
-            "Summarize previously exported NetWatch UDP evidence without sending network traffic. "
-            "Input is bounded to 5 MiB and 10,000 records."
-        ),
+        description="Summarize previously exported NetWatch UDP evidence. Input is bounded.",
     )
-    parser.add_argument(
-        "input",
-        nargs="?",
-        default="-",
-        help="Evidence file to summarize, or '-' to read stdin (default: stdin)",
-    )
+    parser.add_argument("input", nargs="?", default="-", help="Evidence file, or '-' for stdin")
     parser.add_argument(
         "--format",
         choices=_FORMATS,
         default="auto",
-        help="Input format; auto detects NetWatch JSON, JSONL, or CSV (default: auto)",
+        help="Input format; auto detects JSON, JSONL, or CSV",
     )
     return parser
 
@@ -98,19 +90,25 @@ def _rows_from_jsonl(text: str) -> list[dict[str, object]]:
 
 
 def _rows_from_csv(text: str) -> list[dict[str, object]]:
-    reader = csv.DictReader(io.StringIO(text))
-    if reader.fieldnames is None:
+    reader = csv.reader(io.StringIO(text))
+    try:
+        fieldnames = next(reader)
+    except StopIteration as exc:
+        raise ValueError("UDP evidence CSV must contain a header row") from exc
+    if not fieldnames:
         raise ValueError("UDP evidence CSV must contain a header row")
+    if len(set(fieldnames)) != len(fieldnames):
+        raise ValueError("UDP evidence CSV header contains duplicate columns")
+
     rows: list[dict[str, object]] = []
-    for row_number, row in enumerate(reader, start=2):
+    for row_number, values in enumerate(reader, start=2):
         if len(rows) >= _MAX_RECORDS:
             raise ValueError("UDP evidence exceeds the 10,000-record reporting limit")
-        if None in row:
-            raise ValueError(f"UDP evidence CSV row {row_number} contains extra columns")
-        normalized_row: dict[str, object] = {
-            key: value for key, value in row.items() if key is not None
-        }
-        rows.append(normalized_row)
+        if len(values) != len(fieldnames):
+            raise ValueError(
+                f"UDP evidence CSV row {row_number} contains an unexpected number of columns"
+            )
+        rows.append(dict(zip(fieldnames, values)))
     return rows
 
 
