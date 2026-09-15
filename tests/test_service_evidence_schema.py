@@ -4,9 +4,11 @@ from pathlib import Path
 import pytest
 
 from service_evidence import (
+    MAX_SERVICE_EVIDENCE_RECORDS,
     SERVICE_EVIDENCE_SCHEMA_VERSION,
     SERVICE_EVIDENCE_SOURCE,
     normalize_service_evidence,
+    normalize_service_evidence_rows,
 )
 
 SCHEMA = Path("schemas/netwatch-service-v1.schema.json")
@@ -52,6 +54,31 @@ def test_normalize_service_evidence_rejects_invalid_identity_fields() -> None:
     bad_port["port"] = 70000
     with pytest.raises(ValueError, match="port"):
         normalize_service_evidence(bad_port)
+
+
+def test_normalize_service_evidence_rejects_boolean_numeric_fields() -> None:
+    bad_response_time = _finding()
+    bad_response_time["response_time_ms"] = True
+
+    with pytest.raises(ValueError, match="response_time_ms"):
+        normalize_service_evidence(bad_response_time)
+
+
+def test_service_evidence_batch_is_bounded_and_preserves_order() -> None:
+    rows = [_finding("192.0.2.10"), _finding("2001:db8::10"), _finding("192.0.2.11")]
+
+    normalized = normalize_service_evidence_rows(rows, limit=2)
+
+    assert [row["ip_address"] for row in normalized] == ["192.0.2.10", "2001:db8::10"]
+    assert all(row["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION for row in normalized)
+    assert all(row["payload_retained"] is False for row in normalized)
+
+
+def test_service_evidence_batch_rejects_unbounded_limits() -> None:
+    with pytest.raises(ValueError, match="limit"):
+        normalize_service_evidence_rows([], limit=0)
+    with pytest.raises(ValueError, match="limit"):
+        normalize_service_evidence_rows([], limit=MAX_SERVICE_EVIDENCE_RECORDS + 1)
 
 
 def test_machine_readable_schema_covers_normalized_service_evidence() -> None:
