@@ -155,8 +155,17 @@ def export_service_evidence_csv(
     """Serialize bounded service evidence as spreadsheet-safe UTF-8 CSV."""
     records = normalize_service_evidence_rows(rows, limit=limit)
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=SERVICE_EVIDENCE_FIELDS, extrasaction="ignore")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=SERVICE_EVIDENCE_FIELDS,
+        extrasaction="ignore",
+    )
     writer.writeheader()
     for record in records:
-        writer.writerow({field: _safe_csv_cell(record.get(field)) for field in SERVICE_EVIDENCE_FIELDS})
+        writer.writerow(
+            {
+                field: _safe_csv_cell(record.get(field))
+                for field in SERVICE_EVIDENCE_FIELDS
+            }
+        )
     return output.getvalue()
