@@ -1,21 +1,38 @@
 from __future__ import annotations
 
 import ipaddress
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 SERVICE_EVIDENCE_SCHEMA_VERSION = "netwatch.service.v1"
 SERVICE_EVIDENCE_SOURCE = "netwatch.service_observation"
+MAX_SERVICE_EVIDENCE_RECORDS = 1_000
+_NUMERIC_TYPES = (int, float, str, bytes, bytearray)
 
 
 def _required_int(row: Mapping[str, object], field: str) -> int:
     value = row.get(field)
-    if isinstance(value, bool) or not isinstance(value, (int, float, str, bytes, bytearray)):
+    if isinstance(value, bool) or not isinstance(value, _NUMERIC_TYPES):
         raise ValueError(f"{field} must be an integer")
     try:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field} must be an integer") from exc
+
+
+def _optional_float(row: Mapping[str, object], field: str) -> float | None:
+    value = row.get(field)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, _NUMERIC_TYPES):
+        raise ValueError(f"{field} must be numeric or null")
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be numeric or null") from exc
+    if result < 0:
+        raise ValueError(f"{field} must be non-negative")
+    return result
 
 
 def _text(row: Mapping[str, object], field: str) -> str:
@@ -39,16 +56,6 @@ def normalize_service_evidence(row: Mapping[str, object]) -> dict[str, Any]:
     if scan_run_id < 0:
         raise ValueError("scan_run_id must be non-negative")
 
-    response_time_value = row.get("response_time_ms")
-    response_time_ms = None
-    if response_time_value is not None:
-        try:
-            response_time_ms = float(response_time_value)  # type: ignore[arg-type]
-        except (TypeError, ValueError) as exc:
-            raise ValueError("response_time_ms must be numeric or null") from exc
-        if response_time_ms < 0:
-            raise ValueError("response_time_ms must be non-negative")
-
     return {
         "schema_version": SERVICE_EVIDENCE_SCHEMA_VERSION,
         "evidence_source": SERVICE_EVIDENCE_SOURCE,
@@ -66,5 +73,22 @@ def normalize_service_evidence(row: Mapping[str, object]) -> dict[str, Any]:
         "service_confidence": _text(row, "service_confidence"),
         "status": _text(row, "status"),
         "risk": _text(row, "risk"),
-        "response_time_ms": response_time_ms,
+        "response_time_ms": _optional_float(row, "response_time_ms"),
     }
+
+
+def normalize_service_evidence_rows(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    limit: int = MAX_SERVICE_EVIDENCE_RECORDS,
+) -> list[dict[str, Any]]:
+    """Normalize a bounded service-evidence batch for export/API integration."""
+    if isinstance(limit, bool) or not 1 <= limit <= MAX_SERVICE_EVIDENCE_RECORDS:
+        raise ValueError(f"limit must be between 1 and {MAX_SERVICE_EVIDENCE_RECORDS}")
+
+    normalized: list[dict[str, Any]] = []
+    for row in rows:
+        if len(normalized) >= limit:
+            break
+        normalized.append(normalize_service_evidence(row))
+    return normalized
