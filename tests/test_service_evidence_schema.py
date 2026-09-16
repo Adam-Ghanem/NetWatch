@@ -97,9 +97,7 @@ def test_service_evidence_batch_rejects_unbounded_limits() -> None:
 
 def test_service_evidence_json_export_is_bounded_and_metadata_only() -> None:
     payload = json.loads(
-        export_service_evidence_json(
-            [_finding(), _finding("2001:db8::10")], limit=1
-        )
+        export_service_evidence_json([_finding(), _finding("2001:db8::10")], limit=1)
     )
 
     assert payload["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION
