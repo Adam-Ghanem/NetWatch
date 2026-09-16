@@ -165,6 +165,9 @@ def export_service_evidence_csv(
     writer.writeheader()
     for record in records:
         writer.writerow(
-            {field: _safe_csv_cell(record.get(field)) for field in SERVICE_EVIDENCE_FIELDS}
+            {
+                field: _safe_csv_cell(record.get(field))
+                for field in SERVICE_EVIDENCE_FIELDS
+            }
         )
     return output.getvalue()
