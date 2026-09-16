@@ -68,9 +68,7 @@ def _safe_csv_cell(value: object) -> object:
     if not isinstance(value, str):
         return value
     candidate = value.lstrip()
-    if value.startswith(_CSV_CONTROL_PREFIXES) or candidate.startswith(
-        _CSV_FORMULA_PREFIXES
-    ):
+    if value.startswith(_CSV_CONTROL_PREFIXES) or candidate.startswith(_CSV_FORMULA_PREFIXES):
         return "'" + value
     return value
 
@@ -163,11 +161,8 @@ def export_service_evidence_csv(
         extrasaction="ignore",
     )
     writer.writeheader()
+    fields = SERVICE_EVIDENCE_FIELDS
     for record in records:
-        writer.writerow(
-            {
-                field: _safe_csv_cell(record.get(field))
-                for field in SERVICE_EVIDENCE_FIELDS
-            }
-        )
+        safe_record = {field: _safe_csv_cell(record.get(field)) for field in fields}
+        writer.writerow(safe_record)
     return output.getvalue()
