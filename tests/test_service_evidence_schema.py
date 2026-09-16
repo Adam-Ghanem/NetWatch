@@ -70,21 +70,12 @@ def test_normalize_service_evidence_rejects_boolean_numeric_fields() -> None:
 
 
 def test_service_evidence_batch_is_bounded_and_preserves_order() -> None:
-    rows = [
-        _finding("192.0.2.10"),
-        _finding("2001:db8::10"),
-        _finding("192.0.2.11"),
-    ]
+    rows = [_finding("192.0.2.10"), _finding("2001:db8::10"), _finding("192.0.2.11")]
 
     normalized = normalize_service_evidence_rows(rows, limit=2)
 
-    assert [row["ip_address"] for row in normalized] == [
-        "192.0.2.10",
-        "2001:db8::10",
-    ]
-    assert all(
-        row["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION for row in normalized
-    )
+    assert [row["ip_address"] for row in normalized] == ["192.0.2.10", "2001:db8::10"]
+    assert all(row["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION for row in normalized)
     assert all(row["payload_retained"] is False for row in normalized)
 
 
@@ -128,10 +119,7 @@ def test_machine_readable_schema_covers_normalized_service_evidence() -> None:
     record = normalize_service_evidence(_finding())
 
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
-    assert (
-        schema["properties"]["schema_version"]["const"]
-        == SERVICE_EVIDENCE_SCHEMA_VERSION
-    )
+    assert schema["properties"]["schema_version"]["const"] == SERVICE_EVIDENCE_SCHEMA_VERSION
     assert schema["properties"]["evidence_source"]["const"] == SERVICE_EVIDENCE_SOURCE
     assert schema["properties"]["payload_retained"]["const"] is False
     assert set(schema["required"]).issubset(record)
