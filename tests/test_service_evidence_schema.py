@@ -110,7 +110,7 @@ def test_service_evidence_json_export_is_bounded_and_metadata_only() -> None:
 
 def test_service_evidence_csv_export_is_stable_and_formula_safe() -> None:
     finding = _finding()
-    finding["service_product"] = "=HYPERLINK(\"https://example.invalid\")"
+    finding["service_product"] = '=HYPERLINK("https://example.invalid")'
 
     exported = export_service_evidence_csv([finding])
     rows = list(csv.DictReader(io.StringIO(exported)))
