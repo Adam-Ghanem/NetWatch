@@ -68,9 +68,7 @@ def _safe_csv_cell(value: object) -> object:
     if not isinstance(value, str):
         return value
     candidate = value.lstrip()
-    if value.startswith(_CSV_CONTROL_PREFIXES) or candidate.startswith(
-        _CSV_FORMULA_PREFIXES
-    ):
+    if value.startswith(_CSV_CONTROL_PREFIXES) or candidate.startswith(_CSV_FORMULA_PREFIXES):
         return "'" + value
     return value
 
