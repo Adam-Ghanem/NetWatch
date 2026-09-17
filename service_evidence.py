@@ -156,9 +156,10 @@ def export_service_evidence_ndjson(
     records = normalize_service_evidence_rows(rows, limit=limit)
     if not records:
         return ""
-    return "\n".join(
-        json.dumps(record, separators=(",", ":"), sort_keys=True) for record in records
-    ) + "\n"
+    return (
+        "\n".join(json.dumps(record, separators=(",", ":"), sort_keys=True) for record in records)
+        + "\n"
+    )
 
 
 def export_service_evidence_csv(
