@@ -34,6 +34,33 @@ SERVICE_EVIDENCE_FIELDS = (
 )
 
 
+def service_evidence_contract_manifest() -> dict[str, Any]:
+    """Describe the stable service-evidence interoperability boundary.
+
+    The manifest is intentionally static and network-free so downstream SIEM,
+    ETL, and observability integrations can discover version, formats, bounds,
+    and privacy guarantees without parsing example records.
+    """
+    return {
+        "schema_version": SERVICE_EVIDENCE_SCHEMA_VERSION,
+        "evidence_source": SERVICE_EVIDENCE_SOURCE,
+        "schema_path": "schemas/netwatch-service-v1.schema.json",
+        "formats": ["json", "ndjson", "csv"],
+        "max_records": MAX_SERVICE_EVIDENCE_RECORDS,
+        "fields": list(SERVICE_EVIDENCE_FIELDS),
+        "compatibility": {
+            "major_version": 1,
+            "unknown_fields": "reject",
+            "field_order_stable_for_csv": True,
+        },
+        "privacy": {
+            "payload_retained": False,
+            "packet_payload_fields": False,
+            "credential_fields": False,
+        },
+    }
+
+
 def _required_int(row: Mapping[str, object], field: str) -> int:
     value = row.get(field)
     if isinstance(value, bool) or not isinstance(value, _NUMERIC_TYPES):
