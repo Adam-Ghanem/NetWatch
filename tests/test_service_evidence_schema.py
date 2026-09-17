@@ -12,6 +12,7 @@ from service_evidence import (
     SERVICE_EVIDENCE_SOURCE,
     export_service_evidence_csv,
     export_service_evidence_json,
+    export_service_evidence_ndjson,
     normalize_service_evidence,
     normalize_service_evidence_rows,
 )
@@ -97,6 +98,20 @@ def test_service_evidence_json_export_is_bounded_and_metadata_only() -> None:
     assert payload["items"][0]["ip_address"] == "192.0.2.10"
     assert "payload" not in payload["items"][0]
     assert "raw" not in payload["items"][0]
+
+
+def test_service_evidence_ndjson_export_is_bounded_and_line_delimited() -> None:
+    rows = [_finding(), _finding("2001:db8::10")]
+    exported = export_service_evidence_ndjson(rows, limit=2)
+    records = [json.loads(line) for line in exported.splitlines()]
+
+    assert len(records) == 2
+    assert records[0]["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION
+    assert records[0]["payload_retained"] is False
+    assert records[1]["address_family"] == "ipv6"
+    assert "payload" not in records[0]
+    assert exported.endswith("\n")
+    assert export_service_evidence_ndjson([]) == ""
 
 
 def test_service_evidence_csv_export_is_stable_and_formula_safe() -> None:
