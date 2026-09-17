@@ -147,6 +147,20 @@ def export_service_evidence_json(
     )
 
 
+def export_service_evidence_ndjson(
+    rows: Iterable[Mapping[str, object]],
+    *,
+    limit: int = MAX_SERVICE_EVIDENCE_RECORDS,
+) -> str:
+    """Serialize bounded service evidence as one stable JSON record per line."""
+    records = normalize_service_evidence_rows(rows, limit=limit)
+    if not records:
+        return ""
+    return "\n".join(
+        json.dumps(record, separators=(",", ":"), sort_keys=True) for record in records
+    ) + "\n"
+
+
 def export_service_evidence_csv(
     rows: Iterable[Mapping[str, object]],
     *,
