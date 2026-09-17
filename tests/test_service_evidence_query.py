@@ -75,4 +75,4 @@ def test_export_recent_service_evidence_rejects_unbounded_or_unknown_output() ->
     with pytest.raises(ValueError, match="limit"):
         service_evidence_query.export_recent_service_evidence(limit=1001)
     with pytest.raises(ValueError, match="output_format"):
-        service_evidence_query.export_recent_service_evidence(output_format="xml")  # type: ignore[arg-type]
+        service_evidence_query.export_recent_service_evidence(output_format="xml")
