@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 
-from service_evidence import MAX_SERVICE_EVIDENCE_RECORDS
+from service_evidence import MAX_SERVICE_EVIDENCE_RECORDS, service_evidence_contract_manifest
 from service_evidence_query import export_recent_service_evidence
 
 
@@ -40,6 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Restrict output to one persisted IPv4 or IPv6 address.",
     )
+    parser.add_argument(
+        "--describe-contract",
+        action="store_true",
+        help="Print the machine-readable service evidence contract and exit without querying data.",
+    )
     return parser
 
 
@@ -48,6 +54,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.scan_run_id is not None and args.scan_run_id < 1:
         parser.error("--scan-run-id must be a positive integer")
+
+    if args.describe_contract:
+        sys.stdout.write(json.dumps(service_evidence_contract_manifest(), sort_keys=True) + "\n")
+        return 0
 
     try:
         output = export_recent_service_evidence(
