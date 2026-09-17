@@ -69,6 +69,20 @@ def test_export_recent_service_evidence_supports_stable_csv(monkeypatch) -> None
     assert rows[0]["payload_retained"] == "False"
 
 
+def test_export_recent_service_evidence_supports_ndjson(monkeypatch) -> None:
+    monkeypatch.setattr(
+        service_evidence_query.inventory_store,
+        "recent_service_findings",
+        lambda **_: [_finding(), _finding("2001:db8::10")],
+    )
+
+    exported = service_evidence_query.export_recent_service_evidence(output_format="ndjson")
+    records = [json.loads(line) for line in exported.splitlines()]
+
+    assert [record["address_family"] for record in records] == ["ipv4", "ipv6"]
+    assert all(record["payload_retained"] is False for record in records)
+
+
 def test_export_recent_service_evidence_rejects_unbounded_or_unknown_output() -> None:
     with pytest.raises(ValueError, match="limit"):
         service_evidence_query.export_recent_service_evidence(limit=0)
