@@ -56,6 +56,18 @@ def test_cli_supports_csv_without_modifying_payload(monkeypatch, capsys) -> None
     )
 
 
+def test_cli_supports_ndjson_without_extra_blank_lines(monkeypatch, capsys) -> None:
+    line = '{"schema_version":"netwatch.service.v1","ip_address":"192.0.2.10"}\n'
+    monkeypatch.setattr(
+        netwatch_service_export,
+        "export_recent_service_evidence",
+        lambda **_: line,
+    )
+
+    assert netwatch_service_export.main(["--format", "ndjson"]) == 0
+    assert capsys.readouterr().out == line
+
+
 @pytest.mark.parametrize(
     "argv",
     [
