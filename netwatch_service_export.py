@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--format",
-        choices=("json", "csv"),
+        choices=("json", "ndjson", "csv"),
         default="json",
         dest="output_format",
         help="Stable export format (default: json).",
