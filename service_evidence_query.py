@@ -5,6 +5,7 @@ from service_evidence import (
     MAX_SERVICE_EVIDENCE_RECORDS,
     export_service_evidence_csv,
     export_service_evidence_json,
+    export_service_evidence_ndjson,
 )
 
 
@@ -23,8 +24,8 @@ def export_recent_service_evidence(
     """
     if isinstance(limit, bool) or not 1 <= limit <= MAX_SERVICE_EVIDENCE_RECORDS:
         raise ValueError(f"limit must be between 1 and {MAX_SERVICE_EVIDENCE_RECORDS}")
-    if output_format not in {"json", "csv"}:
-        raise ValueError("output_format must be 'json' or 'csv'")
+    if output_format not in {"json", "ndjson", "csv"}:
+        raise ValueError("output_format must be 'json', 'ndjson', or 'csv'")
 
     rows = inventory_store.recent_service_findings(
         limit=limit,
@@ -33,4 +34,6 @@ def export_recent_service_evidence(
     )
     if output_format == "csv":
         return export_service_evidence_csv(rows, limit=limit)
+    if output_format == "ndjson":
+        return export_service_evidence_ndjson(rows, limit=limit)
     return export_service_evidence_json(rows, limit=limit)
