@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 from pathlib import Path
 
@@ -5,8 +7,11 @@ import pytest
 
 from service_evidence import (
     MAX_SERVICE_EVIDENCE_RECORDS,
+    SERVICE_EVIDENCE_FIELDS,
     SERVICE_EVIDENCE_SCHEMA_VERSION,
     SERVICE_EVIDENCE_SOURCE,
+    export_service_evidence_csv,
+    export_service_evidence_json,
     normalize_service_evidence,
     normalize_service_evidence_rows,
 )
@@ -79,6 +84,34 @@ def test_service_evidence_batch_rejects_unbounded_limits() -> None:
         normalize_service_evidence_rows([], limit=0)
     with pytest.raises(ValueError, match="limit"):
         normalize_service_evidence_rows([], limit=MAX_SERVICE_EVIDENCE_RECORDS + 1)
+
+
+def test_service_evidence_json_export_is_bounded_and_metadata_only() -> None:
+    rows = [_finding(), _finding("2001:db8::10")]
+    payload = json.loads(export_service_evidence_json(rows, limit=1))
+
+    assert payload["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION
+    assert payload["evidence_source"] == SERVICE_EVIDENCE_SOURCE
+    assert payload["payload_retained"] is False
+    assert payload["count"] == 1
+    assert payload["items"][0]["ip_address"] == "192.0.2.10"
+    assert "payload" not in payload["items"][0]
+    assert "raw" not in payload["items"][0]
+
+
+def test_service_evidence_csv_export_is_stable_and_formula_safe() -> None:
+    finding = _finding()
+    finding["service_product"] = '=HYPERLINK("https://example.invalid")'
+
+    exported = export_service_evidence_csv([finding])
+    rows = list(csv.DictReader(io.StringIO(exported)))
+
+    assert tuple(rows[0]) == SERVICE_EVIDENCE_FIELDS
+    assert rows[0]["schema_version"] == SERVICE_EVIDENCE_SCHEMA_VERSION
+    assert rows[0]["payload_retained"] == "False"
+    assert rows[0]["service_product"].startswith("'=")
+    assert "payload" not in rows[0]
+    assert "raw" not in rows[0]
 
 
 def test_machine_readable_schema_covers_normalized_service_evidence() -> None:
