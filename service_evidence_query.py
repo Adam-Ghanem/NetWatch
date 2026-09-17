@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Literal
-
 import inventory_store
 from service_evidence import (
     MAX_SERVICE_EVIDENCE_RECORDS,
@@ -9,12 +7,10 @@ from service_evidence import (
     export_service_evidence_json,
 )
 
-ServiceEvidenceFormat = Literal["json", "csv"]
-
 
 def export_recent_service_evidence(
     *,
-    output_format: ServiceEvidenceFormat = "json",
+    output_format: str = "json",
     limit: int = 200,
     scan_run_id: int | None = None,
     ip_address: str | None = None,
