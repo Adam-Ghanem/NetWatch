@@ -68,6 +68,37 @@ def test_cli_supports_ndjson_without_extra_blank_lines(monkeypatch, capsys) -> N
     assert capsys.readouterr().out == line
 
 
+def test_cli_describes_contract_without_querying_persisted_data(monkeypatch, capsys) -> None:
+    def unexpected_query(**_kwargs) -> str:
+        raise AssertionError("contract discovery must not query persisted evidence")
+
+    monkeypatch.setattr(
+        netwatch_service_export,
+        "export_recent_service_evidence",
+        unexpected_query,
+    )
+
+    assert netwatch_service_export.main(["--describe-contract"]) == 0
+    manifest = json.loads(capsys.readouterr().out)
+
+    assert manifest["schema_version"] == "netwatch.service.v1"
+    assert manifest["formats"] == ["json", "ndjson", "csv"]
+    assert manifest["max_records"] == 1000
+    assert manifest["schema_path"] == "schemas/netwatch-service-v1.schema.json"
+    assert manifest["compatibility"] == {
+        "major_version": 1,
+        "unknown_fields": "reject",
+        "field_order_stable_for_csv": True,
+    }
+    assert manifest["privacy"] == {
+        "payload_retained": False,
+        "packet_payload_fields": False,
+        "credential_fields": False,
+    }
+    assert "ip_address" in manifest["fields"]
+    assert "payload_retained" in manifest["fields"]
+
+
 @pytest.mark.parametrize(
     "argv",
     [
