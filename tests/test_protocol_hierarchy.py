@@ -74,6 +74,6 @@ def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
     "kwargs",
     [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}],
 )
-def test_protocol_hierarchy_rejects_invalid_bounds(kwargs: dict[str, object]) -> None:
+def test_protocol_hierarchy_rejects_invalid_bounds(kwargs: dict[str, int]) -> None:
     with pytest.raises(ValueError):
         protocol_hierarchy_summary([], **kwargs)
