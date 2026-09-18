@@ -2,10 +2,36 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
-from typing import Any
+from typing import TypedDict
 
 MAX_PROTOCOL_HIERARCHY_FLOWS = 10_000
 MAX_PROTOCOL_HIERARCHY_ROWS = 128
+
+
+class ProtocolHierarchyRow(TypedDict):
+    protocol: str
+    service: str | None
+    level: str
+    flows: int
+    packets: int
+    bytes: int
+    flow_percent: float
+    packet_percent: float
+    byte_percent: float
+
+
+class ProtocolHierarchyPrivacy(TypedDict):
+    payload_retained: bool
+    metadata_only: bool
+
+
+class ProtocolHierarchySummary(TypedDict):
+    flow_count: int
+    packet_count: int
+    byte_count: int
+    truncated: bool
+    privacy: ProtocolHierarchyPrivacy
+    rows: list[ProtocolHierarchyRow]
 
 
 def _safe_nonnegative_int(value: object) -> int:
@@ -38,7 +64,7 @@ def protocol_hierarchy_summary(
     *,
     flow_limit: int = MAX_PROTOCOL_HIERARCHY_FLOWS,
     row_limit: int = MAX_PROTOCOL_HIERARCHY_ROWS,
-) -> dict[str, Any]:
+) -> ProtocolHierarchySummary:
     """Build a bounded, metadata-only protocol hierarchy from normalized flows.
 
     The summary intentionally operates on existing flow metadata. It performs no
@@ -72,14 +98,16 @@ def protocol_hierarchy_summary(
             counters[key]["packets"] += packets
             counters[key]["bytes"] += bytes_count
 
-    rows: list[dict[str, object]] = []
+    rows: list[ProtocolHierarchyRow] = []
     for (protocol, service), values in counters.items():
         rows.append(
             {
                 "protocol": protocol,
                 "service": service,
                 "level": "transport" if service is None else "application",
-                **values,
+                "flows": values["flows"],
+                "packets": values["packets"],
+                "bytes": values["bytes"],
                 "flow_percent": _percentage(values["flows"], total_flows),
                 "packet_percent": _percentage(values["packets"], total_packets),
                 "byte_percent": _percentage(values["bytes"], total_bytes),
@@ -87,10 +115,10 @@ def protocol_hierarchy_summary(
         )
     rows.sort(
         key=lambda row: (
-            -int(str(row["bytes"])),
+            -row["bytes"],
             0 if row["level"] == "transport" else 1,
-            str(row["protocol"]),
-            str(row["service"] or ""),
+            row["protocol"],
+            row["service"] or "",
         )
     )
     if len(rows) > row_limit:
