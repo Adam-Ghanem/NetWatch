@@ -39,9 +39,7 @@ def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
     assert rows[0]["bytes"] == 1500
     assert rows[0]["flow_percent"] == pytest.approx(66.67)
     assert any(row["service"] == "https" and row["bytes"] == 1000 for row in rows)
-    assert any(
-        row["service"] == "dns" and row["level"] == "application" for row in rows
-    )
+    assert any(row["service"] == "dns" and row["level"] == "application" for row in rows)
 
 
 def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
