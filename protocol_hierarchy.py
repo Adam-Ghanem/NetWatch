@@ -87,7 +87,7 @@ def protocol_hierarchy_summary(
         )
     rows.sort(
         key=lambda row: (
-            -int(row["bytes"]),
+            -int(str(row["bytes"])),
             0 if row["level"] == "transport" else 1,
             str(row["protocol"]),
             str(row["service"] or ""),
