@@ -70,13 +70,10 @@ def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
     assert summary["truncated"] is True
 
 
-@pytest.mark.parametrize(
-    ("bound", "value"),
-    [("flow_limit", 0), ("flow_limit", True), ("row_limit", 0)],
-)
-def test_protocol_hierarchy_rejects_invalid_bounds(bound: str, value: int) -> None:
+def test_protocol_hierarchy_rejects_invalid_bounds() -> None:
     with pytest.raises(ValueError):
-        if bound == "flow_limit":
-            protocol_hierarchy_summary([], flow_limit=value)
-        else:
-            protocol_hierarchy_summary([], row_limit=value)
+        protocol_hierarchy_summary([], flow_limit=0)
+    with pytest.raises(ValueError):
+        protocol_hierarchy_summary([], flow_limit=True)
+    with pytest.raises(ValueError):
+        protocol_hierarchy_summary([], row_limit=0)
