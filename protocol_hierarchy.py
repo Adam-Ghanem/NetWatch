@@ -26,6 +26,12 @@ def _normalized_service(value: object) -> str:
     return service[:64]
 
 
+def _percentage(part: int, total: int) -> float:
+    if total == 0:
+        return 0.0
+    return round(part * 100 / total, 2)
+
+
 def protocol_hierarchy_summary(
     flows: Iterable[dict],
     *,
@@ -73,21 +79,9 @@ def protocol_hierarchy_summary(
                 "service": service,
                 "level": "transport" if service is None else "application",
                 **values,
-                "flow_percent": (
-                    round(values["flows"] * 100 / total_flows, 2)
-                    if total_flows
-                    else 0.0
-                ),
-                "packet_percent": (
-                    round(values["packets"] * 100 / total_packets, 2)
-                    if total_packets
-                    else 0.0
-                ),
-                "byte_percent": (
-                    round(values["bytes"] * 100 / total_bytes, 2)
-                    if total_bytes
-                    else 0.0
-                ),
+                "flow_percent": _percentage(values["flows"], total_flows),
+                "packet_percent": _percentage(values["packets"], total_packets),
+                "byte_percent": _percentage(values["bytes"], total_bytes),
             }
         )
     rows.sort(
