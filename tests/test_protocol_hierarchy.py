@@ -8,7 +8,12 @@ from protocol_hierarchy import protocol_hierarchy_summary
 def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
     summary = protocol_hierarchy_summary(
         [
-            {"protocol": "TCP", "service": "https", "packets": 10, "bytes": 1000},
+            {
+                "protocol": "TCP",
+                "service": "https",
+                "packets": 10,
+                "bytes": 1000,
+            },
             {"protocol": "TCP", "service": "http", "packets": 5, "bytes": 500},
             {"protocol": "UDP", "service": "dns", "packets": 2, "bytes": 100},
         ]
@@ -24,7 +29,9 @@ def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
     assert rows[0]["bytes"] == 1500
     assert rows[0]["flow_percent"] == pytest.approx(66.67)
     assert any(row["service"] == "https" and row["bytes"] == 1000 for row in rows)
-    assert any(row["service"] == "dns" and row["level"] == "application" for row in rows)
+    assert any(
+        row["service"] == "dns" and row["level"] == "application" for row in rows
+    )
 
 
 def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
@@ -40,7 +47,12 @@ def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
 
 def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
     flows = [
-        {"protocol": "TCP", "service": f"svc-{index}", "packets": 1, "bytes": index + 1}
+        {
+            "protocol": "TCP",
+            "service": f"svc-{index}",
+            "packets": 1,
+            "bytes": index + 1,
+        }
         for index in range(5)
     ]
     summary = protocol_hierarchy_summary(flows, flow_limit=3, row_limit=2)
@@ -50,7 +62,9 @@ def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
     assert summary["truncated"] is True
 
 
-@pytest.mark.parametrize("kwargs", [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}])
+@pytest.mark.parametrize(
+    "kwargs", [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}]
+)
 def test_protocol_hierarchy_rejects_invalid_bounds(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         protocol_hierarchy_summary([], **kwargs)
