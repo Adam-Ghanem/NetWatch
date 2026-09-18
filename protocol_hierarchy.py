@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from typing import Any
 
 MAX_PROTOCOL_HIERARCHY_FLOWS = 10_000
 MAX_PROTOCOL_HIERARCHY_ROWS = 128
@@ -33,11 +34,11 @@ def _percentage(part: int, total: int) -> float:
 
 
 def protocol_hierarchy_summary(
-    flows: Iterable[dict],
+    flows: Iterable[dict[str, object]],
     *,
     flow_limit: int = MAX_PROTOCOL_HIERARCHY_FLOWS,
     row_limit: int = MAX_PROTOCOL_HIERARCHY_ROWS,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Build a bounded, metadata-only protocol hierarchy from normalized flows.
 
     The summary intentionally operates on existing flow metadata. It performs no
