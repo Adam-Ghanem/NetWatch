@@ -38,11 +38,17 @@ def protocol_hierarchy_summary(
     capture or scanning and does not inspect or retain payload bytes. Transport
     protocols are parents and recognized application services are child rows.
     """
-    if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS:
+    if (
+        isinstance(flow_limit, bool)
+        or not 1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS
+    ):
         raise ValueError(
             f"flow_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_FLOWS}"
         )
-    if isinstance(row_limit, bool) or not 1 <= row_limit <= MAX_PROTOCOL_HIERARCHY_ROWS:
+    if (
+        isinstance(row_limit, bool)
+        or not 1 <= row_limit <= MAX_PROTOCOL_HIERARCHY_ROWS
+    ):
         raise ValueError(
             f"row_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_ROWS}"
         )
