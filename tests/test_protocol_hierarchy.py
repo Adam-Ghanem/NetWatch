@@ -71,9 +71,12 @@ def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
 
 
 @pytest.mark.parametrize(
-    "kwargs",
-    [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}],
+    ("bound", "value"),
+    [("flow_limit", 0), ("flow_limit", True), ("row_limit", 0)],
 )
-def test_protocol_hierarchy_rejects_invalid_bounds(kwargs: dict[str, int]) -> None:
+def test_protocol_hierarchy_rejects_invalid_bounds(bound: str, value: int) -> None:
     with pytest.raises(ValueError):
-        protocol_hierarchy_summary([], **kwargs)
+        if bound == "flow_limit":
+            protocol_hierarchy_summary([], flow_limit=value)
+        else:
+            protocol_hierarchy_summary([], row_limit=value)
