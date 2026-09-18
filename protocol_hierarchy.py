@@ -38,16 +38,18 @@ def protocol_hierarchy_summary(
     capture or scanning and does not inspect or retain payload bytes. Transport
     protocols are parents and recognized application services are child rows.
     """
-    if (
-        isinstance(flow_limit, bool)
-        or not 1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS
+    if isinstance(flow_limit, bool) or not (
+        1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS
     ):
-        raise ValueError(f"flow_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_FLOWS}")
-    if (
-        isinstance(row_limit, bool)
-        or not 1 <= row_limit <= MAX_PROTOCOL_HIERARCHY_ROWS
+        raise ValueError(
+            f"flow_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_FLOWS}"
+        )
+    if isinstance(row_limit, bool) or not (
+        1 <= row_limit <= MAX_PROTOCOL_HIERARCHY_ROWS
     ):
-        raise ValueError(f"row_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_ROWS}")
+        raise ValueError(
+            f"row_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_ROWS}"
+        )
 
     counters: dict[tuple[str, str | None], dict[str, int]] = defaultdict(
         lambda: {"flows": 0, "packets": 0, "bytes": 0}
@@ -79,15 +81,21 @@ def protocol_hierarchy_summary(
                 "service": service,
                 "level": "transport" if service is None else "application",
                 **values,
-                "flow_percent": round(values["flows"] * 100 / total_flows, 2)
-                if total_flows
-                else 0.0,
-                "packet_percent": round(values["packets"] * 100 / total_packets, 2)
-                if total_packets
-                else 0.0,
-                "byte_percent": round(values["bytes"] * 100 / total_bytes, 2)
-                if total_bytes
-                else 0.0,
+                "flow_percent": (
+                    round(values["flows"] * 100 / total_flows, 2)
+                    if total_flows
+                    else 0.0
+                ),
+                "packet_percent": (
+                    round(values["packets"] * 100 / total_packets, 2)
+                    if total_packets
+                    else 0.0
+                ),
+                "byte_percent": (
+                    round(values["bytes"] * 100 / total_bytes, 2)
+                    if total_bytes
+                    else 0.0
+                ),
             }
         )
     rows.sort(
