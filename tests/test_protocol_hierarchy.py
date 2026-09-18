@@ -14,8 +14,18 @@ def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
                 "packets": 10,
                 "bytes": 1000,
             },
-            {"protocol": "TCP", "service": "http", "packets": 5, "bytes": 500},
-            {"protocol": "UDP", "service": "dns", "packets": 2, "bytes": 100},
+            {
+                "protocol": "TCP",
+                "service": "http",
+                "packets": 5,
+                "bytes": 500,
+            },
+            {
+                "protocol": "UDP",
+                "service": "dns",
+                "packets": 2,
+                "bytes": 100,
+            },
         ]
     )
 
@@ -63,7 +73,8 @@ def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
 
 
 @pytest.mark.parametrize(
-    "kwargs", [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}]
+    "kwargs",
+    [{"flow_limit": 0}, {"flow_limit": True}, {"row_limit": 0}],
 )
 def test_protocol_hierarchy_rejects_invalid_bounds(kwargs: dict[str, object]) -> None:
     with pytest.raises(ValueError):
