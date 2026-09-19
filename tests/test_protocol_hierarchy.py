@@ -42,6 +42,54 @@ def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
     assert any(row["service"] == "dns" and row["level"] == "application" for row in rows)
 
 
+def test_protocol_hierarchy_preserves_directional_traffic_balance() -> None:
+    summary = protocol_hierarchy_summary(
+        [
+            {
+                "protocol": "TCP",
+                "service": "https",
+                "packets": 10,
+                "bytes": 1000,
+                "originator_packets": 4,
+                "originator_bytes": 200,
+                "responder_packets": 6,
+                "responder_bytes": 800,
+            },
+            {
+                "protocol": "TCP",
+                "service": "https",
+                "packets": 5,
+                "bytes": 500,
+                "originator_packets": 3,
+                "originator_bytes": 300,
+                "responder_packets": 2,
+                "responder_bytes": 200,
+            },
+        ]
+    )
+
+    assert summary["originator_packet_count"] == 7
+    assert summary["originator_byte_count"] == 500
+    assert summary["responder_packet_count"] == 8
+    assert summary["responder_byte_count"] == 1000
+    transport = next(row for row in summary["rows"] if row["service"] is None)
+    assert transport["originator_packets"] == 7
+    assert transport["originator_bytes"] == 500
+    assert transport["responder_packets"] == 8
+    assert transport["responder_bytes"] == 1000
+    assert transport["responder_byte_percent"] == pytest.approx(66.67)
+
+
+def test_protocol_hierarchy_directionality_defaults_to_zero_when_absent() -> None:
+    summary = protocol_hierarchy_summary(
+        [{"protocol": "udp", "service": "dns", "packets": 2, "bytes": 100}]
+    )
+
+    assert summary["originator_byte_count"] == 0
+    assert summary["responder_byte_count"] == 0
+    assert all(row["responder_byte_percent"] == 0.0 for row in summary["rows"])
+
+
 def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
     summary = protocol_hierarchy_summary(
         [{"protocol": "", "service": None, "packets": "bad", "bytes": -5}]
