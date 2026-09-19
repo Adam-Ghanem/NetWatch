@@ -99,12 +99,12 @@ def protocol_hierarchy_summary(
             counters[key]["bytes"] += bytes_count
 
     rows: list[ProtocolHierarchyRow] = []
-    for (protocol, service), values in counters.items():
+    for (protocol_key, service_key), values in counters.items():
         rows.append(
             {
-                "protocol": protocol,
-                "service": service,
-                "level": "transport" if service is None else "application",
+                "protocol": protocol_key,
+                "service": service_key,
+                "level": "transport" if service_key is None else "application",
                 "flows": values["flows"],
                 "packets": values["packets"],
                 "bytes": values["bytes"],
