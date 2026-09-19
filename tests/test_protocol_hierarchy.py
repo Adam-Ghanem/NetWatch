@@ -8,30 +8,18 @@ from protocol_hierarchy import protocol_hierarchy_summary
 def test_protocol_hierarchy_builds_transport_and_application_rows() -> None:
     summary = protocol_hierarchy_summary(
         [
-            {
-                "protocol": "TCP",
-                "service": "https",
-                "packets": 10,
-                "bytes": 1000,
-            },
-            {
-                "protocol": "TCP",
-                "service": "http",
-                "packets": 5,
-                "bytes": 500,
-            },
-            {
-                "protocol": "UDP",
-                "service": "dns",
-                "packets": 2,
-                "bytes": 100,
-            },
+            {"protocol": "TCP", "service": "https", "packets": 10, "bytes": 1000},
+            {"protocol": "TCP", "service": "http", "packets": 5, "bytes": 500},
+            {"protocol": "UDP", "service": "dns", "packets": 2, "bytes": 100},
         ]
     )
 
     assert summary["flow_count"] == 3
     assert summary["packet_count"] == 17
     assert summary["byte_count"] == 1600
+    assert summary["service_identified_flow_count"] == 3
+    assert summary["service_unknown_flow_count"] == 0
+    assert summary["service_identification_percent"] == 100.0
     assert summary["privacy"] == {"payload_retained": False, "metadata_only": True}
     rows = summary["rows"]
     assert rows[0]["protocol"] == "tcp"
@@ -90,6 +78,23 @@ def test_protocol_hierarchy_directionality_defaults_to_zero_when_absent() -> Non
     assert all(row["responder_byte_percent"] == 0.0 for row in summary["rows"])
 
 
+def test_protocol_hierarchy_tracks_unknown_service_coverage_without_fake_app_row() -> None:
+    summary = protocol_hierarchy_summary(
+        [
+            {"protocol": "TCP", "service": "https", "packets": 4, "bytes": 400},
+            {"protocol": "TCP", "service": None, "packets": 2, "bytes": 200},
+            {"protocol": "UDP", "service": "unknown", "packets": 1, "bytes": 80},
+            {"protocol": "UDP", "service": "-", "packets": 1, "bytes": 60},
+        ]
+    )
+
+    assert summary["service_identified_flow_count"] == 1
+    assert summary["service_unknown_flow_count"] == 3
+    assert summary["service_identification_percent"] == 25.0
+    assert not any(row["service"] == "unknown" for row in summary["rows"])
+    assert [row["service"] for row in summary["rows"] if row["level"] == "application"] == ["https"]
+
+
 def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
     summary = protocol_hierarchy_summary(
         [{"protocol": "", "service": None, "packets": "bad", "bytes": -5}]
@@ -98,17 +103,15 @@ def test_protocol_hierarchy_handles_unknown_and_invalid_counters() -> None:
     assert summary["packet_count"] == 0
     assert summary["byte_count"] == 0
     assert summary["rows"][0]["protocol"] == "unknown"
-    assert any(row["service"] == "unknown" for row in summary["rows"])
+    assert summary["service_identified_flow_count"] == 0
+    assert summary["service_unknown_flow_count"] == 1
+    assert summary["service_identification_percent"] == 0.0
+    assert all(row["level"] == "transport" for row in summary["rows"])
 
 
 def test_protocol_hierarchy_enforces_flow_and_row_bounds() -> None:
     flows = [
-        {
-            "protocol": "TCP",
-            "service": f"svc-{index}",
-            "packets": 1,
-            "bytes": index + 1,
-        }
+        {"protocol": "TCP", "service": f"svc-{index}", "packets": 1, "bytes": index + 1}
         for index in range(5)
     ]
     summary = protocol_hierarchy_summary(flows, flow_limit=3, row_limit=2)

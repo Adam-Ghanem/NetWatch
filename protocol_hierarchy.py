@@ -38,6 +38,9 @@ class ProtocolHierarchySummary(TypedDict):
     originator_byte_count: int
     responder_packet_count: int
     responder_byte_count: int
+    service_identified_flow_count: int
+    service_unknown_flow_count: int
+    service_identification_percent: float
     truncated: bool
     privacy: ProtocolHierarchyPrivacy
     rows: list[ProtocolHierarchyRow]
@@ -55,10 +58,10 @@ def _normalized_protocol(value: object) -> str:
     return protocol[:32] or "unknown"
 
 
-def _normalized_service(value: object) -> str:
+def _normalized_service(value: object) -> str | None:
     service = str(value or "-").strip().lower()
     if service in {"", "-", "unknown"}:
-        return "unknown"
+        return None
     return service[:64]
 
 
@@ -81,6 +84,8 @@ def protocol_hierarchy_summary(
     protocols are parents and recognized application services are child rows.
     Directional counters preserve originator/responder traffic balance when that
     metadata is available without exposing endpoint identities or payload data.
+    Unknown services remain visible through coverage counters instead of being
+    represented as a falsely identified application-layer protocol.
     """
     if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS:
         raise ValueError(f"flow_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_FLOWS}")
@@ -101,6 +106,7 @@ def protocol_hierarchy_summary(
     total_flows = total_packets = total_bytes = 0
     total_originator_packets = total_originator_bytes = 0
     total_responder_packets = total_responder_bytes = 0
+    service_identified_flows = 0
     truncated = False
 
     for index, flow in enumerate(flows):
@@ -122,7 +128,11 @@ def protocol_hierarchy_summary(
         total_originator_bytes += originator_bytes
         total_responder_packets += responder_packets
         total_responder_bytes += responder_bytes
-        for key in ((protocol, None), (protocol, service)):
+        keys: list[tuple[str, str | None]] = [(protocol, None)]
+        if service is not None:
+            service_identified_flows += 1
+            keys.append((protocol, service))
+        for key in keys:
             counters[key]["flows"] += 1
             counters[key]["packets"] += packets
             counters[key]["bytes"] += bytes_count
@@ -172,6 +182,9 @@ def protocol_hierarchy_summary(
         "originator_byte_count": total_originator_bytes,
         "responder_packet_count": total_responder_packets,
         "responder_byte_count": total_responder_bytes,
+        "service_identified_flow_count": service_identified_flows,
+        "service_unknown_flow_count": total_flows - service_identified_flows,
+        "service_identification_percent": _percentage(service_identified_flows, total_flows),
         "truncated": truncated,
         "privacy": {"payload_retained": False, "metadata_only": True},
         "rows": rows,
