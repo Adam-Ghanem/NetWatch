@@ -128,7 +128,7 @@ def protocol_hierarchy_summary(
         total_originator_bytes += originator_bytes
         total_responder_packets += responder_packets
         total_responder_bytes += responder_bytes
-        keys = [(protocol, None)]
+        keys: list[tuple[str, str | None]] = [(protocol, None)]
         if service is not None:
             service_identified_flows += 1
             keys.append((protocol, service))
