@@ -76,7 +76,9 @@ def flow_quality_summary(
             break
         total += 1
         directional_values = [flow.get(key) for key in directional_keys]
-        directional_present = all(key in flow and flow.get(key) is not None for key in directional_keys)
+        directional_present = all(
+            key in flow and flow.get(key) is not None for key in directional_keys
+        )
         has_directional = directional_present and all(
             _nonnegative_integer(value) for value in directional_values
         )
