@@ -31,6 +31,8 @@ def test_flow_quality_reports_independent_metadata_coverage() -> None:
     assert summary["state_flow_count"] == 2
     assert summary["complete_flow_count"] == 1
     assert summary["complete_flow_percent"] == pytest.approx(33.33)
+    assert summary["invalid_directional_flow_count"] == 0
+    assert summary["invalid_duration_flow_count"] == 0
 
 
 def test_flow_quality_treats_zero_directional_counters_as_observed() -> None:
@@ -63,6 +65,55 @@ def test_flow_quality_rejects_placeholders_and_missing_directional_fields() -> N
     assert summary["state_flow_count"] == 0
     assert summary["directional_flow_count"] == 0
     assert summary["complete_flow_count"] == 0
+    assert summary["invalid_duration_flow_count"] == 1
+
+
+def test_flow_quality_distinguishes_invalid_present_metadata() -> None:
+    summary = flow_quality_summary(
+        [
+            {
+                "service": 443,
+                "duration": -0.1,
+                "state": 1,
+                "originator_packets": -1,
+                "originator_bytes": 10,
+                "responder_packets": 1,
+                "responder_bytes": 20,
+            },
+            {
+                "service": "dns",
+                "duration": float("inf"),
+                "state": "open",
+                "originator_packets": True,
+                "originator_bytes": 10,
+                "responder_packets": 1,
+                "responder_bytes": 20,
+            },
+        ]
+    )
+
+    assert summary["directional_flow_count"] == 0
+    assert summary["invalid_directional_flow_count"] == 2
+    assert summary["duration_flow_count"] == 0
+    assert summary["invalid_duration_flow_count"] == 2
+    assert summary["service_flow_count"] == 1
+    assert summary["state_flow_count"] == 1
+    assert summary["complete_flow_count"] == 0
+
+
+def test_flow_quality_accepts_finite_nonnegative_numeric_duration() -> None:
+    summary = flow_quality_summary(
+        [
+            {"duration": 0},
+            {"duration": 1.5},
+            {"duration": float("nan")},
+            {"duration": True},
+        ]
+    )
+
+    assert summary["duration_flow_count"] == 2
+    assert summary["invalid_duration_flow_count"] == 2
+    assert summary["duration_coverage_percent"] == 50.0
 
 
 def test_flow_quality_is_bounded() -> None:
