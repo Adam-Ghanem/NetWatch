@@ -146,9 +146,7 @@ def protocol_hierarchy_summary(
                 "originator_bytes": values["originator_bytes"],
                 "responder_packets": values["responder_packets"],
                 "responder_bytes": values["responder_bytes"],
-                "responder_byte_percent": _percentage(
-                    values["responder_bytes"], directional_bytes
-                ),
+                "responder_byte_percent": _percentage(values["responder_bytes"], directional_bytes),
                 "flow_percent": _percentage(values["flows"], total_flows),
                 "packet_percent": _percentage(values["packets"], total_packets),
                 "byte_percent": _percentage(values["bytes"], total_bytes),
