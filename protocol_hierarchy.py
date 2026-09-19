@@ -15,6 +15,11 @@ class ProtocolHierarchyRow(TypedDict):
     flows: int
     packets: int
     bytes: int
+    originator_packets: int
+    originator_bytes: int
+    responder_packets: int
+    responder_bytes: int
+    responder_byte_percent: float
     flow_percent: float
     packet_percent: float
     byte_percent: float
@@ -29,6 +34,10 @@ class ProtocolHierarchySummary(TypedDict):
     flow_count: int
     packet_count: int
     byte_count: int
+    originator_packet_count: int
+    originator_byte_count: int
+    responder_packet_count: int
+    responder_byte_count: int
     truncated: bool
     privacy: ProtocolHierarchyPrivacy
     rows: list[ProtocolHierarchyRow]
@@ -70,6 +79,8 @@ def protocol_hierarchy_summary(
     The summary intentionally operates on existing flow metadata. It performs no
     capture or scanning and does not inspect or retain payload bytes. Transport
     protocols are parents and recognized application services are child rows.
+    Directional counters preserve originator/responder traffic balance when that
+    metadata is available without exposing endpoint identities or payload data.
     """
     if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_PROTOCOL_HIERARCHY_FLOWS:
         raise ValueError(f"flow_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_FLOWS}")
@@ -77,9 +88,19 @@ def protocol_hierarchy_summary(
         raise ValueError(f"row_limit must be between 1 and {MAX_PROTOCOL_HIERARCHY_ROWS}")
 
     counters: dict[tuple[str, str | None], dict[str, int]] = defaultdict(
-        lambda: {"flows": 0, "packets": 0, "bytes": 0}
+        lambda: {
+            "flows": 0,
+            "packets": 0,
+            "bytes": 0,
+            "originator_packets": 0,
+            "originator_bytes": 0,
+            "responder_packets": 0,
+            "responder_bytes": 0,
+        }
     )
     total_flows = total_packets = total_bytes = 0
+    total_originator_packets = total_originator_bytes = 0
+    total_responder_packets = total_responder_bytes = 0
     truncated = False
 
     for index, flow in enumerate(flows):
@@ -90,16 +111,29 @@ def protocol_hierarchy_summary(
         service = _normalized_service(flow.get("service"))
         packets = _safe_nonnegative_int(flow.get("packets"))
         bytes_count = _safe_nonnegative_int(flow.get("bytes"))
+        originator_packets = _safe_nonnegative_int(flow.get("originator_packets"))
+        originator_bytes = _safe_nonnegative_int(flow.get("originator_bytes"))
+        responder_packets = _safe_nonnegative_int(flow.get("responder_packets"))
+        responder_bytes = _safe_nonnegative_int(flow.get("responder_bytes"))
         total_flows += 1
         total_packets += packets
         total_bytes += bytes_count
+        total_originator_packets += originator_packets
+        total_originator_bytes += originator_bytes
+        total_responder_packets += responder_packets
+        total_responder_bytes += responder_bytes
         for key in ((protocol, None), (protocol, service)):
             counters[key]["flows"] += 1
             counters[key]["packets"] += packets
             counters[key]["bytes"] += bytes_count
+            counters[key]["originator_packets"] += originator_packets
+            counters[key]["originator_bytes"] += originator_bytes
+            counters[key]["responder_packets"] += responder_packets
+            counters[key]["responder_bytes"] += responder_bytes
 
     rows: list[ProtocolHierarchyRow] = []
     for (protocol_key, service_key), values in counters.items():
+        directional_bytes = values["originator_bytes"] + values["responder_bytes"]
         rows.append(
             {
                 "protocol": protocol_key,
@@ -108,6 +142,11 @@ def protocol_hierarchy_summary(
                 "flows": values["flows"],
                 "packets": values["packets"],
                 "bytes": values["bytes"],
+                "originator_packets": values["originator_packets"],
+                "originator_bytes": values["originator_bytes"],
+                "responder_packets": values["responder_packets"],
+                "responder_bytes": values["responder_bytes"],
+                "responder_byte_percent": _percentage(values["responder_bytes"], directional_bytes),
                 "flow_percent": _percentage(values["flows"], total_flows),
                 "packet_percent": _percentage(values["packets"], total_packets),
                 "byte_percent": _percentage(values["bytes"], total_bytes),
@@ -129,6 +168,10 @@ def protocol_hierarchy_summary(
         "flow_count": total_flows,
         "packet_count": total_packets,
         "byte_count": total_bytes,
+        "originator_packet_count": total_originator_packets,
+        "originator_byte_count": total_originator_bytes,
+        "responder_packet_count": total_responder_packets,
+        "responder_byte_count": total_responder_bytes,
         "truncated": truncated,
         "privacy": {"payload_retained": False, "metadata_only": True},
         "rows": rows,
