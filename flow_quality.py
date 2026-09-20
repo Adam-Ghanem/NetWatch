@@ -35,6 +35,11 @@ class FlowQualitySummary(TypedDict):
     invalid_state_percent: float
     missing_state_flow_count: int
     missing_state_percent: float
+    capture_loss_flow_count: int
+    capture_loss_percent: float
+    invalid_capture_loss_flow_count: int
+    invalid_capture_loss_percent: float
+    capture_loss_bytes: int
     truncated: bool
 
 
@@ -62,14 +67,17 @@ def _percent(part: int, total: int) -> float:
 def flow_quality_summary(
     flows: Iterable[dict[str, object]], *, flow_limit: int = MAX_FLOW_QUALITY_FLOWS
 ) -> FlowQualitySummary:
-    """Measure validity and completeness of normalized flow metadata.
+    """Measure validity, completeness, and capture integrity of flow metadata.
 
     Each metadata group is partitioned into valid, invalid, or missing. Directional
     counters are invalid when only part of the four-field group is present, because
     partial directional telemetry cannot safely support bidirectional analytics.
     Directional counters must be non-negative integers, while duration must be a
     finite non-negative number. Service and state must be meaningful strings.
-    ``complete`` means all four metadata groups are valid for the same flow.
+    ``missed_bytes`` is treated as an optional capture-integrity signal: a positive
+    value marks a flow whose content had gaps, while malformed present values are
+    reported separately. ``complete`` means all four core metadata groups are valid
+    for the same flow; capture loss is intentionally reported independently.
     Payloads and endpoint identities are never inspected.
     """
     if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_FLOW_QUALITY_FLOWS:
@@ -78,6 +86,7 @@ def flow_quality_summary(
     total = directional = service = duration = state = complete = 0
     invalid_directional = invalid_service = invalid_duration = invalid_state = 0
     missing_directional = missing_service = missing_duration = missing_state = 0
+    capture_loss_flows = invalid_capture_loss = capture_loss_bytes = 0
     truncated = False
     directional_keys = (
         "originator_packets",
@@ -108,6 +117,15 @@ def flow_quality_summary(
         has_duration = duration_present and _valid_duration(flow.get("duration"))
         state_present = "state" in flow and flow.get("state") is not None
         has_state = _text_present(flow, "state")
+
+        missed_bytes_present = "missed_bytes" in flow and flow.get("missed_bytes") is not None
+        missed_bytes = flow.get("missed_bytes")
+        valid_missed_bytes = missed_bytes_present and _nonnegative_integer(missed_bytes)
+        if valid_missed_bytes and isinstance(missed_bytes, int):
+            capture_loss_flows += int(missed_bytes > 0)
+            capture_loss_bytes += missed_bytes
+        elif missed_bytes_present:
+            invalid_capture_loss += 1
 
         directional += int(has_directional)
         service += int(has_service)
@@ -151,5 +169,10 @@ def flow_quality_summary(
         "invalid_state_percent": _percent(invalid_state, total),
         "missing_state_flow_count": missing_state,
         "missing_state_percent": _percent(missing_state, total),
+        "capture_loss_flow_count": capture_loss_flows,
+        "capture_loss_percent": _percent(capture_loss_flows, total),
+        "invalid_capture_loss_flow_count": invalid_capture_loss,
+        "invalid_capture_loss_percent": _percent(invalid_capture_loss, total),
+        "capture_loss_bytes": capture_loss_bytes,
         "truncated": truncated,
     }
