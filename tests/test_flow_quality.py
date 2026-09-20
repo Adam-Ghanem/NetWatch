@@ -188,6 +188,40 @@ def test_flow_quality_partitions_every_group_into_valid_invalid_or_missing() -> 
     assert summary["missing_directional_percent"] == pytest.approx(33.33)
 
 
+def test_flow_quality_reports_capture_loss_without_marking_zero_as_loss() -> None:
+    summary = flow_quality_summary(
+        [
+            {"missed_bytes": 0},
+            {"missed_bytes": 17},
+            {"missed_bytes": 3},
+            {},
+        ]
+    )
+
+    assert summary["capture_loss_flow_count"] == 2
+    assert summary["capture_loss_percent"] == 50.0
+    assert summary["capture_loss_bytes"] == 20
+    assert summary["invalid_capture_loss_flow_count"] == 0
+    assert summary["invalid_capture_loss_percent"] == 0.0
+
+
+def test_flow_quality_rejects_malformed_capture_loss_metadata() -> None:
+    summary = flow_quality_summary(
+        [
+            {"missed_bytes": -1},
+            {"missed_bytes": True},
+            {"missed_bytes": 1.5},
+            {"missed_bytes": "4"},
+            {"missed_bytes": None},
+        ]
+    )
+
+    assert summary["capture_loss_flow_count"] == 0
+    assert summary["capture_loss_bytes"] == 0
+    assert summary["invalid_capture_loss_flow_count"] == 4
+    assert summary["invalid_capture_loss_percent"] == 80.0
+
+
 def test_flow_quality_is_bounded() -> None:
     summary = flow_quality_summary([{"service": "dns"}] * 3, flow_limit=2)
 
