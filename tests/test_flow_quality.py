@@ -158,12 +158,30 @@ def test_flow_quality_partitions_every_group_into_valid_invalid_or_missing() -> 
         ]
     )
 
-    for prefix in ("directional", "service", "duration", "state"):
-        valid = summary[f"{prefix}_flow_count"]
-        invalid = summary[f"invalid_{prefix}_flow_count"]
-        missing = summary[f"missing_{prefix}_flow_count"]
-        assert valid + invalid + missing == summary["flow_count"]
-
+    assert (
+        summary["directional_flow_count"]
+        + summary["invalid_directional_flow_count"]
+        + summary["missing_directional_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["service_flow_count"]
+        + summary["invalid_service_flow_count"]
+        + summary["missing_service_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["duration_flow_count"]
+        + summary["invalid_duration_flow_count"]
+        + summary["missing_duration_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["state_flow_count"]
+        + summary["invalid_state_flow_count"]
+        + summary["missing_state_flow_count"]
+        == summary["flow_count"]
+    )
     assert summary["missing_service_percent"] == pytest.approx(33.33)
     assert summary["missing_duration_percent"] == pytest.approx(33.33)
     assert summary["missing_state_percent"] == pytest.approx(33.33)
