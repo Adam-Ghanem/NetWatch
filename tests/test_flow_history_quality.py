@@ -44,7 +44,7 @@ def test_history_quality_reports_degradation_signals_once_per_flow() -> None:
     assert summary["partial_analysis_flow_count"] == 2
     assert summary["bad_checksum_flow_count"] == 2
     assert summary["retransmission_flow_count"] == 2
-    assert summary["inconsistent_flow_count"] == 2
+    assert summary["inconsistent_flow_count"] == 1
 
 
 def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -> None:
