@@ -32,9 +32,13 @@ def test_flow_quality_reports_independent_metadata_coverage() -> None:
     assert summary["complete_flow_count"] == 1
     assert summary["complete_flow_percent"] == pytest.approx(33.33)
     assert summary["invalid_directional_flow_count"] == 0
+    assert summary["missing_directional_flow_count"] == 2
     assert summary["invalid_duration_flow_count"] == 0
+    assert summary["missing_duration_flow_count"] == 1
     assert summary["invalid_service_flow_count"] == 1
     assert summary["invalid_service_percent"] == pytest.approx(33.33)
+    assert summary["missing_service_flow_count"] == 0
+    assert summary["missing_state_flow_count"] == 1
 
 
 def test_flow_quality_treats_zero_directional_counters_as_observed() -> None:
@@ -51,9 +55,11 @@ def test_flow_quality_treats_zero_directional_counters_as_observed() -> None:
 
     assert summary["directional_flow_count"] == 1
     assert summary["directional_coverage_percent"] == 100.0
+    assert summary["invalid_directional_flow_count"] == 0
+    assert summary["missing_directional_flow_count"] == 0
 
 
-def test_flow_quality_rejects_placeholders_and_missing_directional_fields() -> None:
+def test_flow_quality_rejects_placeholders_and_partial_directional_fields() -> None:
     summary = flow_quality_summary(
         [
             {"service": "-", "duration": None, "state": "unknown"},
@@ -70,6 +76,8 @@ def test_flow_quality_rejects_placeholders_and_missing_directional_fields() -> N
     assert summary["invalid_service_flow_count"] == 2
     assert summary["invalid_duration_flow_count"] == 1
     assert summary["invalid_state_flow_count"] == 2
+    assert summary["invalid_directional_flow_count"] == 1
+    assert summary["missing_directional_flow_count"] == 2
 
 
 def test_flow_quality_distinguishes_invalid_present_metadata() -> None:
@@ -125,6 +133,59 @@ def test_flow_quality_accepts_finite_nonnegative_numeric_duration() -> None:
     assert summary["invalid_duration_flow_count"] == 2
     assert summary["duration_coverage_percent"] == 50.0
     assert summary["invalid_duration_percent"] == 50.0
+    assert summary["missing_duration_flow_count"] == 0
+
+
+def test_flow_quality_partitions_every_group_into_valid_invalid_or_missing() -> None:
+    summary = flow_quality_summary(
+        [
+            {
+                "service": "dns",
+                "duration": 0,
+                "state": "closed",
+                "originator_packets": 1,
+                "originator_bytes": 50,
+                "responder_packets": 1,
+                "responder_bytes": 60,
+            },
+            {
+                "service": "unknown",
+                "duration": -1,
+                "state": "-",
+                "originator_packets": 1,
+            },
+            {},
+        ]
+    )
+
+    assert (
+        summary["directional_flow_count"]
+        + summary["invalid_directional_flow_count"]
+        + summary["missing_directional_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["service_flow_count"]
+        + summary["invalid_service_flow_count"]
+        + summary["missing_service_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["duration_flow_count"]
+        + summary["invalid_duration_flow_count"]
+        + summary["missing_duration_flow_count"]
+        == summary["flow_count"]
+    )
+    assert (
+        summary["state_flow_count"]
+        + summary["invalid_state_flow_count"]
+        + summary["missing_state_flow_count"]
+        == summary["flow_count"]
+    )
+    assert summary["missing_service_percent"] == pytest.approx(33.33)
+    assert summary["missing_duration_percent"] == pytest.approx(33.33)
+    assert summary["missing_state_percent"] == pytest.approx(33.33)
+    assert summary["missing_directional_percent"] == pytest.approx(33.33)
 
 
 def test_flow_quality_is_bounded() -> None:
