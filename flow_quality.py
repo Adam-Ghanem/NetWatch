@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from typing import TypedDict
 
@@ -18,12 +19,24 @@ class FlowQualitySummary(TypedDict):
     state_coverage_percent: float
     complete_flow_count: int
     complete_flow_percent: float
+    invalid_directional_flow_count: int
+    invalid_duration_flow_count: int
     truncated: bool
 
 
-def _present(flow: dict[str, object], key: str) -> bool:
+def _text_present(flow: dict[str, object], key: str) -> bool:
     value = flow.get(key)
-    return value is not None and str(value).strip().lower() not in {"", "-", "unknown"}
+    return isinstance(value, str) and value.strip().lower() not in {"", "-", "unknown"}
+
+
+def _nonnegative_integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _valid_duration(value: object) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(float(value)) and value >= 0
 
 
 def _percent(part: int, total: int) -> float:
@@ -35,17 +48,20 @@ def _percent(part: int, total: int) -> float:
 def flow_quality_summary(
     flows: Iterable[dict[str, object]], *, flow_limit: int = MAX_FLOW_QUALITY_FLOWS
 ) -> FlowQualitySummary:
-    """Measure completeness of normalized flow metadata without inspecting payloads.
+    """Measure validity and completeness of normalized flow metadata.
 
-    A flow has directional metadata when all originator/responder packet and byte
-    counters are present, even when their legitimate value is zero. Service,
-    duration, and state coverage are tracked independently. ``complete`` means
-    all four metadata groups are available for the same flow.
+    Directional counters must be non-negative integers, while duration must be a
+    finite non-negative number. Service and state must be meaningful strings.
+    Invalid-but-present directional/duration metadata is counted separately so
+    malformed telemetry is not mistaken for missing telemetry. ``complete``
+    means all four metadata groups are valid for the same flow. Payloads and
+    endpoint identities are never inspected.
     """
     if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_FLOW_QUALITY_FLOWS:
         raise ValueError(f"flow_limit must be between 1 and {MAX_FLOW_QUALITY_FLOWS}")
 
     total = directional = service = duration = state = complete = 0
+    invalid_directional = invalid_duration = 0
     truncated = False
     directional_keys = (
         "originator_packets",
@@ -59,14 +75,23 @@ def flow_quality_summary(
             truncated = True
             break
         total += 1
-        has_directional = all(key in flow and flow.get(key) is not None for key in directional_keys)
-        has_service = _present(flow, "service")
-        has_duration = _present(flow, "duration")
-        has_state = _present(flow, "state")
+        directional_values = [flow.get(key) for key in directional_keys]
+        directional_present = all(
+            key in flow and flow.get(key) is not None for key in directional_keys
+        )
+        has_directional = directional_present and all(
+            _nonnegative_integer(value) for value in directional_values
+        )
+        has_service = _text_present(flow, "service")
+        duration_present = "duration" in flow and flow.get("duration") is not None
+        has_duration = duration_present and _valid_duration(flow.get("duration"))
+        has_state = _text_present(flow, "state")
         directional += int(has_directional)
         service += int(has_service)
         duration += int(has_duration)
         state += int(has_state)
+        invalid_directional += int(directional_present and not has_directional)
+        invalid_duration += int(duration_present and not has_duration)
         complete += int(has_directional and has_service and has_duration and has_state)
 
     return {
@@ -81,5 +106,7 @@ def flow_quality_summary(
         "state_coverage_percent": _percent(state, total),
         "complete_flow_count": complete,
         "complete_flow_percent": _percent(complete, total),
+        "invalid_directional_flow_count": invalid_directional,
+        "invalid_duration_flow_count": invalid_duration,
         "truncated": truncated,
     }
