@@ -33,6 +33,8 @@ def test_flow_quality_reports_independent_metadata_coverage() -> None:
     assert summary["complete_flow_percent"] == pytest.approx(33.33)
     assert summary["invalid_directional_flow_count"] == 0
     assert summary["invalid_duration_flow_count"] == 0
+    assert summary["invalid_service_flow_count"] == 1
+    assert summary["invalid_service_percent"] == pytest.approx(33.33)
 
 
 def test_flow_quality_treats_zero_directional_counters_as_observed() -> None:
@@ -65,7 +67,9 @@ def test_flow_quality_rejects_placeholders_and_missing_directional_fields() -> N
     assert summary["state_flow_count"] == 0
     assert summary["directional_flow_count"] == 0
     assert summary["complete_flow_count"] == 0
+    assert summary["invalid_service_flow_count"] == 2
     assert summary["invalid_duration_flow_count"] == 1
+    assert summary["invalid_state_flow_count"] == 2
 
 
 def test_flow_quality_distinguishes_invalid_present_metadata() -> None:
@@ -94,10 +98,16 @@ def test_flow_quality_distinguishes_invalid_present_metadata() -> None:
 
     assert summary["directional_flow_count"] == 0
     assert summary["invalid_directional_flow_count"] == 2
+    assert summary["invalid_directional_percent"] == 100.0
     assert summary["duration_flow_count"] == 0
     assert summary["invalid_duration_flow_count"] == 2
+    assert summary["invalid_duration_percent"] == 100.0
     assert summary["service_flow_count"] == 1
+    assert summary["invalid_service_flow_count"] == 1
+    assert summary["invalid_service_percent"] == 50.0
     assert summary["state_flow_count"] == 1
+    assert summary["invalid_state_flow_count"] == 1
+    assert summary["invalid_state_percent"] == 50.0
     assert summary["complete_flow_count"] == 0
 
 
@@ -114,6 +124,7 @@ def test_flow_quality_accepts_finite_nonnegative_numeric_duration() -> None:
     assert summary["duration_flow_count"] == 2
     assert summary["invalid_duration_flow_count"] == 2
     assert summary["duration_coverage_percent"] == 50.0
+    assert summary["invalid_duration_percent"] == 50.0
 
 
 def test_flow_quality_is_bounded() -> None:

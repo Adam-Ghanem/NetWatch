@@ -20,7 +20,13 @@ class FlowQualitySummary(TypedDict):
     complete_flow_count: int
     complete_flow_percent: float
     invalid_directional_flow_count: int
+    invalid_directional_percent: float
+    invalid_service_flow_count: int
+    invalid_service_percent: float
     invalid_duration_flow_count: int
+    invalid_duration_percent: float
+    invalid_state_flow_count: int
+    invalid_state_percent: float
     truncated: bool
 
 
@@ -52,16 +58,16 @@ def flow_quality_summary(
 
     Directional counters must be non-negative integers, while duration must be a
     finite non-negative number. Service and state must be meaningful strings.
-    Invalid-but-present directional/duration metadata is counted separately so
-    malformed telemetry is not mistaken for missing telemetry. ``complete``
-    means all four metadata groups are valid for the same flow. Payloads and
-    endpoint identities are never inspected.
+    Invalid-but-present metadata is counted separately so malformed telemetry is
+    not mistaken for missing telemetry. ``complete`` means all four metadata
+    groups are valid for the same flow. Payloads and endpoint identities are
+    never inspected.
     """
     if isinstance(flow_limit, bool) or not 1 <= flow_limit <= MAX_FLOW_QUALITY_FLOWS:
         raise ValueError(f"flow_limit must be between 1 and {MAX_FLOW_QUALITY_FLOWS}")
 
     total = directional = service = duration = state = complete = 0
-    invalid_directional = invalid_duration = 0
+    invalid_directional = invalid_service = invalid_duration = invalid_state = 0
     truncated = False
     directional_keys = (
         "originator_packets",
@@ -82,16 +88,20 @@ def flow_quality_summary(
         has_directional = directional_present and all(
             _nonnegative_integer(value) for value in directional_values
         )
+        service_present = "service" in flow and flow.get("service") is not None
         has_service = _text_present(flow, "service")
         duration_present = "duration" in flow and flow.get("duration") is not None
         has_duration = duration_present and _valid_duration(flow.get("duration"))
+        state_present = "state" in flow and flow.get("state") is not None
         has_state = _text_present(flow, "state")
         directional += int(has_directional)
         service += int(has_service)
         duration += int(has_duration)
         state += int(has_state)
         invalid_directional += int(directional_present and not has_directional)
+        invalid_service += int(service_present and not has_service)
         invalid_duration += int(duration_present and not has_duration)
+        invalid_state += int(state_present and not has_state)
         complete += int(has_directional and has_service and has_duration and has_state)
 
     return {
@@ -107,6 +117,12 @@ def flow_quality_summary(
         "complete_flow_count": complete,
         "complete_flow_percent": _percent(complete, total),
         "invalid_directional_flow_count": invalid_directional,
+        "invalid_directional_percent": _percent(invalid_directional, total),
+        "invalid_service_flow_count": invalid_service,
+        "invalid_service_percent": _percent(invalid_service, total),
         "invalid_duration_flow_count": invalid_duration,
+        "invalid_duration_percent": _percent(invalid_duration, total),
+        "invalid_state_flow_count": invalid_state,
+        "invalid_state_percent": _percent(invalid_state, total),
         "truncated": truncated,
     }
