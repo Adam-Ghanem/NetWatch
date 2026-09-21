@@ -25,10 +25,15 @@ class FlowHistoryQualitySummary(TypedDict):
     degraded_history_flow_count: int
     degraded_history_percent: float
     capture_gap_flow_count: int
+    capture_gap_percent: float
     partial_analysis_flow_count: int
+    partial_analysis_percent: float
     bad_checksum_flow_count: int
+    bad_checksum_percent: float
     retransmission_flow_count: int
+    retransmission_percent: float
     inconsistent_flow_count: int
+    inconsistent_percent: float
     truncated: bool
 
 
@@ -51,6 +56,8 @@ def flow_history_quality_summary(
     connection history. It treats missing history separately from malformed present
     values and reports quality-degrading evidence such as content gaps, partial
     analysis, bad checksums, retransmissions, and inconsistent/multi-flag packets.
+    Per-signal rates use all observed flows as the denominator so dashboards can
+    compare them directly with history coverage and overall degradation rates.
 
     The result is descriptive evidence, not an intrusion verdict. Endpoint identities
     and packet payloads are never inspected.
@@ -109,9 +116,14 @@ def flow_history_quality_summary(
         "degraded_history_flow_count": degraded,
         "degraded_history_percent": _percent(degraded, total),
         "capture_gap_flow_count": capture_gap,
+        "capture_gap_percent": _percent(capture_gap, total),
         "partial_analysis_flow_count": partial,
+        "partial_analysis_percent": _percent(partial, total),
         "bad_checksum_flow_count": bad_checksum,
+        "bad_checksum_percent": _percent(bad_checksum, total),
         "retransmission_flow_count": retransmission,
+        "retransmission_percent": _percent(retransmission, total),
         "inconsistent_flow_count": inconsistent,
+        "inconsistent_percent": _percent(inconsistent, total),
         "truncated": truncated,
     }

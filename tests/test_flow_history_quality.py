@@ -41,10 +41,31 @@ def test_history_quality_reports_degradation_signals_once_per_flow() -> None:
     assert summary["degraded_history_flow_count"] == 5
     assert summary["degraded_history_percent"] == pytest.approx(83.33)
     assert summary["capture_gap_flow_count"] == 2
+    assert summary["capture_gap_percent"] == pytest.approx(33.33)
     assert summary["partial_analysis_flow_count"] == 2
+    assert summary["partial_analysis_percent"] == pytest.approx(33.33)
     assert summary["bad_checksum_flow_count"] == 2
+    assert summary["bad_checksum_percent"] == pytest.approx(33.33)
     assert summary["retransmission_flow_count"] == 2
+    assert summary["retransmission_percent"] == pytest.approx(33.33)
     assert summary["inconsistent_flow_count"] == 1
+    assert summary["inconsistent_percent"] == pytest.approx(16.67)
+
+
+def test_history_signal_rates_use_all_observed_flows_as_denominator() -> None:
+    summary = flow_history_quality_summary(
+        [
+            {"history": "g"},
+            {"history": "ShADadFf"},
+            {"history": None},
+            {"history": ""},
+        ]
+    )
+
+    assert summary["flow_count"] == 4
+    assert summary["history_flow_count"] == 2
+    assert summary["capture_gap_flow_count"] == 1
+    assert summary["capture_gap_percent"] == 25.0
 
 
 def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -> None:
@@ -58,6 +79,11 @@ def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -
 
     assert summary["degraded_history_flow_count"] == 0
     assert summary["degraded_history_percent"] == 0.0
+    assert summary["capture_gap_percent"] == 0.0
+    assert summary["partial_analysis_percent"] == 0.0
+    assert summary["bad_checksum_percent"] == 0.0
+    assert summary["retransmission_percent"] == 0.0
+    assert summary["inconsistent_percent"] == 0.0
 
 
 def test_history_quality_is_bounded() -> None:
@@ -68,7 +94,9 @@ def test_history_quality_is_bounded() -> None:
 
     assert summary["flow_count"] == 2
     assert summary["capture_gap_flow_count"] == 1
+    assert summary["capture_gap_percent"] == 50.0
     assert summary["partial_analysis_flow_count"] == 1
+    assert summary["partial_analysis_percent"] == 50.0
     assert summary["truncated"] is True
 
 
