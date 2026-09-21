@@ -5,8 +5,8 @@ from typing import TypedDict
 
 MAX_FLOW_HISTORY_FLOWS = 10_000
 
-# Zeek conn.log history markers are case-sensitive by direction. Lowercase markers
-# describe the originator and uppercase markers describe the responder.
+# Zeek conn.log history markers are case-sensitive by direction. Uppercase markers
+# describe the originator and lowercase markers describe the responder.
 _CAPTURE_GAP_MARKERS = frozenset("gG")
 _PARTIAL_ANALYSIS_MARKERS = frozenset("xX")
 _BAD_CHECKSUM_MARKERS = frozenset("cC")
@@ -106,8 +106,8 @@ def flow_history_quality_summary(
         has_bad_checksum = _markers(history, _BAD_CHECKSUM_MARKERS)
         has_retransmission = _markers(history, _RETRANSMISSION_MARKERS)
         has_inconsistent = _markers(history, _INCONSISTENT_MARKERS)
-        has_originator_zero_window = "w" in history
-        has_responder_zero_window = "W" in history
+        has_originator_zero_window = "W" in history
+        has_responder_zero_window = "w" in history
         has_zero_window = has_originator_zero_window or has_responder_zero_window
 
         capture_gap += int(has_capture_gap)
