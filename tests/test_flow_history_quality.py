@@ -104,6 +104,22 @@ def test_zero_window_direction_matches_zeek_history_case_semantics() -> None:
     assert responder["responder_zero_window_flow_count"] == 1
 
 
+def test_direction_flip_is_reported_as_provenance_not_degradation() -> None:
+    summary = flow_history_quality_summary(
+        [
+            {"history": "Sh^ADadFf"},
+            {"history": "^W"},
+            {"history": "ShADadFf"},
+            {"history": None},
+        ]
+    )
+
+    assert summary["direction_flipped_flow_count"] == 2
+    assert summary["direction_flipped_percent"] == 50.0
+    assert summary["degraded_history_flow_count"] == 1
+    assert summary["originator_zero_window_flow_count"] == 1
+
+
 def test_history_signal_rates_use_all_observed_flows_as_denominator() -> None:
     summary = flow_history_quality_summary(
         [
@@ -136,6 +152,7 @@ def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -
     assert summary["bad_checksum_percent"] == 0.0
     assert summary["retransmission_percent"] == 0.0
     assert summary["inconsistent_percent"] == 0.0
+    assert summary["direction_flipped_percent"] == 0.0
     assert summary["zero_window_percent"] == 0.0
     assert summary["originator_zero_window_percent"] == 0.0
     assert summary["responder_zero_window_percent"] == 0.0
