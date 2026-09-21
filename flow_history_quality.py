@@ -34,6 +34,8 @@ class FlowHistoryQualitySummary(TypedDict):
     retransmission_percent: float
     inconsistent_flow_count: int
     inconsistent_percent: float
+    direction_flipped_flow_count: int
+    direction_flipped_percent: float
     zero_window_flow_count: int
     zero_window_percent: float
     originator_zero_window_flow_count: int
@@ -66,9 +68,11 @@ def flow_history_quality_summary(
     analysis, bad checksums, retransmissions, inconsistent/multi-flag packets, and
     zero-window receiver pressure. Zero-window evidence is also partitioned by Zeek's
     originator/responder direction so operators can tell which side advertised receive
-    pressure without exposing endpoint identities. Per-signal rates use all observed
-    flows as the denominator so dashboards can compare them directly with history
-    coverage and overall degradation rates.
+    pressure without exposing endpoint identities. Direction-flip evidence is reported
+    separately because Zeek's heuristic may redefine which endpoint is the originator;
+    it is provenance context, not degradation by itself. Per-signal rates use all
+    observed flows as the denominator so dashboards can compare them directly with
+    history coverage and overall degradation rates.
 
     The result is descriptive evidence, not an intrusion verdict. Endpoint identities
     and packet payloads are never inspected.
@@ -78,6 +82,7 @@ def flow_history_quality_summary(
 
     total = valid = invalid = missing = degraded = 0
     capture_gap = partial = bad_checksum = retransmission = inconsistent = 0
+    direction_flipped = 0
     zero_window = 0
     originator_zero_window = 0
     responder_zero_window = 0
@@ -106,6 +111,7 @@ def flow_history_quality_summary(
         has_bad_checksum = _markers(history, _BAD_CHECKSUM_MARKERS)
         has_retransmission = _markers(history, _RETRANSMISSION_MARKERS)
         has_inconsistent = _markers(history, _INCONSISTENT_MARKERS)
+        has_direction_flip = "^" in history
         has_originator_zero_window = "W" in history
         has_responder_zero_window = "w" in history
         has_zero_window = has_originator_zero_window or has_responder_zero_window
@@ -115,6 +121,7 @@ def flow_history_quality_summary(
         bad_checksum += int(has_bad_checksum)
         retransmission += int(has_retransmission)
         inconsistent += int(has_inconsistent)
+        direction_flipped += int(has_direction_flip)
         zero_window += int(has_zero_window)
         originator_zero_window += int(has_originator_zero_window)
         responder_zero_window += int(has_responder_zero_window)
@@ -148,6 +155,8 @@ def flow_history_quality_summary(
         "retransmission_percent": _percent(retransmission, total),
         "inconsistent_flow_count": inconsistent,
         "inconsistent_percent": _percent(inconsistent, total),
+        "direction_flipped_flow_count": direction_flipped,
+        "direction_flipped_percent": _percent(direction_flipped, total),
         "zero_window_flow_count": zero_window,
         "zero_window_percent": _percent(zero_window, total),
         "originator_zero_window_flow_count": originator_zero_window,
