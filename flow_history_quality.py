@@ -12,7 +12,6 @@ _PARTIAL_ANALYSIS_MARKERS = frozenset("xX")
 _BAD_CHECKSUM_MARKERS = frozenset("cC")
 _RETRANSMISSION_MARKERS = frozenset("tT")
 _INCONSISTENT_MARKERS = frozenset("iIqQ")
-_ZERO_WINDOW_MARKERS = frozenset("wW")
 
 
 class FlowHistoryQualitySummary(TypedDict):
@@ -119,9 +118,7 @@ def flow_history_quality_summary(
         zero_window += int(has_zero_window)
         originator_zero_window += int(has_originator_zero_window)
         responder_zero_window += int(has_responder_zero_window)
-        bidirectional_zero_window += int(
-            has_originator_zero_window and has_responder_zero_window
-        )
+        bidirectional_zero_window += int(has_originator_zero_window and has_responder_zero_window)
         degraded += int(
             has_capture_gap
             or has_partial
