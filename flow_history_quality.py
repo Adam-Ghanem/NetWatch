@@ -12,6 +12,7 @@ _PARTIAL_ANALYSIS_MARKERS = frozenset("xX")
 _BAD_CHECKSUM_MARKERS = frozenset("cC")
 _RETRANSMISSION_MARKERS = frozenset("tT")
 _INCONSISTENT_MARKERS = frozenset("iIqQ")
+_ZERO_WINDOW_MARKERS = frozenset("wW")
 
 
 class FlowHistoryQualitySummary(TypedDict):
@@ -34,6 +35,8 @@ class FlowHistoryQualitySummary(TypedDict):
     retransmission_percent: float
     inconsistent_flow_count: int
     inconsistent_percent: float
+    zero_window_flow_count: int
+    zero_window_percent: float
     truncated: bool
 
 
@@ -55,9 +58,10 @@ def flow_history_quality_summary(
     This helper consumes normalized ``history`` metadata compatible with Zeek-style
     connection history. It treats missing history separately from malformed present
     values and reports quality-degrading evidence such as content gaps, partial
-    analysis, bad checksums, retransmissions, and inconsistent/multi-flag packets.
-    Per-signal rates use all observed flows as the denominator so dashboards can
-    compare them directly with history coverage and overall degradation rates.
+    analysis, bad checksums, retransmissions, inconsistent/multi-flag packets, and
+    zero-window receiver pressure. Per-signal rates use all observed flows as the
+    denominator so dashboards can compare them directly with history coverage and
+    overall degradation rates.
 
     The result is descriptive evidence, not an intrusion verdict. Endpoint identities
     and packet payloads are never inspected.
@@ -67,6 +71,7 @@ def flow_history_quality_summary(
 
     total = valid = invalid = missing = degraded = 0
     capture_gap = partial = bad_checksum = retransmission = inconsistent = 0
+    zero_window = 0
     truncated = False
 
     for index, flow in enumerate(flows):
@@ -91,18 +96,21 @@ def flow_history_quality_summary(
         has_bad_checksum = _markers(history, _BAD_CHECKSUM_MARKERS)
         has_retransmission = _markers(history, _RETRANSMISSION_MARKERS)
         has_inconsistent = _markers(history, _INCONSISTENT_MARKERS)
+        has_zero_window = _markers(history, _ZERO_WINDOW_MARKERS)
 
         capture_gap += int(has_capture_gap)
         partial += int(has_partial)
         bad_checksum += int(has_bad_checksum)
         retransmission += int(has_retransmission)
         inconsistent += int(has_inconsistent)
+        zero_window += int(has_zero_window)
         degraded += int(
             has_capture_gap
             or has_partial
             or has_bad_checksum
             or has_retransmission
             or has_inconsistent
+            or has_zero_window
         )
 
     return {
@@ -125,5 +133,7 @@ def flow_history_quality_summary(
         "retransmission_percent": _percent(retransmission, total),
         "inconsistent_flow_count": inconsistent,
         "inconsistent_percent": _percent(inconsistent, total),
+        "zero_window_flow_count": zero_window,
+        "zero_window_percent": _percent(zero_window, total),
         "truncated": truncated,
     }

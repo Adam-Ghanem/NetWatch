@@ -50,6 +50,26 @@ def test_history_quality_reports_degradation_signals_once_per_flow() -> None:
     assert summary["retransmission_percent"] == pytest.approx(33.33)
     assert summary["inconsistent_flow_count"] == 1
     assert summary["inconsistent_percent"] == pytest.approx(16.67)
+    assert summary["zero_window_flow_count"] == 0
+    assert summary["zero_window_percent"] == 0.0
+
+
+def test_history_quality_reports_zero_window_receiver_pressure() -> None:
+    summary = flow_history_quality_summary(
+        [
+            {"history": "ShADadFf"},
+            {"history": "ShwWadFf"},
+            {"history": "W"},
+            {"history": None},
+        ]
+    )
+
+    assert summary["flow_count"] == 4
+    assert summary["history_flow_count"] == 3
+    assert summary["zero_window_flow_count"] == 2
+    assert summary["zero_window_percent"] == 50.0
+    assert summary["degraded_history_flow_count"] == 2
+    assert summary["degraded_history_percent"] == 50.0
 
 
 def test_history_signal_rates_use_all_observed_flows_as_denominator() -> None:
@@ -84,6 +104,7 @@ def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -
     assert summary["bad_checksum_percent"] == 0.0
     assert summary["retransmission_percent"] == 0.0
     assert summary["inconsistent_percent"] == 0.0
+    assert summary["zero_window_percent"] == 0.0
 
 
 def test_history_quality_is_bounded() -> None:
