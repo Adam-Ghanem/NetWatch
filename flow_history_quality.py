@@ -5,14 +5,13 @@ from typing import TypedDict
 
 MAX_FLOW_HISTORY_FLOWS = 10_000
 
-# Zeek conn.log history markers are case-sensitive by direction, but quality
-# semantics are the same for the upper/lowercase variants.
+# Zeek conn.log history markers are case-sensitive by direction. Lowercase markers
+# describe the originator and uppercase markers describe the responder.
 _CAPTURE_GAP_MARKERS = frozenset("gG")
 _PARTIAL_ANALYSIS_MARKERS = frozenset("xX")
 _BAD_CHECKSUM_MARKERS = frozenset("cC")
 _RETRANSMISSION_MARKERS = frozenset("tT")
 _INCONSISTENT_MARKERS = frozenset("iIqQ")
-_ZERO_WINDOW_MARKERS = frozenset("wW")
 
 
 class FlowHistoryQualitySummary(TypedDict):
@@ -37,6 +36,12 @@ class FlowHistoryQualitySummary(TypedDict):
     inconsistent_percent: float
     zero_window_flow_count: int
     zero_window_percent: float
+    originator_zero_window_flow_count: int
+    originator_zero_window_percent: float
+    responder_zero_window_flow_count: int
+    responder_zero_window_percent: float
+    bidirectional_zero_window_flow_count: int
+    bidirectional_zero_window_percent: float
     truncated: bool
 
 
@@ -59,9 +64,11 @@ def flow_history_quality_summary(
     connection history. It treats missing history separately from malformed present
     values and reports quality-degrading evidence such as content gaps, partial
     analysis, bad checksums, retransmissions, inconsistent/multi-flag packets, and
-    zero-window receiver pressure. Per-signal rates use all observed flows as the
-    denominator so dashboards can compare them directly with history coverage and
-    overall degradation rates.
+    zero-window receiver pressure. Zero-window evidence is also partitioned by Zeek's
+    originator/responder direction so operators can tell which side advertised receive
+    pressure without exposing endpoint identities. Per-signal rates use all observed
+    flows as the denominator so dashboards can compare them directly with history
+    coverage and overall degradation rates.
 
     The result is descriptive evidence, not an intrusion verdict. Endpoint identities
     and packet payloads are never inspected.
@@ -72,6 +79,9 @@ def flow_history_quality_summary(
     total = valid = invalid = missing = degraded = 0
     capture_gap = partial = bad_checksum = retransmission = inconsistent = 0
     zero_window = 0
+    originator_zero_window = 0
+    responder_zero_window = 0
+    bidirectional_zero_window = 0
     truncated = False
 
     for index, flow in enumerate(flows):
@@ -96,7 +106,9 @@ def flow_history_quality_summary(
         has_bad_checksum = _markers(history, _BAD_CHECKSUM_MARKERS)
         has_retransmission = _markers(history, _RETRANSMISSION_MARKERS)
         has_inconsistent = _markers(history, _INCONSISTENT_MARKERS)
-        has_zero_window = _markers(history, _ZERO_WINDOW_MARKERS)
+        has_originator_zero_window = "w" in history
+        has_responder_zero_window = "W" in history
+        has_zero_window = has_originator_zero_window or has_responder_zero_window
 
         capture_gap += int(has_capture_gap)
         partial += int(has_partial)
@@ -104,6 +116,9 @@ def flow_history_quality_summary(
         retransmission += int(has_retransmission)
         inconsistent += int(has_inconsistent)
         zero_window += int(has_zero_window)
+        originator_zero_window += int(has_originator_zero_window)
+        responder_zero_window += int(has_responder_zero_window)
+        bidirectional_zero_window += int(has_originator_zero_window and has_responder_zero_window)
         degraded += int(
             has_capture_gap
             or has_partial
@@ -135,5 +150,11 @@ def flow_history_quality_summary(
         "inconsistent_percent": _percent(inconsistent, total),
         "zero_window_flow_count": zero_window,
         "zero_window_percent": _percent(zero_window, total),
+        "originator_zero_window_flow_count": originator_zero_window,
+        "originator_zero_window_percent": _percent(originator_zero_window, total),
+        "responder_zero_window_flow_count": responder_zero_window,
+        "responder_zero_window_percent": _percent(responder_zero_window, total),
+        "bidirectional_zero_window_flow_count": bidirectional_zero_window,
+        "bidirectional_zero_window_percent": _percent(bidirectional_zero_window, total),
         "truncated": truncated,
     }

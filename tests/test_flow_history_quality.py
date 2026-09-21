@@ -72,6 +72,28 @@ def test_history_quality_reports_zero_window_receiver_pressure() -> None:
     assert summary["degraded_history_percent"] == 50.0
 
 
+def test_zero_window_pressure_is_partitioned_by_connection_direction() -> None:
+    summary = flow_history_quality_summary(
+        [
+            {"history": "w"},
+            {"history": "W"},
+            {"history": "wWwW"},
+            {"history": "ShADadFf"},
+            {"history": None},
+        ]
+    )
+
+    assert summary["flow_count"] == 5
+    assert summary["zero_window_flow_count"] == 3
+    assert summary["zero_window_percent"] == 60.0
+    assert summary["originator_zero_window_flow_count"] == 2
+    assert summary["originator_zero_window_percent"] == 40.0
+    assert summary["responder_zero_window_flow_count"] == 2
+    assert summary["responder_zero_window_percent"] == 40.0
+    assert summary["bidirectional_zero_window_flow_count"] == 1
+    assert summary["bidirectional_zero_window_percent"] == 20.0
+
+
 def test_history_signal_rates_use_all_observed_flows_as_denominator() -> None:
     summary = flow_history_quality_summary(
         [
@@ -105,6 +127,9 @@ def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -
     assert summary["retransmission_percent"] == 0.0
     assert summary["inconsistent_percent"] == 0.0
     assert summary["zero_window_percent"] == 0.0
+    assert summary["originator_zero_window_percent"] == 0.0
+    assert summary["responder_zero_window_percent"] == 0.0
+    assert summary["bidirectional_zero_window_percent"] == 0.0
 
 
 def test_history_quality_is_bounded() -> None:
