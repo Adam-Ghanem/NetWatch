@@ -94,6 +94,16 @@ def test_zero_window_pressure_is_partitioned_by_connection_direction() -> None:
     assert summary["bidirectional_zero_window_percent"] == 20.0
 
 
+def test_zero_window_direction_matches_zeek_history_case_semantics() -> None:
+    originator = flow_history_quality_summary([{"history": "W"}])
+    responder = flow_history_quality_summary([{"history": "w"}])
+
+    assert originator["originator_zero_window_flow_count"] == 1
+    assert originator["responder_zero_window_flow_count"] == 0
+    assert responder["originator_zero_window_flow_count"] == 0
+    assert responder["responder_zero_window_flow_count"] == 1
+
+
 def test_history_signal_rates_use_all_observed_flows_as_denominator() -> None:
     summary = flow_history_quality_summary(
         [
