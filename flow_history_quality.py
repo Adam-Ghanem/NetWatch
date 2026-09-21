@@ -79,7 +79,10 @@ def flow_history_quality_summary(
 
     total = valid = invalid = missing = degraded = 0
     capture_gap = partial = bad_checksum = retransmission = inconsistent = 0
-    zero_window = originator_zero_window = responder_zero_window = bidirectional_zero_window = 0
+    zero_window = 0
+    originator_zero_window = 0
+    responder_zero_window = 0
+    bidirectional_zero_window = 0
     truncated = False
 
     for index, flow in enumerate(flows):
