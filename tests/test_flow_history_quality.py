@@ -54,6 +54,29 @@ def test_history_quality_reports_degradation_signals_once_per_flow() -> None:
     assert summary["zero_window_percent"] == 0.0
 
 
+def test_retransmissions_are_partitioned_by_connection_direction() -> None:
+    summary = flow_history_quality_summary(
+        [
+            {"history": "T"},
+            {"history": "t"},
+            {"history": "TtTt"},
+            {"history": "ShADadFf"},
+            {"history": None},
+        ]
+    )
+
+    assert summary["flow_count"] == 5
+    assert summary["retransmission_flow_count"] == 3
+    assert summary["retransmission_percent"] == 60.0
+    assert summary["originator_retransmission_flow_count"] == 2
+    assert summary["originator_retransmission_percent"] == 40.0
+    assert summary["responder_retransmission_flow_count"] == 2
+    assert summary["responder_retransmission_percent"] == 40.0
+    assert summary["bidirectional_retransmission_flow_count"] == 1
+    assert summary["bidirectional_retransmission_percent"] == 20.0
+    assert summary["degraded_history_flow_count"] == 3
+
+
 def test_history_quality_reports_zero_window_receiver_pressure() -> None:
     summary = flow_history_quality_summary(
         [
@@ -174,6 +197,9 @@ def test_history_quality_does_not_treat_normal_handshake_letters_as_degraded() -
     assert summary["partial_analysis_percent"] == 0.0
     assert summary["bad_checksum_percent"] == 0.0
     assert summary["retransmission_percent"] == 0.0
+    assert summary["originator_retransmission_percent"] == 0.0
+    assert summary["responder_retransmission_percent"] == 0.0
+    assert summary["bidirectional_retransmission_percent"] == 0.0
     assert summary["inconsistent_percent"] == 0.0
     assert summary["direction_flipped_percent"] == 0.0
     assert summary["reset_percent"] == pytest.approx(33.33)
