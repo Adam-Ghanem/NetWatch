@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import TypedDict
 
 MAX_CONNECTION_STATE_FLOWS = 10_000
@@ -70,7 +70,7 @@ def _percent(part: int, total: int) -> float:
 
 
 def connection_state_summary(
-    flows: Iterable[dict[str, object]], *, flow_limit: int = MAX_CONNECTION_STATE_FLOWS
+    flows: Iterable[Mapping[str, object]], *, flow_limit: int = MAX_CONNECTION_STATE_FLOWS
 ) -> ConnectionStateSummary:
     """Summarize bounded TCP outcomes from Zeek-style ``conn_state`` metadata.
 
