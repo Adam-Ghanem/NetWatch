@@ -10,7 +10,6 @@ MAX_FLOW_HISTORY_FLOWS = 10_000
 _CAPTURE_GAP_MARKERS = frozenset("gG")
 _PARTIAL_ANALYSIS_MARKERS = frozenset("xX")
 _BAD_CHECKSUM_MARKERS = frozenset("cC")
-_RETRANSMISSION_MARKERS = frozenset("tT")
 _INCONSISTENT_MARKERS = frozenset("iIqQ")
 
 
@@ -32,6 +31,12 @@ class FlowHistoryQualitySummary(TypedDict):
     bad_checksum_percent: float
     retransmission_flow_count: int
     retransmission_percent: float
+    originator_retransmission_flow_count: int
+    originator_retransmission_percent: float
+    responder_retransmission_flow_count: int
+    responder_retransmission_percent: float
+    bidirectional_retransmission_flow_count: int
+    bidirectional_retransmission_percent: float
     inconsistent_flow_count: int
     inconsistent_percent: float
     direction_flipped_flow_count: int
@@ -74,11 +79,11 @@ def flow_history_quality_summary(
     connection history. It treats missing history separately from malformed present
     values and reports quality-degrading evidence such as content gaps, partial
     analysis, bad checksums, retransmissions, inconsistent/multi-flag packets, and
-    zero-window receiver pressure. Reset and zero-window evidence are partitioned by
-    Zeek's originator/responder direction so operators can identify which side emitted
-    the transport signal without exposing endpoint identities. Resets and direction
-    flips are reported as transport/provenance context rather than degradation by
-    themselves because both can occur during normal connection handling. Per-signal
+    zero-window receiver pressure. Retransmission, reset, and zero-window evidence is
+    partitioned by Zeek's originator/responder direction so operators can identify
+    which side emitted the transport signal without exposing endpoint identities.
+    Resets and direction flips are transport/provenance context rather than degradation
+    by themselves because both can occur during normal connection handling. Per-signal
     rates use all observed flows as the denominator so dashboards can compare them
     directly with history coverage and overall degradation rates.
 
@@ -89,7 +94,9 @@ def flow_history_quality_summary(
         raise ValueError(f"flow_limit must be between 1 and {MAX_FLOW_HISTORY_FLOWS}")
 
     total = valid = invalid = missing = degraded = 0
-    capture_gap = partial = bad_checksum = retransmission = inconsistent = 0
+    capture_gap = partial = bad_checksum = inconsistent = 0
+    retransmission = originator_retransmission = responder_retransmission = 0
+    bidirectional_retransmission = 0
     direction_flipped = 0
     reset = originator_reset = responder_reset = bidirectional_reset = 0
     zero_window = 0
@@ -118,7 +125,9 @@ def flow_history_quality_summary(
         has_capture_gap = _markers(history, _CAPTURE_GAP_MARKERS)
         has_partial = _markers(history, _PARTIAL_ANALYSIS_MARKERS)
         has_bad_checksum = _markers(history, _BAD_CHECKSUM_MARKERS)
-        has_retransmission = _markers(history, _RETRANSMISSION_MARKERS)
+        has_originator_retransmission = "T" in history
+        has_responder_retransmission = "t" in history
+        has_retransmission = has_originator_retransmission or has_responder_retransmission
         has_inconsistent = _markers(history, _INCONSISTENT_MARKERS)
         has_direction_flip = "^" in history
         has_originator_reset = "R" in history
@@ -132,6 +141,11 @@ def flow_history_quality_summary(
         partial += int(has_partial)
         bad_checksum += int(has_bad_checksum)
         retransmission += int(has_retransmission)
+        originator_retransmission += int(has_originator_retransmission)
+        responder_retransmission += int(has_responder_retransmission)
+        bidirectional_retransmission += int(
+            has_originator_retransmission and has_responder_retransmission
+        )
         inconsistent += int(has_inconsistent)
         direction_flipped += int(has_direction_flip)
         reset += int(has_reset)
@@ -169,6 +183,12 @@ def flow_history_quality_summary(
         "bad_checksum_percent": _percent(bad_checksum, total),
         "retransmission_flow_count": retransmission,
         "retransmission_percent": _percent(retransmission, total),
+        "originator_retransmission_flow_count": originator_retransmission,
+        "originator_retransmission_percent": _percent(originator_retransmission, total),
+        "responder_retransmission_flow_count": responder_retransmission,
+        "responder_retransmission_percent": _percent(responder_retransmission, total),
+        "bidirectional_retransmission_flow_count": bidirectional_retransmission,
+        "bidirectional_retransmission_percent": _percent(bidirectional_retransmission, total),
         "inconsistent_flow_count": inconsistent,
         "inconsistent_percent": _percent(inconsistent, total),
         "direction_flipped_flow_count": direction_flipped,
