@@ -6,7 +6,21 @@ from flow_connection_state import connection_state_summary
 
 
 def test_connection_state_reports_operator_outcomes() -> None:
-    states = ["SF", "S1", "S0", "REJ", "S2", "S3", "RSTO", "RSTR", "RSTOS0", "RSTRH", "SH", "SHR", "OTH"]
+    states = [
+        "SF",
+        "S1",
+        "S0",
+        "REJ",
+        "S2",
+        "S3",
+        "RSTO",
+        "RSTR",
+        "RSTOS0",
+        "RSTRH",
+        "SH",
+        "SHR",
+        "OTH",
+    ]
     flows = [{"proto": "tcp", "conn_state": state} for state in states]
     flows.append({"proto": "udp", "conn_state": "SF"})
 
