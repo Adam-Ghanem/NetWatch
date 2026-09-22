@@ -8,7 +8,21 @@ MAX_CONNECTION_STATE_FLOWS = 10_000
 # Zeek conn.log TCP connection states. Keep outcome groups explicit so a new or
 # malformed state is surfaced as unknown rather than silently misclassified.
 _RECOGNIZED_STATES = frozenset(
-    {"S0", "S1", "SF", "REJ", "S2", "S3", "RSTO", "RSTR", "RSTOS0", "RSTRH", "SH", "SHR", "OTH"}
+    {
+        "S0",
+        "S1",
+        "SF",
+        "REJ",
+        "S2",
+        "S3",
+        "RSTO",
+        "RSTR",
+        "RSTOS0",
+        "RSTRH",
+        "SH",
+        "SHR",
+        "OTH",
+    }
 )
 _ESTABLISHED_STATES = frozenset({"S1", "SF", "S2", "S3", "RSTO", "RSTR"})
 _RESET_STATES = frozenset({"RSTO", "RSTR", "RSTOS0", "RSTRH"})
