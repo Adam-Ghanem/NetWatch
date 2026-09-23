@@ -34,18 +34,16 @@ def test_summarizes_bidirectional_payload_without_retaining_content():
 
 
 def test_reports_missing_metadata_instead_of_guessing_from_frame_length():
-    summary = tcp_payload_evidence_summary(
-        [
-            {
-                "protocol": "TCP",
-                "source_ip": "10.0.0.2",
-                "destination_ip": "10.0.0.3",
-                "source_port": 50000,
-                "destination_port": 443,
-                "length_bytes": 1514,
-            },
-        ],
-    )
+    record = {
+        "protocol": "TCP",
+        "source_ip": "10.0.0.2",
+        "destination_ip": "10.0.0.3",
+        "source_port": 50000,
+        "destination_port": 443,
+        "length_bytes": 1514,
+    }
+
+    summary = tcp_payload_evidence_summary([record])
 
     assert summary["payload_bytes"] == 0
     assert summary["payload_segment_count"] == 0
