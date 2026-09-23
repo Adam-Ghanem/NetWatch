@@ -21,6 +21,13 @@ class TcpPayloadEvidenceSummary(TypedDict):
     payload_retained: bool
 
 
+class _FlowPayloadEvidence(TypedDict):
+    originator: tuple[str, int]
+    responder: tuple[str, int]
+    originator_bytes: int
+    responder_bytes: int
+
+
 def _percent(part: int, total: int) -> float:
     if total == 0:
         return 0.0
@@ -63,10 +70,7 @@ def tcp_payload_evidence_summary(
 
     total = tcp = payload_segments = payload_bytes = missing = 0
     truncated = False
-    flows: dict[
-        tuple[tuple[str, int], tuple[str, int]],
-        dict[tuple[str, int], int],
-    ] = {}
+    flows: dict[tuple[tuple[str, int], tuple[str, int]], _FlowPayloadEvidence] = {}
 
     for index, record in enumerate(records):
         if index >= record_limit:
@@ -88,21 +92,27 @@ def tcp_payload_evidence_summary(
 
         payload_segments += 1
         payload_bytes += segment_length
-        left, right = sorted((source, destination))
-        directions = flows.setdefault((left, right), {left: 0, right: 0})
-        directions[source] = directions.get(source, 0) + segment_length
+        key = tuple(sorted((source, destination)))
+        flow = flows.setdefault(
+            key,
+            {
+                "originator": source,
+                "responder": destination,
+                "originator_bytes": 0,
+                "responder_bytes": 0,
+            },
+        )
+        role = "originator_bytes" if source == flow["originator"] else "responder_bytes"
+        flow[role] += segment_length
 
-    bidirectional = sum(1 for values in flows.values() if all(value > 0 for value in values.values()))
+    bidirectional = sum(
+        1
+        for flow in flows.values()
+        if flow["originator_bytes"] > 0 and flow["responder_bytes"] > 0
+    )
     unidirectional = len(flows) - bidirectional
-
-    originator_bytes = 0
-    responder_bytes = 0
-    for values in flows.values():
-        ordered = list(values.values())
-        if ordered:
-            originator_bytes += ordered[0]
-        if len(ordered) > 1:
-            responder_bytes += ordered[1]
+    originator_bytes = sum(flow["originator_bytes"] for flow in flows.values())
+    responder_bytes = sum(flow["responder_bytes"] for flow in flows.values())
 
     return {
         "record_count": total,
