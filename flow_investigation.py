@@ -8,6 +8,7 @@ from flow_analysis import summarize_conversations
 from flow_anomaly import FlowAnomalyPolicy, analyze_flow_anomalies
 from flow_correlation import CorrelationPolicy, correlate_flow_events
 from flow_query import FlowQuery, query_flows
+from flow_tcp_completeness import TcpCompletenessSummary, tcp_completeness_summary
 from flow_topology import TopologyLimits, TopologyResult, build_flow_topology
 
 
@@ -17,6 +18,7 @@ class InvestigationResult(TypedDict):
     event_count: int
     flows: list[dict[str, object]]
     conversations: dict[str, object]
+    tcp_completeness: TcpCompletenessSummary
     topology: TopologyResult
     anomalies: list[dict[str, object]]
 
@@ -59,11 +61,11 @@ def build_flow_investigation(
 ) -> InvestigationResult:
     """Build one bounded, metadata-only analyst investigation snapshot.
 
-    Querying happens first so conversations, protocol-event correlation, topology,
-    and explainable anomaly findings are scoped to the same analyst selection. Only
-    allowlisted protocol metadata reaches correlated flows; raw payloads are never
-    copied or returned. Anomalies expose deterministic thresholds and bounded evidence
-    rather than opaque risk scores.
+    Querying happens first so conversations, TCP completeness, protocol-event
+    correlation, topology, and explainable anomaly findings are scoped to the same
+    analyst selection. Only allowlisted protocol metadata reaches correlated flows;
+    raw payloads are never copied or returned. Anomalies expose deterministic
+    thresholds and bounded evidence rather than opaque risk scores.
     """
     selected = limits or InvestigationLimits()
     selected.validate()
@@ -97,6 +99,10 @@ def build_flow_investigation(
         conversation_limit=selected.conversation_limit,
         endpoint_limit=selected.endpoint_limit,
     )
+    tcp_completeness = tcp_completeness_summary(
+        enriched_flows,
+        flow_limit=selected.flow_limit,
+    )
     topology = build_flow_topology(
         enriched_flows,
         devices=devices,
@@ -117,6 +123,7 @@ def build_flow_investigation(
         "event_count": correlation["event_count"],
         "flows": enriched_flows,
         "conversations": conversations,
+        "tcp_completeness": tcp_completeness,
         "topology": topology,
         "anomalies": anomalies,
     }
