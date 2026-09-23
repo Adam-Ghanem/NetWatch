@@ -44,7 +44,7 @@ def test_reports_missing_metadata_instead_of_guessing_from_frame_length():
                 "destination_port": 443,
                 "length_bytes": 1514,
             }
-        ]
+        ],
     )
 
     assert summary["payload_bytes"] == 0
