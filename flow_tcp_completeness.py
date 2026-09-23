@@ -51,9 +51,8 @@ def tcp_completeness_summary(
     can begin late, end early, or lose packets. Raw payloads and endpoint identities are
     never inspected or retained.
     """
-    if (
-        isinstance(flow_limit, bool)
-        or not 1 <= flow_limit <= MAX_TCP_COMPLETENESS_FLOWS
+    if isinstance(flow_limit, bool) or not (
+        1 <= flow_limit <= MAX_TCP_COMPLETENESS_FLOWS
     ):
         raise ValueError(f"flow_limit must be between 1 and {MAX_TCP_COMPLETENESS_FLOWS}")
 
