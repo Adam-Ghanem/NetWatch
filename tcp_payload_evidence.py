@@ -65,7 +65,10 @@ def tcp_payload_evidence_summary(
     one or both directions. Missing segment-length metadata is reported explicitly;
     Ethernet frame length is never treated as TCP payload.
     """
-    if isinstance(record_limit, bool) or not 1 <= record_limit <= MAX_TCP_PAYLOAD_RECORDS:
+    if (
+        isinstance(record_limit, bool)
+        or not 1 <= record_limit <= MAX_TCP_PAYLOAD_RECORDS
+    ):
         raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
 
     total = tcp = payload_segments = payload_bytes = missing = 0
