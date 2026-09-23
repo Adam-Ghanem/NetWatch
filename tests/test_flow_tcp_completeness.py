@@ -32,9 +32,7 @@ def test_tcp_completeness_classifies_open_data_and_close_evidence() -> None:
 
 
 def test_tcp_completeness_does_not_treat_partial_capture_as_risk() -> None:
-    summary = tcp_completeness_summary(
-        [{"protocol": "TCP", "tcp_history": [">D", "<A"]}]
-    )
+    summary = tcp_completeness_summary([{"protocol": "TCP", "tcp_history": [">D", "<A"]}])
 
     assert summary["incomplete_flow_count"] == 1
     assert "risk" not in summary
