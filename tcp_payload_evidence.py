@@ -1,3 +1,4 @@
+# fmt: off
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -132,3 +133,4 @@ def tcp_payload_evidence_summary(
         "truncated": truncated,
         "payload_retained": False,
     }
+# fmt: on
