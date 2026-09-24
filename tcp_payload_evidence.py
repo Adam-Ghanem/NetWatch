@@ -107,8 +107,10 @@ def tcp_payload_evidence_summary(
                 "responder_bytes": 0,
             },
         )
-        role = "originator_bytes" if source == flow["originator"] else "responder_bytes"
-        flow[role] += segment_length
+        if source == flow["originator"]:
+            flow["originator_bytes"] += segment_length
+        else:
+            flow["responder_bytes"] += segment_length
 
     bidirectional = sum(
         1
