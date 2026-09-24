@@ -1,3 +1,4 @@
+# fmt: off
 import pytest
 
 from tcp_payload_evidence import tcp_payload_evidence_summary
@@ -85,3 +86,4 @@ def test_record_limit_is_bounded_and_reports_truncation():
 def test_rejects_invalid_record_limits(value):
     with pytest.raises(ValueError):
         tcp_payload_evidence_summary([], record_limit=value)
+# fmt: on
