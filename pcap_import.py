@@ -4,6 +4,7 @@ import struct
 from datetime import datetime, timezone
 from typing import Any
 
+from tcp_payload_evidence import tcp_payload_evidence_summary
 from tcp_sequence_evidence import (
     extract_tcp_sequence_metadata,
     summarize_tcp_sequence_evidence,
@@ -105,6 +106,7 @@ def import_pcap_metadata(data: bytes, *, max_packets: int = 1_000) -> dict[str, 
             "truncated_by_limit": offset < len(data),
             "payload_retained": False,
             "tcp_sequence_evidence": summarize_tcp_sequence_evidence(records),
+            "tcp_payload_evidence": tcp_payload_evidence_summary(records),
         }
     )
     return result
