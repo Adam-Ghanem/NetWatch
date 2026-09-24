@@ -53,9 +53,7 @@ def _endpoint(record: Mapping[str, object], prefix: str) -> tuple[str, int] | No
 
 
 def _validate_record_limit(record_limit: int) -> None:
-    if isinstance(record_limit, bool):
-        raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
-    if record_limit < 1 or record_limit > MAX_TCP_PAYLOAD_RECORDS:
+    if isinstance(record_limit, bool) or not 1 <= record_limit <= MAX_TCP_PAYLOAD_RECORDS:
         raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
 
 
