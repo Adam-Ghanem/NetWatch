@@ -97,7 +97,7 @@ def tcp_payload_evidence_summary(
 
         payload_segments += 1
         payload_bytes += segment_length
-        key = tuple(sorted((source, destination)))
+        key = (source, destination) if source <= destination else (destination, source)
         flow = flows.setdefault(
             key,
             {
