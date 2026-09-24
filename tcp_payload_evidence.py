@@ -52,6 +52,13 @@ def _endpoint(record: Mapping[str, object], prefix: str) -> tuple[str, int] | No
     return address, port
 
 
+def _validate_record_limit(record_limit: int) -> None:
+    if isinstance(record_limit, bool):
+        raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
+    if record_limit < 1 or record_limit > MAX_TCP_PAYLOAD_RECORDS:
+        raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
+
+
 def tcp_payload_evidence_summary(
     records: Iterable[Mapping[str, object]],
     *,
@@ -65,8 +72,7 @@ def tcp_payload_evidence_summary(
     one or both directions. Missing segment-length metadata is reported explicitly;
     Ethernet frame length is never treated as TCP payload.
     """
-    if isinstance(record_limit, bool) or not 1 <= record_limit <= MAX_TCP_PAYLOAD_RECORDS:
-        raise ValueError(f"record_limit must be between 1 and {MAX_TCP_PAYLOAD_RECORDS}")
+    _validate_record_limit(record_limit)
 
     total = tcp = payload_segments = payload_bytes = missing = 0
     truncated = False
