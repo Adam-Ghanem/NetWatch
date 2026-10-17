@@ -47,8 +47,12 @@ def test_outbox_is_idempotent_and_claimed_once_until_stale():
     claimed = claim_outbox_events(conn, consumer_id="worker-a", now="2026-08-12T10:00:00+00:00")
     assert [event["id"] for event in claimed] == [first]
     assert claim_outbox_events(conn, consumer_id="worker-b", now="2026-08-12T10:01:00+00:00") == []
-    assert mark_outbox_delivered(conn, event_id=first, consumer_id="worker-b") is False
-    assert mark_outbox_delivered(conn, event_id=first, consumer_id="worker-a") is True
+    assert mark_outbox_delivered(
+        conn, event_id=first, consumer_id="worker-b", expected_attempts=claimed[0]["attempts"]
+    ) is False
+    assert mark_outbox_delivered(
+        conn, event_id=first, consumer_id="worker-a", expected_attempts=claimed[0]["attempts"]
+    ) is True
     assert enterprise_queue_status(conn)["outbox_delivered"] == 1
 
 
@@ -95,12 +99,19 @@ def test_jobs_are_idempotent_and_fail_after_bounded_attempts():
         conn,
         job_id=job_id,
         worker_id="worker-a",
+        expected_attempts=claimed[0]["attempts"],
         error="temporary failure",
         retry_at="2026-08-12T10:01:00+00:00",
     )
     claimed_again = claim_jobs(conn, worker_id="worker-a", now="2026-08-12T10:01:00+00:00")
     assert [job["id"] for job in claimed_again] == [job_id]
-    assert fail_job(conn, job_id=job_id, worker_id="worker-a", error="permanent failure")
+    assert fail_job(
+        conn,
+        job_id=job_id,
+        worker_id="worker-a",
+        expected_attempts=claimed_again[0]["attempts"],
+        error="permanent failure",
+    )
     assert enterprise_queue_status(conn)["jobs_failed"] == 1
 
 
@@ -113,6 +124,8 @@ def test_completed_jobs_are_not_claimed_again():
         payload={"tenant_id": "default"},
     )
     assert claim_jobs(conn, worker_id="worker-a")
-    assert complete_job(conn, job_id=job_id, worker_id="worker-a") is True
+    assert complete_job(
+        conn, job_id=job_id, worker_id="worker-a", expected_attempts=1
+    ) is True
     assert claim_jobs(conn, worker_id="worker-b") == []
     assert enterprise_queue_status(conn)["jobs_succeeded"] == 1

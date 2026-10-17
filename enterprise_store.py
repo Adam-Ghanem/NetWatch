@@ -80,6 +80,17 @@ def _stale_cutoff(current: str) -> str:
     return (moment - timedelta(seconds=CLAIM_STALE_SECONDS)).isoformat(timespec="seconds")
 
 
+def _tenant_scope(tenant_id: str) -> str:
+    if (
+        not isinstance(tenant_id, str)
+        or not tenant_id
+        or len(tenant_id) > 120
+        or tenant_id.strip() != tenant_id
+    ):
+        raise ValueError("A canonical nonempty tenant_id of at most 120 characters is required.")
+    return tenant_id
+
+
 def _json_payload(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
 
@@ -117,7 +128,7 @@ def enqueue_outbox_event(
         (
             now,
             available_at or now,
-            str(tenant_id)[:120] or "default",
+            _tenant_scope(tenant_id),
             str(topic)[:120],
             str(event_type)[:120],
             str(aggregate_id)[:200],
@@ -128,10 +139,12 @@ def enqueue_outbox_event(
     if cursor.rowcount == 1 and cursor.lastrowid is not None:
         return int(cursor.lastrowid)
     row = conn.execute(
-        "SELECT id FROM enterprise_outbox WHERE dedupe_key = ?", (str(dedupe_key)[:240],)
+        "SELECT id, tenant_id FROM enterprise_outbox WHERE dedupe_key = ?", (str(dedupe_key)[:240],)
     ).fetchone()
     if row is None:
         raise RuntimeError("Outbox event was not created or recovered.")
+    if row["tenant_id"] != _tenant_scope(tenant_id):
+        raise ValueError("Outbox dedupe key is already owned by another tenant.")
     return int(row["id"])
 
 
@@ -139,22 +152,24 @@ def claim_outbox_events(
     conn: sqlite3.Connection,
     *,
     consumer_id: str,
+    tenant_id: str = "default",
     limit: int = 100,
     now: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Claim pending events; stale claims become eligible for another worker."""
+    """Claim only one tenant's events; stale claims may be recovered."""
+    scope = _tenant_scope(tenant_id)
     current = now or _utc_now()
     safe_limit = max(1, min(int(limit), 500))
     stale_cutoff = _stale_cutoff(current)
     rows = conn.execute(
         """
         SELECT * FROM enterprise_outbox
-        WHERE delivered_at = '' AND available_at <= ?
+        WHERE delivered_at = '' AND tenant_id = ? AND available_at <= ?
           AND (claimed_at = '' OR claimed_at <= ?)
           AND attempts < ?
         ORDER BY id ASC LIMIT ?
         """,
-        (current, stale_cutoff, OUTBOX_MAX_ATTEMPTS, safe_limit),
+        (scope, current, stale_cutoff, OUTBOX_MAX_ATTEMPTS, safe_limit),
     ).fetchall()
     claimed: list[dict[str, Any]] = []
     for row in rows:
@@ -162,10 +177,14 @@ def claim_outbox_events(
             """
             UPDATE enterprise_outbox
             SET claimed_at = ?, claimed_by = ?, attempts = attempts + 1
-            WHERE id = ? AND delivered_at = ''
+            WHERE id = ? AND tenant_id = ? AND delivered_at = ''
+              AND available_at <= ? AND attempts < ?
               AND (claimed_at = '' OR claimed_at <= ?)
             """,
-            (current, str(consumer_id)[:120], row["id"], stale_cutoff),
+            (
+                current, str(consumer_id)[:120], row["id"], scope,
+                current, OUTBOX_MAX_ATTEMPTS, stale_cutoff,
+            ),
         )
         if cursor.rowcount == 1:
             refreshed = conn.execute(
@@ -177,15 +196,25 @@ def claim_outbox_events(
 
 
 def mark_outbox_delivered(
-    conn: sqlite3.Connection, *, event_id: int, consumer_id: str, delivered_at: str | None = None
+    conn: sqlite3.Connection,
+    *,
+    event_id: int,
+    consumer_id: str,
+    expected_attempts: int,
+    tenant_id: str = "default",
+    delivered_at: str | None = None,
 ) -> bool:
     cursor = conn.execute(
         """
         UPDATE enterprise_outbox
         SET delivered_at = ?, claimed_at = '', claimed_by = '', last_error = ''
-        WHERE id = ? AND claimed_by = ? AND delivered_at = ''
+        WHERE id = ? AND tenant_id = ? AND claimed_by = ?
+          AND attempts = ? AND delivered_at = ''
         """,
-        (delivered_at or _utc_now(), event_id, str(consumer_id)[:120]),
+        (
+            delivered_at or _utc_now(), event_id, _tenant_scope(tenant_id),
+            str(consumer_id)[:120], int(expected_attempts),
+        ),
     )
     return cursor.rowcount == 1
 
@@ -196,19 +225,24 @@ def mark_outbox_failed(
     event_id: int,
     consumer_id: str,
     error: str,
+    expected_attempts: int,
+    tenant_id: str = "default",
     retry_at: str | None = None,
 ) -> bool:
     cursor = conn.execute(
         """
         UPDATE enterprise_outbox
         SET available_at = ?, claimed_at = '', claimed_by = '', last_error = ?
-        WHERE id = ? AND claimed_by = ? AND delivered_at = ''
+        WHERE id = ? AND tenant_id = ? AND claimed_by = ?
+          AND attempts = ? AND delivered_at = ''
         """,
         (
             retry_at or _utc_now(),
             " ".join(str(error).split())[:500],
             event_id,
+            _tenant_scope(tenant_id),
             str(consumer_id)[:120],
+            int(expected_attempts),
         ),
     )
     return cursor.rowcount == 1
@@ -236,7 +270,7 @@ def enqueue_job(
         (
             now,
             available_at or now,
-            str(tenant_id)[:120] or "default",
+            _tenant_scope(tenant_id),
             str(job_type)[:120],
             str(dedupe_key)[:240],
             _json_payload(payload),
@@ -246,10 +280,12 @@ def enqueue_job(
     if cursor.rowcount == 1 and cursor.lastrowid is not None:
         return int(cursor.lastrowid)
     row = conn.execute(
-        "SELECT id FROM enterprise_jobs WHERE dedupe_key = ?", (str(dedupe_key)[:240],)
+        "SELECT id, tenant_id FROM enterprise_jobs WHERE dedupe_key = ?", (str(dedupe_key)[:240],)
     ).fetchone()
     if row is None:
         raise RuntimeError("Job was not created or recovered.")
+    if row["tenant_id"] != _tenant_scope(tenant_id):
+        raise ValueError("Job dedupe key is already owned by another tenant.")
     return int(row["id"])
 
 
@@ -258,22 +294,24 @@ def claim_jobs(
     *,
     worker_id: str,
     job_type: str | None = None,
+    tenant_id: str = "default",
     limit: int = 10,
     now: str | None = None,
 ) -> list[dict[str, Any]]:
+    scope = _tenant_scope(tenant_id)
     current = now or _utc_now()
     safe_limit = max(1, min(int(limit), 100))
     stale_cutoff = _stale_cutoff(current)
     rows = conn.execute(
         """
         SELECT * FROM enterprise_jobs
-        WHERE status IN ('pending', 'running') AND available_at <= ?
-          AND (claimed_at = '' OR claimed_at <= ?)
+        WHERE status IN ('pending', 'running') AND tenant_id = ?
+          AND available_at <= ? AND (claimed_at = '' OR claimed_at <= ?)
           AND attempts < max_attempts
           AND (? IS NULL OR job_type = ?)
         ORDER BY id ASC LIMIT ?
         """,
-        (current, stale_cutoff, job_type, job_type, safe_limit),
+        (scope, current, stale_cutoff, job_type, job_type, safe_limit),
     ).fetchall()
     claimed: list[dict[str, Any]] = []
     for row in rows:
@@ -281,10 +319,14 @@ def claim_jobs(
             """
             UPDATE enterprise_jobs
             SET status = 'running', claimed_at = ?, claimed_by = ?, attempts = attempts + 1
-            WHERE id = ? AND status IN ('pending', 'running')
+            WHERE id = ? AND tenant_id = ? AND status IN ('pending', 'running')
+              AND available_at <= ? AND attempts < max_attempts
               AND (claimed_at = '' OR claimed_at <= ?)
             """,
-            (current, str(worker_id)[:120], row["id"], stale_cutoff),
+            (
+                current, str(worker_id)[:120], row["id"], scope,
+                current, stale_cutoff,
+            ),
         )
         if cursor.rowcount == 1:
             refreshed = conn.execute(
@@ -295,15 +337,26 @@ def claim_jobs(
     return claimed
 
 
-def complete_job(conn: sqlite3.Connection, *, job_id: int, worker_id: str) -> bool:
+def complete_job(
+    conn: sqlite3.Connection,
+    *,
+    job_id: int,
+    worker_id: str,
+    expected_attempts: int,
+    tenant_id: str = "default",
+) -> bool:
     cursor = conn.execute(
         """
         UPDATE enterprise_jobs
         SET status = 'succeeded', completed_at = ?, claimed_at = '',
             claimed_by = '', last_error = ''
-        WHERE id = ? AND status = 'running' AND claimed_by = ?
+        WHERE id = ? AND tenant_id = ? AND status = 'running'
+          AND claimed_by = ? AND attempts = ?
         """,
-        (_utc_now(), job_id, str(worker_id)[:120]),
+        (
+            _utc_now(), job_id, _tenant_scope(tenant_id),
+            str(worker_id)[:120], int(expected_attempts),
+        ),
     )
     return cursor.rowcount == 1
 
@@ -314,6 +367,8 @@ def fail_job(
     job_id: int,
     worker_id: str,
     error: str,
+    expected_attempts: int,
+    tenant_id: str = "default",
     retry_at: str | None = None,
 ) -> bool:
     cursor = conn.execute(
@@ -321,13 +376,16 @@ def fail_job(
         UPDATE enterprise_jobs
         SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
             available_at = ?, claimed_at = '', claimed_by = '', last_error = ?
-        WHERE id = ? AND status = 'running' AND claimed_by = ?
+        WHERE id = ? AND tenant_id = ? AND status = 'running'
+          AND claimed_by = ? AND attempts = ?
         """,
         (
             retry_at or _utc_now(),
             " ".join(str(error).split())[:500],
             job_id,
+            _tenant_scope(tenant_id),
             str(worker_id)[:120],
+            int(expected_attempts),
         ),
     )
     return cursor.rowcount == 1

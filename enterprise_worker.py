@@ -30,9 +30,10 @@ def process_jobs_once(
     *,
     worker_id: str,
     handlers: dict[str, JobHandler],
+    tenant_id: str = "default",
     limit: int = 10,
 ) -> WorkerCycleResult:
-    claimed = claim_jobs(conn, worker_id=worker_id, limit=limit)
+    claimed = claim_jobs(conn, worker_id=worker_id, tenant_id=tenant_id, limit=limit)
     succeeded = 0
     failed = 0
     dead_lettered = 0
@@ -50,11 +51,19 @@ def process_jobs_once(
                 conn,
                 job_id=int(job["id"]),
                 worker_id=worker_id,
+                tenant_id=tenant_id,
+                expected_attempts=int(job["attempts"]),
                 error=_safe_error(error),
                 retry_at=_retry_at(int(job["attempts"])),
             )
         else:
-            if complete_job(conn, job_id=int(job["id"]), worker_id=worker_id):
+            if complete_job(
+                conn,
+                job_id=int(job["id"]),
+                worker_id=worker_id,
+                tenant_id=tenant_id,
+                expected_attempts=int(job["attempts"]),
+            ):
                 succeeded += 1
     conn.commit()
     return WorkerCycleResult(len(claimed), succeeded, failed, dead_lettered)
@@ -65,11 +74,14 @@ def publish_outbox_once(
     *,
     consumer_id: str,
     publisher: EventPublisher,
+    tenant_id: str = "default",
     limit: int = 100,
 ) -> WorkerCycleResult:
     from enterprise_store import claim_outbox_events
 
-    claimed = claim_outbox_events(conn, consumer_id=consumer_id, limit=limit)
+    claimed = claim_outbox_events(
+        conn, consumer_id=consumer_id, tenant_id=tenant_id, limit=limit
+    )
     succeeded = 0
     failed = 0
     dead_lettered = 0
@@ -84,6 +96,8 @@ def publish_outbox_once(
                 conn,
                 event_id=int(event["id"]),
                 consumer_id=consumer_id,
+                tenant_id=tenant_id,
+                expected_attempts=int(event["attempts"]),
                 error=_safe_error(error),
                 retry_at=_retry_at(int(event["attempts"])),
             )
@@ -92,6 +106,8 @@ def publish_outbox_once(
                 conn,
                 event_id=int(event["id"]),
                 consumer_id=consumer_id,
+                tenant_id=tenant_id,
+                expected_attempts=int(event["attempts"]),
             ):
                 succeeded += 1
     conn.commit()
