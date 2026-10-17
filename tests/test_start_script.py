@@ -29,7 +29,8 @@ def test_launcher_generates_key_and_defaults(monkeypatch, tmp_path: Path):
     assert values["NETWATCH_SCHEDULER_ENABLED"] == "false"
     assert values["NETWATCH_SCHEDULER_POLL_SECONDS"] == "30"
     assert values["NETWATCH_AI_ENABLED"] == "true"
-    assert values["NETWATCH_AI_MODEL"] == "gpt-5.6-luna"
+    assert values["NETWATCH_AI_PROVIDER"] == "openai"
+    assert values["NETWATCH_AI_MODEL"] == ""
     assert values["NETWATCH_AI_DAILY_REQUEST_LIMIT"] == "50"
     assert len(values["NETWATCH_AI_SAFETY_SECRET"]) >= 32
     assert len(values["NETWATCH_AI_SUBJECT_ID"]) >= 16
