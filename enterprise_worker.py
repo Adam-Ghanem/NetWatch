@@ -11,7 +11,7 @@ from enterprise_store import (
     mark_outbox_delivered,
     mark_outbox_failed,
 )
-from enterprise_worker_safety import safe_error as _safe_error
+from enterprise_worker_safety import retry_at as _retry_at, safe_error as _safe_error
 
 JobHandler = Callable[[dict[str, Any]], None]
 EventPublisher = Callable[[dict[str, Any]], None]
@@ -51,6 +51,7 @@ def process_jobs_once(
                 job_id=int(job["id"]),
                 worker_id=worker_id,
                 error=_safe_error(error),
+                retry_at=_retry_at(int(job["attempts"])),
             )
         else:
             if complete_job(conn, job_id=int(job["id"]), worker_id=worker_id):
@@ -84,6 +85,7 @@ def publish_outbox_once(
                 event_id=int(event["id"]),
                 consumer_id=consumer_id,
                 error=_safe_error(error),
+                retry_at=_retry_at(int(event["attempts"])),
             )
         else:
             if mark_outbox_delivered(
@@ -102,7 +104,6 @@ def run_poll_loop(
     poll_seconds: float = 1.0,
     max_cycles: int | None = None,
 ) -> list[WorkerCycleResult]:
-    """Run a bounded loop; callers own connection lifecycle and shutdown signals."""
     safe_poll = max(0.1, min(float(poll_seconds), 60.0))
     safe_cycles = None if max_cycles is None else max(1, min(int(max_cycles), 10_000))
     results: list[WorkerCycleResult] = []
