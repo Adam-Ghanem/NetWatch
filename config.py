@@ -93,7 +93,10 @@ RETENTION_MAX_DELETE_ROWS = _env_int(
 SCHEDULER_ENABLED = _env_bool("NETWATCH_SCHEDULER_ENABLED", False)
 SCHEDULER_POLL_SECONDS = _env_int("NETWATCH_SCHEDULER_POLL_SECONDS", 30, minimum=5, maximum=300)
 AI_ENABLED = _env_bool("NETWATCH_AI_ENABLED", True)
-AI_MODEL = os.getenv("NETWATCH_AI_MODEL", "gpt-5.6-luna").strip() or "gpt-5.6-luna"
+AI_PROVIDER = os.getenv("NETWATCH_AI_PROVIDER", "openai").strip().lower()
+AI_MODEL = os.getenv("NETWATCH_AI_MODEL", "").strip() or (
+    "claude-sonnet-5-5" if AI_PROVIDER == "anthropic" else "gpt-5-mini"
+)
 AI_TIMEOUT_SECONDS = _env_int("NETWATCH_AI_TIMEOUT_SECONDS", 25, minimum=5, maximum=60)
 AI_MAX_OUTPUT_TOKENS = _env_int("NETWATCH_AI_MAX_OUTPUT_TOKENS", 1_200, minimum=256, maximum=4_000)
 AI_MAX_CONCURRENT_REQUESTS = _env_int(
