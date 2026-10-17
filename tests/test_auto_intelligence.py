@@ -56,19 +56,23 @@ def test_auto_analysis_claim_persists_across_calls_and_skips_unchanged(isolated_
 def test_auto_analysis_failure_throttled_and_later_retryable(isolated_db):
     start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
     digest = _digest("failure")
-    assert auto_intelligence.claim_auto_analysis(
-        digest, interval_seconds=3600, now=start
-    ) == "claimed"
-    assert auto_intelligence.finish_auto_analysis(
-        digest, success=False, now=start
+    assert (
+        auto_intelligence.claim_auto_analysis(digest, interval_seconds=3600, now=start) == "claimed"
     )
+    assert auto_intelligence.finish_auto_analysis(digest, success=False, now=start)
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
-    assert auto_intelligence.claim_auto_analysis(
-        digest, interval_seconds=3600, now=start + timedelta(minutes=20)
-    ) == "interval"
-    assert auto_intelligence.claim_auto_analysis(
-        digest, interval_seconds=3600, now=start + timedelta(hours=1)
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest, interval_seconds=3600, now=start + timedelta(minutes=20)
+        )
+        == "interval"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest, interval_seconds=3600, now=start + timedelta(hours=1)
+        )
+        == "claimed"
+    )
 
 
 def test_auto_analysis_rejects_invalid_digest(isolated_db):
@@ -85,9 +89,7 @@ def test_auto_analysis_single_winner_across_simultaneous_claims(isolated_db):
     lock = threading.Lock()
 
     def worker():
-        result = auto_intelligence.claim_auto_analysis(
-            digest, interval_seconds=3600, now=now
-        )
+        result = auto_intelligence.claim_auto_analysis(digest, interval_seconds=3600, now=now)
         with lock:
             results.append(result)
 
@@ -106,7 +108,8 @@ def test_auto_cycle_requires_opt_in_and_healthy_provider(monkeypatch, isolated_d
     assert api._run_auto_intelligence_once() == "disabled"
     monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
     monkeypatch.setattr(
-        api, "enterprise_readiness",
+        api,
+        "enterprise_readiness",
         lambda: {"capabilities": {"local_single_instance_safe": True}},
     )
     monkeypatch.setattr(api, "_intelligence_configuration_is_usable", lambda: False)
@@ -118,7 +121,8 @@ def test_auto_cycle_uses_evidence_only_and_no_repeat_call(monkeypatch, isolated_
     monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
     monkeypatch.setattr(api, "AI_AUTO_INTERVAL_SECONDS", 3600)
     monkeypatch.setattr(
-        api, "enterprise_readiness",
+        api,
+        "enterprise_readiness",
         lambda: {"capabilities": {"local_single_instance_safe": True}},
     )
     monkeypatch.setattr(api, "_intelligence_configuration_is_usable", lambda: True)
@@ -142,7 +146,8 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
     monkeypatch.setattr(api, "AI_AUTO_INTERVAL_SECONDS", 3600)
     monkeypatch.setattr(
-        api, "enterprise_readiness",
+        api,
+        "enterprise_readiness",
         lambda: {"capabilities": {"local_single_instance_safe": True}},
     )
     monkeypatch.setattr(api, "_intelligence_configuration_is_usable", lambda: True)
@@ -157,28 +162,3 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
     assert api._run_auto_intelligence_once() == "interval"
 
-
-def test_temporary_black_formatted_code_diagnostics():
-    """Temporary diagnostic only: removed after canonical Black diffs are applied."""
-    import difflib
-
-    import black
-
-    root = Path(__file__).resolve().parents[1]
-    differences = []
-    for relative in ("auto_intelligence.py", "tests/test_auto_intelligence.py", "backend/main.py"):
-        value = (root / relative).read_text(encoding="utf-8")
-        expected = black.format_str(value, mode=black.Mode(line_length=100))
-        if expected == value:
-            continue
-        delta = "\n".join(
-            difflib.unified_diff(
-                value.splitlines(),
-                expected.splitlines(),
-                fromfile=relative,
-                tofile=f"{relative}:black",
-                lineterm="",
-            )
-        )
-        differences.append(delta)
-    assert not differences, "\n\n".join(differences)
