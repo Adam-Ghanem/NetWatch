@@ -42,7 +42,8 @@ DEFAULTS = {
     "NETWATCH_SCHEDULER_ENABLED": "false",
     "NETWATCH_SCHEDULER_POLL_SECONDS": "30",
     "NETWATCH_AI_ENABLED": "true",
-    "NETWATCH_AI_MODEL": "gpt-5.6-luna",
+    "NETWATCH_AI_PROVIDER": "openai",
+    "NETWATCH_AI_MODEL": "",
     "NETWATCH_AI_TIMEOUT_SECONDS": "25",
     "NETWATCH_AI_MAX_OUTPUT_TOKENS": "1200",
     "NETWATCH_AI_MAX_CONCURRENT_REQUESTS": "2",
@@ -109,7 +110,12 @@ def ensure_configuration() -> str:
     if len(configured_role_keys) != len(set(configured_role_keys)):
         raise ValueError("Each configured NetWatch role must use a unique key.")
 
-    provider_key = values.get("OPENAI_API_KEY", "").strip()
+    provider_name = values.get("NETWATCH_AI_PROVIDER", "openai").strip().lower()
+    if provider_name not in {"openai", "anthropic"}:
+        raise ValueError("NETWATCH_AI_PROVIDER must be openai or anthropic.")
+    provider_key = values.get(
+        "ANTHROPIC_API_KEY" if provider_name == "anthropic" else "OPENAI_API_KEY", ""
+    ).strip()
     safety_secret = values.get("NETWATCH_AI_SAFETY_SECRET", "").strip()
     if (
         len(safety_secret) < MIN_AI_SAFETY_SECRET_LENGTH
@@ -177,7 +183,7 @@ def main() -> int:
     print("Tamper-evident audit signing is enabled with a separate server-only key.")
     print("Scheduled policy execution is opt-in with NETWATCH_SCHEDULER_ENABLED=true.")
     print("AI safety identity is generated automatically and never shown to dashboard users.")
-    print("Server-side intelligence is available only when OPENAI_API_KEY is configured.")
+    print("Server-side intelligence requires the selected provider API key.")
     return 0
 
 
