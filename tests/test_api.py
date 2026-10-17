@@ -1291,6 +1291,16 @@ def test_readiness_center_frontend_is_present(monkeypatch, tmp_path):
     assert "renderReadiness" in frontend.text
 
 
+def test_auto_intelligence_status_is_admin_only(monkeypatch, tmp_path):
+    with _client(monkeypatch, tmp_path) as client:
+        viewer = client.get("/api/intelligence/auto/status")
+        admin = client.get("/api/intelligence/auto/status", headers=API_HEADERS)
+    assert viewer.status_code == 401
+    assert admin.status_code == 200
+    assert admin.json()["enabled"] is False
+    assert admin.json()["last_outcome"] == "never"
+
+
 def test_anthropic_provider_uses_only_claude_key_and_separate_cache(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-claude-provider-key-long-enough")
