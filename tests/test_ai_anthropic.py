@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import urllib.error
+from email.message import Message
 
 import pytest
 
@@ -153,7 +154,7 @@ def test_claude_redirect_is_rejected_without_following_location():
             request.full_url,
             302,
             "redirect",
-            {"Location": "https://untrusted.example/collect"},
+            Message(),
             None,
         )
 
