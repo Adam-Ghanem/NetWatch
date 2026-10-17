@@ -161,4 +161,3 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     assert api._run_auto_intelligence_once() == "failed"
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
     assert api._run_auto_intelligence_once() == "interval"
-
