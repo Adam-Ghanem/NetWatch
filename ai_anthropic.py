@@ -80,7 +80,9 @@ def parse_anthropic_response(payload: dict[str, Any]) -> AIProviderResult:
     stop_reason = payload.get("stop_reason")
     if stop_reason == "refusal":
         raise AIProviderError(
-            "provider_refusal", "The intelligence provider declined this analysis.", http_status=422
+            "provider_refusal",
+            "The intelligence provider declined this analysis.",
+            http_status=422,
         )
     if stop_reason != "end_turn":
         raise AIProviderError(
