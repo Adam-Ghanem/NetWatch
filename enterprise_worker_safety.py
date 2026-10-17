@@ -4,9 +4,10 @@ from datetime import datetime, timedelta, timezone
 
 
 def safe_error(error: BaseException) -> str:
-    if str(error) == "No approved handler is registered for this job type.":
-        return "No approved handler is registered for this job type."
-    return f"Worker handler failed ({error.__class__.__name__})."
+    known = "No approved handler is registered for this job type."
+    if type(error) is RuntimeError and error.args == (known,):
+        return known
+    return f"Worker handler failed ({type(error).__name__[:64]})."
 
 
 def retry_at(attempts: int) -> str:
