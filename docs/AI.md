@@ -57,6 +57,46 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   enabling external AI on company networks.
 - Failed/disabled AI does not interrupt core monitoring and the local Risk Advisor.
 
+## Continuous evidence-only analysis (opt-in)
+
+NetWatch can periodically use the selected GPT or Claude provider to analyze
+**already-collected, aggregated, de-identified** inventory/service/case
+evidence. This does **not** schedule scans or transmit raw private network
+data. Unlike the ChatGPT GitHub-upgrade automation, this scheduler runs only
+inside your deployed NetWatch server.
+
+The default is **disabled** and no provider calls occur without an explicit
+server-side opt-in. To enable, in server-side `.env`:
+
+```dotenv
+NETWATCH_AI_ENABLED=true
+NETWATCH_AI_AUTO_ANALYSIS_ENABLED=true
+NETWATCH_AI_AUTO_INTERVAL_SECONDS=3600
+```
+
+Intervals are clamped between one and 24 hours. The scheduler runs only in
+the supported single-instance/compatibility deployment modes; it never
+activates the unvalidated shared-service or multi-replica architecture.
+The first cycle runs when the application starts, then at each interval.
+A durable SQLite claim prevents duplicate requests within the configured
+interval, including after restart. **Unchanged evidence previously analyzed
+successfully is skipped**; failures are eligible for retry only after the
+interval. This prevents sending periodic duplicate provider requests just
+to generate activity.
+
+Every actual provider request still passes the existing key separation,
+audit-integrity gate, bounded concurrency, rate limits, daily request
+budget, redacted fixed prompt, schema validation, and cached brief storage.
+AI never chooses scan targets, runs commands, or remediates findings.
+If a provider is unavailable or rate limited, local monitoring continues.
+
+An Admin can inspect aggregate scheduler status (no evidence hashes or
+keys) through `GET /api/intelligence/auto/status`; look at
+`last_attempt_at`, `last_success_at`, and `last_outcome`.
+This is advisory automation, **not** an enterprise distributed scheduler.
+Before connecting real company evidence to external APIs, complete your
+organization's data-processing/privacy approval and provider spend controls.
+
 ## Verify
 
 Run `pytest -q tests/test_ai_advisor.py tests/test_ai_anthropic.py
