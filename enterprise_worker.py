@@ -4,8 +4,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from enterprise_worker_safety import safe_error as _safe_error
-
 from enterprise_store import (
     claim_jobs,
     complete_job,
@@ -13,6 +11,7 @@ from enterprise_store import (
     mark_outbox_delivered,
     mark_outbox_failed,
 )
+from enterprise_worker_safety import safe_error as _safe_error
 
 JobHandler = Callable[[dict[str, Any]], None]
 EventPublisher = Callable[[dict[str, Any]], None]
