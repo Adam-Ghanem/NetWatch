@@ -1162,7 +1162,7 @@ async function loadIntelligenceStatus() {
   badge.textContent = status.available ? 'Ready' : 'Local fallback';
   badge.className = `risk-badge ${status.available ? 'low' : 'medium'}`;
   renderMiniMetrics($('#intelligence-meta'), [
-    { label: 'Provider', value: status.available ? 'Server-side' : 'Disabled', note: 'No browser key' },
+    { label: 'Provider', value: status.available ? (status.provider === 'anthropic' ? 'Anthropic / Claude' : 'OpenAI / GPT') : 'Disabled', note: 'No browser key' },
     { label: 'Model', value: status.model || '—', note: 'Configurable by Admin' },
     { label: 'Daily remaining', value: status.daily_requests_remaining, note: `Limit ${status.daily_request_limit}` },
     { label: 'Cache', value: `${Math.round(status.cache_ttl_seconds / 60)} min`, note: 'Cost protection' },
