@@ -2106,7 +2106,6 @@ def advisor() -> dict[str, Any]:
     return {**advice.__dict__, "markdown": advice_to_markdown(advice)}
 
 
-
 def _run_auto_intelligence_once() -> str:
     """One opted-in, bounded analysis; never activates network probes or AI tools."""
     if not AI_AUTO_ANALYSIS_ENABLED or not AI_ENABLED:
