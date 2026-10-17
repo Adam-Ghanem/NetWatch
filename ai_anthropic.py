@@ -90,16 +90,15 @@ def parse_anthropic_response(payload: dict[str, Any]) -> AIProviderResult:
             "The intelligence provider returned an incomplete analysis.",
             http_status=502,
         )
-    content = payload.get("content")
-    if not isinstance(content, list):
-        content = []
-    blocks = [
-        block.get("text")
-        for block in content
-        if isinstance(block, dict)
-        and block.get("type") == "text"
-        and isinstance(block.get("text"), str)
-    ]
+    raw_content = payload.get("content")
+    content = raw_content if isinstance(raw_content, list) else []
+    blocks: list[str] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "text":
+            continue
+        value = block.get("text")
+        if isinstance(value, str):
+            blocks.append(value)
     if not blocks:
         raise AIProviderError(
             "invalid_provider_response",
@@ -114,7 +113,8 @@ def parse_anthropic_response(payload: dict[str, Any]) -> AIProviderResult:
             "The intelligence provider returned an invalid structured brief.",
             http_status=502,
         ) from exc
-    usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+    raw_usage = payload.get("usage")
+    usage: dict[str, Any] = raw_usage if isinstance(raw_usage, dict) else {}
     request_id = str(payload.get("id", ""))
     return AIProviderResult(
         brief=brief,
