@@ -4,6 +4,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from enterprise_worker_safety import safe_error as _safe_error
+
 from enterprise_store import (
     claim_jobs,
     complete_job,
@@ -22,10 +24,6 @@ class WorkerCycleResult:
     succeeded: int
     failed: int
     dead_lettered: int
-
-
-def _safe_error(error: BaseException) -> str:
-    return " ".join(str(error).split())[:500] or error.__class__.__name__
 
 
 def process_jobs_once(
