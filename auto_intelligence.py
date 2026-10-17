@@ -78,9 +78,7 @@ def claim_auto_analysis(
     return "claimed"
 
 
-def finish_auto_analysis(
-    digest: str, *, success: bool, now: datetime | None = None
-) -> bool:
+def finish_auto_analysis(digest: str, *, success: bool, now: datetime | None = None) -> bool:
     """Persist a completed/failed claim, guarded against stale writers."""
     if not _DIGEST.fullmatch(digest):
         raise ValueError("Invalid AI evidence digest.")
