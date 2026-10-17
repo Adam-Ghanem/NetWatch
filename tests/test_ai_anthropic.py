@@ -166,4 +166,3 @@ def test_claude_redirect_is_rejected_without_following_location():
             opener=reject,
         )
     assert caught.value.code == "provider_redirect_blocked"
-
