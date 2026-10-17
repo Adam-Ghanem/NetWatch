@@ -33,8 +33,15 @@ from ai_advisor import (
     snapshot_hash,
 )
 from ai_anthropic import request_anthropic_intelligence_brief
+from auto_intelligence import (
+    auto_analysis_status,
+    claim_auto_analysis,
+    finish_auto_analysis,
+)
 from capture_cli import analyze_capture_bytes
 from config import (
+    AI_AUTO_ANALYSIS_ENABLED,
+    AI_AUTO_INTERVAL_SECONDS,
     AI_CACHE_TTL_SECONDS,
     AI_DAILY_REQUEST_LIMIT,
     AI_ENABLED,
@@ -167,6 +174,19 @@ async def lifespan(_: FastAPI):
     scheduler_thread: threading.Thread | None = None
     notification_stop = threading.Event()
     notification_thread: threading.Thread | None = None
+    auto_stop = threading.Event()
+    auto_thread: threading.Thread | None = None
+    if (
+        AI_AUTO_ANALYSIS_ENABLED
+        and enterprise_readiness()["capabilities"]["local_single_instance_safe"]
+    ):
+        auto_thread = threading.Thread(
+            target=_auto_intelligence_loop,
+            args=(auto_stop,),
+            name="netwatch-ai-scheduler",
+            daemon=True,
+        )
+        auto_thread.start()
     if SCHEDULER_ENABLED:
         scheduler_thread = threading.Thread(
             target=_scheduler_loop,
@@ -188,6 +208,9 @@ async def lifespan(_: FastAPI):
     finally:
         scheduler_stop.set()
         notification_stop.set()
+        auto_stop.set()
+        if auto_thread is not None:
+            auto_thread.join(timeout=2.0)
         if scheduler_thread is not None:
             scheduler_thread.join(timeout=2.0)
         if notification_thread is not None:
@@ -2083,6 +2106,62 @@ def advisor() -> dict[str, Any]:
     return {**advice.__dict__, "markdown": advice_to_markdown(advice)}
 
 
+def _run_auto_intelligence_once() -> str:
+    """One opted-in, bounded analysis; never activates network probes or AI tools."""
+    if not AI_AUTO_ANALYSIS_ENABLED or not AI_ENABLED:
+        return "disabled"
+    if not enterprise_readiness()["capabilities"]["local_single_instance_safe"]:
+        return "unsupported_mode"
+    if not _intelligence_configuration_is_usable():
+        return "provider_unavailable"
+    if not audit_integrity_is_ready(use_cache=False):
+        return "audit_unavailable"
+    snapshot = _intelligence_snapshot()
+    digest = _intelligence_digest(snapshot)
+    claim = claim_auto_analysis(digest, interval_seconds=AI_AUTO_INTERVAL_SECONDS)
+    if claim != "claimed":
+        return claim
+    try:
+        _produce_intelligence_brief(
+            refresh=False,
+            context=AuthContext(
+                role="operator",
+                actor_id="netwatch:automatic-analysis",
+                auth_method="system",
+                request_id="",
+            ),
+            snapshot=snapshot,
+        )
+    except Exception:
+        finish_auto_analysis(digest, success=False)
+        LOGGER.warning("Automatic AI analysis failed safely; local monitoring continues.")
+        return "failed"
+    finish_auto_analysis(digest, success=True)
+    return "completed"
+
+
+def _auto_intelligence_loop(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            _run_auto_intelligence_once()
+        except Exception:
+            LOGGER.error("Automatic AI analysis cycle failed safely.")
+        if stop_event.wait(AI_AUTO_INTERVAL_SECONDS):
+            break
+
+
+@app.get("/api/intelligence/auto/status")
+def intelligence_auto_status(
+    _: AuthContext = Depends(require_admin_access),
+) -> dict[str, Any]:
+    return {
+        "enabled": AI_AUTO_ANALYSIS_ENABLED,
+        "interval_seconds": AI_AUTO_INTERVAL_SECONDS,
+        "single_instance_only": True,
+        **auto_analysis_status(),
+    }
+
+
 @app.get("/api/intelligence/status")
 def intelligence_status(_: AuthContext = Depends(require_api_access)) -> dict[str, Any]:
     provider_requests = daily_provider_request_count()
@@ -2111,12 +2190,22 @@ def intelligence_brief(
             status_code=403,
             detail="Admin access is required to bypass the intelligence cache.",
         )
+    return _produce_intelligence_brief(refresh=payload.refresh, context=context)
 
-    snapshot = _intelligence_snapshot()
-    digest = hashlib.sha256(
+
+def _intelligence_digest(snapshot: dict[str, Any]) -> str:
+    return hashlib.sha256(
         f"{AI_PROVIDER}:{AI_MODEL}:{snapshot_hash(snapshot)}".encode("utf-8")
     ).hexdigest()
-    if not payload.refresh:
+
+
+def _produce_intelligence_brief(
+    *, refresh: bool, context: AuthContext, snapshot: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    if snapshot is None:
+        snapshot = _intelligence_snapshot()
+    digest = _intelligence_digest(snapshot)
+    if not refresh:
         cached = cached_intelligence_brief(digest)
         if cached is not None:
             return _public_intelligence_brief(
@@ -2137,6 +2226,7 @@ def intelligence_brief(
             subject_id=subject_id,
         )
         or not AI_ENABLED
+        or AI_PROVIDER not in {"openai", "anthropic"}
     ):
         raise HTTPException(
             status_code=503,

@@ -59,7 +59,10 @@ export NETWATCH_AI_MODEL="gpt-5-mini"
 # export NETWATCH_AI_MODEL="claude-sonnet-5-5"
 ```
 
-Only bounded, de-identified evidence is shared. AI has no scan or remediation tools. Core monitoring works without any AI key. See [AI setup](docs/AI.md).
+Only bounded, de-identified evidence is shared. AI has no scan or remediation tools. Core monitoring works without any AI key. Opt-in automatic brief generation
+is supported by setting `NETWATCH_AI_AUTO_ANALYSIS_ENABLED=true`, with a
+minimum one-hour interval, durable change detection and the same safety/cost
+limits. It is disabled by default. See [AI setup](docs/AI.md).
 
 ## Quick Start
 
