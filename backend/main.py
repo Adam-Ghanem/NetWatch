@@ -24,11 +24,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from advisory_engine import advice_to_markdown, build_advice
-from auto_intelligence import (
-    auto_analysis_status,
-    claim_auto_analysis,
-    finish_auto_analysis,
-)
 from ai_advisor import (
     AIProviderError,
     build_deidentified_snapshot,
@@ -38,6 +33,11 @@ from ai_advisor import (
     snapshot_hash,
 )
 from ai_anthropic import request_anthropic_intelligence_brief
+from auto_intelligence import (
+    auto_analysis_status,
+    claim_auto_analysis,
+    finish_auto_analysis,
+)
 from capture_cli import analyze_capture_bytes
 from config import (
     AI_AUTO_ANALYSIS_ENABLED,
