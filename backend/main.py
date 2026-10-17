@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
 import os
@@ -31,6 +32,7 @@ from ai_advisor import (
     safety_identifier,
     snapshot_hash,
 )
+from ai_anthropic import request_anthropic_intelligence_brief
 from capture_cli import analyze_capture_bytes
 from config import (
     AI_CACHE_TTL_SECONDS,
@@ -38,6 +40,7 @@ from config import (
     AI_ENABLED,
     AI_MAX_CONCURRENT_REQUESTS,
     AI_MODEL,
+    AI_PROVIDER,
     AI_RATE_LIMIT_REQUESTS,
     AI_RATE_LIMIT_WINDOW_SECONDS,
     API_ALLOWED_HOSTS,
@@ -526,8 +529,12 @@ def _enforce_rate_limit(identity: str) -> None:
         events.append(now)
 
 
-def _configured_openai_key() -> str:
-    return os.getenv("OPENAI_API_KEY", "").strip()
+def _configured_ai_provider_key() -> str:
+    if AI_PROVIDER == "openai":
+        return os.getenv("OPENAI_API_KEY", "").strip()
+    if AI_PROVIDER == "anthropic":
+        return os.getenv("ANTHROPIC_API_KEY", "").strip()
+    return ""
 
 
 def _configured_ai_safety_secret() -> str:
@@ -539,9 +546,10 @@ def _configured_ai_subject_id() -> str:
 
 
 def _intelligence_configuration_is_usable(provider_key: str | None = None) -> bool:
-    key = _configured_openai_key() if provider_key is None else provider_key
+    key = _configured_ai_provider_key() if provider_key is None else provider_key
     return bool(
         AI_ENABLED
+        and AI_PROVIDER in {"openai", "anthropic"}
         and safety_configuration_is_usable(
             api_key=key,
             safety_secret=_configured_ai_safety_secret(),
@@ -800,6 +808,7 @@ def _public_intelligence_brief(
 ) -> dict[str, Any]:
     return {
         "brief": response,
+        "provider": AI_PROVIDER,
         "model": model,
         "generated_at": generated_at,
         "expires_at": expires_at,
@@ -2080,6 +2089,7 @@ def intelligence_status(_: AuthContext = Depends(require_api_access)) -> dict[st
     available = _intelligence_configuration_is_usable()
     return {
         "available": available,
+        "provider": AI_PROVIDER if AI_PROVIDER in {"openai", "anthropic"} else "",
         "model": AI_MODEL if available else "",
         "daily_request_limit": AI_DAILY_REQUEST_LIMIT,
         "daily_requests_used": provider_requests,
@@ -2103,7 +2113,9 @@ def intelligence_brief(
         )
 
     snapshot = _intelligence_snapshot()
-    digest = snapshot_hash(snapshot)
+    digest = hashlib.sha256(
+        f"{AI_PROVIDER}:{AI_MODEL}:{snapshot_hash(snapshot)}".encode("utf-8")
+    ).hexdigest()
     if not payload.refresh:
         cached = cached_intelligence_brief(digest)
         if cached is not None:
@@ -2115,7 +2127,7 @@ def intelligence_brief(
                 cached=True,
             )
 
-    provider_key = _configured_openai_key()
+    provider_key = _configured_ai_provider_key()
     safety_secret = _configured_ai_safety_secret()
     subject_id = _configured_ai_subject_id()
     if (
@@ -2146,12 +2158,20 @@ def intelligence_brief(
                     status_code=429,
                     detail="The daily intelligence request budget has been reached.",
                 )
-            result = request_intelligence_brief(
-                snapshot,
-                api_key=provider_key,
-                safety_id=safety_id,
-                model=AI_MODEL,
-            )
+            if AI_PROVIDER == "anthropic":
+                result = request_anthropic_intelligence_brief(
+                    snapshot,
+                    api_key=provider_key,
+                    safety_id=safety_id,
+                    model=AI_MODEL,
+                )
+            else:
+                result = request_intelligence_brief(
+                    snapshot,
+                    api_key=provider_key,
+                    safety_id=safety_id,
+                    model=AI_MODEL,
+                )
         brief = result.brief.model_dump(mode="json")
         now = datetime.now(timezone.utc)
         generated_at = now.isoformat(timespec="seconds")

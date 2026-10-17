@@ -45,14 +45,21 @@ NetWatch is a self-hosted network visibility platform for authorized networks.
 
 ## AI
 
-Optional. Use your own provider key:
+Optional. Choose **OpenAI/GPT** or **Anthropic/Claude**, using your own server-side API key:
 
 ```bash
-export OPENAI_API_KEY="your-key"
+# OpenAI (default)
+export NETWATCH_AI_PROVIDER="openai"
+export OPENAI_API_KEY="your-openai-api-key"
 export NETWATCH_AI_MODEL="gpt-5-mini"
+
+# Or, instead of the above, select Claude:
+# export NETWATCH_AI_PROVIDER="anthropic"
+# export ANTHROPIC_API_KEY="your-anthropic-api-key"
+# export NETWATCH_AI_MODEL="claude-sonnet-5-5"
 ```
 
-AI analyzes NetWatch evidence through explicitly registered tools. No API key is required for core features.
+Only bounded, de-identified evidence is shared. AI has no scan or remediation tools. Core monitoring works without any AI key. See [AI setup](docs/AI.md).
 
 ## Quick Start
 
