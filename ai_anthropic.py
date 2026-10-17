@@ -118,9 +118,9 @@ def parse_anthropic_response(payload: dict[str, Any]) -> AIProviderResult:
     request_id = str(payload.get("id", ""))
     return AIProviderResult(
         brief=brief,
-        provider_request_id="".join(
-            char for char in request_id if char.isalnum() or char in "_-"
-        )[:160],
+        provider_request_id="".join(char for char in request_id if char.isalnum() or char in "_-")[
+            :160
+        ],
         input_tokens=_bounded_int(usage.get("input_tokens")),
         output_tokens=_bounded_int(usage.get("output_tokens")),
     )
