@@ -167,19 +167,3 @@ def test_claude_redirect_is_rejected_without_following_location():
         )
     assert caught.value.code == "provider_redirect_blocked"
 
-
-def test_temporary_black_format_diff_probe():
-    """Temporary diagnostic removed after formatting is corrected."""
-    import difflib
-    from pathlib import Path
-
-    import black
-
-    target = Path(__file__).resolve().parents[1] / "ai_anthropic.py"
-    source = target.read_text(encoding="utf-8")
-    expected = black.format_str(source, mode=black.Mode(line_length=100))
-    assert source == expected, "\n" + "\n".join(
-        difflib.unified_diff(
-            source.splitlines(), expected.splitlines(), fromfile="current", tofile="black", lineterm=""
-        )
-    )
