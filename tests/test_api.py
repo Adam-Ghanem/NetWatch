@@ -1289,3 +1289,86 @@ def test_readiness_center_frontend_is_present(monkeypatch, tmp_path):
     assert frontend.status_code == 200
     assert "/api/readiness" in frontend.text
     assert "renderReadiness" in frontend.text
+
+
+def test_anthropic_provider_uses_only_claude_key_and_separate_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-claude-provider-key-long-enough")
+    monkeypatch.setattr(api, "AI_PROVIDER", "openai")
+    monkeypatch.setattr(api, "AI_MODEL", "gpt-5-mini")
+    calls = []
+
+    def openai_provider(snapshot, **kwargs):
+        calls.append(("openai", kwargs["api_key"]))
+        return AIProviderResult(
+            brief=_provider_brief(),
+            provider_request_id="resp_openai_123",
+            input_tokens=10,
+            output_tokens=10,
+        )
+
+    def claude_provider(snapshot, **kwargs):
+        calls.append(("anthropic", kwargs["api_key"]))
+        return AIProviderResult(
+            brief=_provider_brief(),
+            provider_request_id="msg_claude_123",
+            input_tokens=20,
+            output_tokens=10,
+        )
+
+    monkeypatch.setattr(api, "request_intelligence_brief", openai_provider)
+    monkeypatch.setattr(api, "request_anthropic_intelligence_brief", claude_provider)
+
+    with _client(monkeypatch, tmp_path) as client:
+        openai = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+        monkeypatch.setattr(api, "AI_PROVIDER", "anthropic")
+        monkeypatch.setattr(api, "AI_MODEL", "claude-sonnet-5-5")
+        status = client.get("/api/intelligence/status", headers=API_HEADERS)
+        claude = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+        cached = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+
+    assert openai.status_code == 200
+    assert openai.json()["provider"] == "openai"
+    assert claude.status_code == 200
+    assert claude.json()["provider"] == "anthropic"
+    assert claude.json()["cached"] is False
+    assert cached.json()["cached"] is True
+    assert status.json()["provider"] == "anthropic"
+    assert calls == [
+        ("openai", AI_PROVIDER_KEY),
+        ("anthropic", "test-claude-provider-key-long-enough"),
+    ]
+    assert "test-claude-provider-key-long-enough" not in claude.text
+
+
+def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "AI_PROVIDER", "anthropic")
+    monkeypatch.setattr(api, "AI_MODEL", "claude-sonnet-5-5")
+    monkeypatch.setenv("OPENAI_API_KEY", AI_PROVIDER_KEY)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    with _client(monkeypatch, tmp_path) as client:
+        status = client.get("/api/intelligence/status", headers=API_HEADERS)
+        brief = client.post(
+            "/api/intelligence/brief",
+            headers=API_HEADERS,
+            json={"refresh": False},
+        )
+        local = client.get("/api/advisor", headers=API_HEADERS)
+
+    assert status.json()["provider"] == "anthropic"
+    assert status.json()["available"] is False
+    assert brief.status_code == 503
+    assert local.status_code == 200
