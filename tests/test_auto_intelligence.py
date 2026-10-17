@@ -156,3 +156,29 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     assert api._run_auto_intelligence_once() == "failed"
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
     assert api._run_auto_intelligence_once() == "interval"
+
+
+def test_temporary_black_formatted_code_diagnostics():
+    """Temporary diagnostic only: removed after canonical Black diffs are applied."""
+    import difflib
+
+    import black
+
+    root = Path(__file__).resolve().parents[1]
+    differences = []
+    for relative in ("auto_intelligence.py", "tests/test_auto_intelligence.py", "backend/main.py"):
+        value = (root / relative).read_text(encoding="utf-8")
+        expected = black.format_str(value, mode=black.Mode(line_length=100))
+        if expected == value:
+            continue
+        delta = "\n".join(
+            difflib.unified_diff(
+                value.splitlines(),
+                expected.splitlines(),
+                fromfile=relative,
+                tofile=f"{relative}:black",
+                lineterm="",
+            )
+        )
+        differences.append(delta)
+    assert not differences, "\n\n".join(differences)
