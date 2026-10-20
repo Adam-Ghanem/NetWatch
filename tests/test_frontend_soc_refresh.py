@@ -1,4 +1,5 @@
 """Frontend refresh guards: accessibility and asset integration stay dependency-free."""
+
 from pathlib import Path
 
 FRONTEND = Path("frontend")
