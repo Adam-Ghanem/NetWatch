@@ -4,7 +4,7 @@
 
   const accents = ['cyan', 'violet', 'emerald'];
   const names = { cyan: 'Cyan', violet: 'Violet', emerald: 'Emerald' };
-  const storageKey = 'netwatch-ui-accent-v1';
+  const storageKey = 'netwatch-ui-accent-v2';
   const root = document.documentElement;
   const button = document.getElementById('accent-switch');
   const label = document.getElementById('accent-label');
@@ -12,9 +12,9 @@
   function readPreference() {
     try {
       const saved = window.localStorage.getItem(storageKey);
-      return accents.includes(saved) ? saved : 'cyan';
+      return accents.includes(saved) ? saved : 'emerald';
     } catch (_) {
-      return 'cyan';
+      return 'emerald';
     }
   }
 

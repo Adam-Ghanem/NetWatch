@@ -1,15 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="NetWatch local network visibility and defensive review dashboard." />
-  <meta name="color-scheme" content="dark" />
-  <meta name="theme-color" content="#07131e" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f4fbf7" />
   <title>NetWatch · Enterprise Network Intelligence</title>
   <link rel="icon" href="/assets/netwatch-symbol.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/soc-refresh.css" />
+  <link rel="stylesheet" href="/mint-light.css" />
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -101,6 +102,7 @@
         <div class="top-actions">
           <span id="data-freshness" class="freshness-chip waiting" title="No protected data loaded yet"><i aria-hidden="true"></i><span>Waiting for data</span></span>
           <span id="session-role" class="role-badge">Disconnected</span>
+          <button id="theme-switch" class="theme-switch" type="button" aria-label="Switch to dark theme" title="Switch to dark theme" aria-pressed="true"><span class="theme-switch-icon" aria-hidden="true">☀</span><span class="theme-switch-label">Light</span></button>
           <button id="accent-switch" class="appearance-toggle" type="button" aria-label="Change interface accent (currently Cyan)" title="Change interface accent">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9c0 1.6-1.1 2.5-2.4 2.5h-1.3a2 2 0 0 0-2 2c0 1.2.8 2.1.8 3.2 0 1.2-1 2.3-3.1 2.3"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="15" cy="7.5" r="1"/><circle cx="17.5" cy="11" r="1"/></svg>
             <span id="accent-label">Cyan</span>
@@ -540,5 +542,6 @@
 
   <script src="/app.js" defer></script>
   <script src="/ui-polish.js" defer></script>
+  <script src="/theme-toggle.js" defer></script>
 </body>
 </html>
