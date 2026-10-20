@@ -7,8 +7,8 @@ FRONTEND = Path("frontend")
 
 def test_soc_refresh_assets_are_loaded_in_order() -> None:
     html = (FRONTEND / "index.html").read_text(encoding="utf-8")
-    assert html.index('/styles.css') < html.index('/soc-refresh.css')
-    assert html.index('/app.js') < html.index('/ui-polish.js')
+    assert html.index("/styles.css") < html.index("/soc-refresh.css")
+    assert html.index("/app.js") < html.index("/ui-polish.js")
     assert 'href="#main-content"' in html
     assert 'id="main-content"' in html
     assert 'id="accent-switch"' in html
