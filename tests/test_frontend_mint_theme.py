@@ -26,7 +26,7 @@ def test_mint_theme_preserves_data_and_protected_access() -> None:
     assert "localStorage" in js
     assert "fetch(" not in js
     assert "netwatchApiKey" not in js
-    assert "data-theme=\"light\"" in css
+    assert 'data-theme="light"' in css
     assert ".sidebar" in css
     assert ".nav-item.active" in css
     assert ".panel" in css
