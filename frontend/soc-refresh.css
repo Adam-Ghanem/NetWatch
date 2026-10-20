@@ -221,3 +221,12 @@ input:not([type="checkbox"]), select, textarea { border-radius: 10px; }
 @media (prefers-reduced-motion: reduce) {
   .metric { transition: none; }
 }
+
+/* Narrow phones use two header rows instead of hiding session/access controls. */
+@media (max-width: 520px) {
+  .topbar { flex-wrap: wrap; row-gap: 9px; }
+  .page-heading { flex: 1 1 auto; }
+  .command-trigger { flex: 0 0 40px; order: 1; margin: 0; }
+  .top-actions { order: 2; width: 100%; flex: 1 1 100%; justify-content: flex-end; }
+  .top-actions .role-badge { display: inline-flex; margin-right: auto; }
+}
