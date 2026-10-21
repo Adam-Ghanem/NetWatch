@@ -120,19 +120,9 @@ $env:NETWATCH_API_KEY="development-only-secret-at-least-32-chars"
 uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## Optional legacy Streamlit interface
+## Legacy Streamlit interface temporarily disabled
 
-The original dashboard remains available but is not started by default:
-
-```bash
-docker compose --profile legacy up -d streamlit
-```
-
-Open:
-
-```text
-http://127.0.0.1:8501
-```
+The historical Streamlit source remains in `app.py` for reference, but its runtime and Compose profile are **disabled**. As of October 21, 2026, Streamlit's published releases require `Pillow < 13`, while Pillow 13.0.0 contains critical security fixes not available in Pillow 12.3.0. The supported dashboard is the secured FastAPI interface at `http://127.0.0.1:8000`; no legacy service is installed or exposed in the default production image. Do not force-install older Pillow or bypass the vulnerability audit. Re-enable the legacy path only after compatible upstream releases and security tests.
 
 ## Configuration
 

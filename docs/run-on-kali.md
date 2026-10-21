@@ -6,7 +6,7 @@ These commands work well with Kali and the fish shell.
 
 ```fish
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip
+sudo apt install -y python3 python3-venv python3-pip iputils-ping
 ```
 
 ## 2. Clone and enter the project
@@ -42,14 +42,17 @@ pip install -r requirements.txt
 ## 5. Run the app
 
 ```fish
-python -m streamlit run app.py
+set -x NETWATCH_API_KEY (python -c 'import secrets; print(secrets.token_urlsafe(32))')
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open the URL shown by Streamlit, usually:
+Open the secured FastAPI dashboard:
 
 ```text
-http://localhost:8501
+http://127.0.0.1:8000
 ```
+
+For a local break-glass login, use the key stored in `$NETWATCH_API_KEY`. The old Streamlit frontend is temporarily disabled because its Pillow dependency blocks current security patches.
 
 ## Useful checks
 

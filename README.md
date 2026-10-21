@@ -76,6 +76,8 @@ Open `http://127.0.0.1:8000`.
 
 ## Security
 
+The supported FastAPI dashboard uses patched Pillow 13.0.0 and does not install the older Streamlit frontend. Legacy Streamlit execution is temporarily disabled because published releases still require vulnerable Pillow < 13. See [deployment guidance](docs/deployment.md).
+
 Authorization-first, evidence-driven, scope-controlled, and local-first. Never commit secrets or use NetWatch against systems you are not authorized to assess.
 
 ## License

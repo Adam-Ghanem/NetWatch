@@ -24,7 +24,8 @@ run-api:
 	uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 
 run-streamlit:
-	streamlit run app.py
+	@echo 'Legacy Streamlit is unavailable: upstream pins vulnerable Pillow <13. Use make run-api.'
+	@exit 1
 
 test:
 	pytest -q

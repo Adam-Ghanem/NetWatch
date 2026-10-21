@@ -1,6 +1,6 @@
 # NetWatch Architecture
 
-NetWatch v1.7 is a local-first defensive network visibility application with optional enterprise identity. The professional dashboard, protected API, device-identity correlation, bounded traffic-metadata sensor, scheduler, maintenance controls, case workflow, authenticated metrics, audit integrity verification, and optional server-side intelligence gateway are served by one FastAPI process, while the older Streamlit interface remains available only as an optional legacy profile.
+NetWatch v1.7 is a local-first defensive network visibility application with optional enterprise identity. The professional dashboard, protected API, device-identity correlation, bounded traffic-metadata sensor, scheduler, maintenance controls, case workflow, authenticated metrics, audit integrity verification, and optional server-side intelligence gateway are served by one FastAPI process, while the retired Streamlit source remains in `app.py` but is not installed or exposed (upstream Streamlit requires vulnerable Pillow < 13).
 
 ## Runtime flow
 
@@ -83,15 +83,9 @@ It provides:
 - Optional NetWatch Intelligence with de-identified structured briefs and local fallback
 - Markdown and HTML report downloads
 
-### Legacy interface
+### Legacy interface (disabled pending security compatibility)
 
-`app.py` contains the original Streamlit dashboard. It can still be started explicitly for comparison or demonstrations:
-
-```bash
-docker compose --profile legacy up streamlit
-```
-
-It is not the default deployment path.
+`app.py` contains the historical Streamlit dashboard, but the legacy Compose profile and `make run-streamlit` entry point are disabled. Published Streamlit releases still cap Pillow below version 13, preventing installation of the patched Pillow 13.0.0 release. Only the FastAPI + native frontend runtime is supported and security-audited until upstream compatibility allows the legacy option to return.
 
 ## Main modules
 

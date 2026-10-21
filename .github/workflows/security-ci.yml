@@ -64,7 +64,10 @@ jobs:
         run: python -m compileall -q .
 
       - name: Validate frontend JavaScript
-        run: node --check frontend/app.js
+        run: |
+          node --check frontend/app.js
+          node --check frontend/ui-polish.js
+          node --check frontend/theme-toggle.js
 
       - name: Validate Docker Compose
         run: docker compose config --quiet
