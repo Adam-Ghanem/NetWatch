@@ -23,13 +23,9 @@ This document records the defensive controls used in NetWatch.
 
 ## UI safety
 
-Custom Streamlit HTML cards use cleaned dynamic values.
+The supported dashboard is the same-origin FastAPI frontend. Role keys stay in browser session storage, and approved network actions require server-enforced authorization. Historical Streamlit code remains in the source tree but is intentionally excluded from installation and Docker Compose: its published Pillow < 13 constraint prevents applying the critical fixes in Pillow 13.0.0. Do not run the legacy application or bypass the dependency audit until compatible patched upstream releases exist.
 
-Related file:
-
-```text
-safe_text.py
-```
+`safe_text.py` continues to sanitize report and legacy-compatible text.
 
 ## Export safety
 

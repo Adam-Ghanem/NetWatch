@@ -1,4 +1,4 @@
-streamlit==1.59.2
+pillow==13.0.0  # Patched Pillow for report generation; no vulnerable Streamlit dependency
 pandas==2.2.3
 reportlab>=5.0,<6
 plotly==5.24.1

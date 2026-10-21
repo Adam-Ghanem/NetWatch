@@ -69,29 +69,6 @@ services:
       - NET_RAW
     restart: unless-stopped
 
-  streamlit:
-    profiles: ["legacy"]
-    build: .
-    container_name: netwatch-streamlit
-    command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
-    ports:
-      - "127.0.0.1:8501:8501"
-    volumes:
-      - netwatch-data:/app/data
-      - netwatch-logs:/app/logs
-    read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=268435456
-    init: true
-    pids_limit: 256
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_RAW
-    restart: unless-stopped
-
 volumes:
   netwatch-data:
   netwatch-logs:
