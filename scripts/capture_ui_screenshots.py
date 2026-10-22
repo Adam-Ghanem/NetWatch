@@ -40,9 +40,7 @@ def main() -> None:
                 page.locator(f'#nav button[data-view="{view}"]').click()
                 page.locator(f"#view-{view}.active").wait_for(timeout=20000)
                 page.wait_for_timeout(550)
-            page.screenshot(
-                path=str(OUT / filename), full_page=True, animations="disabled"
-            )
+            page.screenshot(path=str(OUT / filename), full_page=True, animations="disabled")
             print("Captured:", filename)
         browser.close()
 
