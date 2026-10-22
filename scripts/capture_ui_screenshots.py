@@ -28,7 +28,7 @@ def main() -> None:
         page.locator("#api-key").fill(key)
         page.locator('#connect-form button[type="submit"]').click()
         page.locator("#connect-overlay.hidden").wait_for(timeout=30000)
-        page.locator('#view-overview.active').wait_for(timeout=30000)
+        page.locator("#view-overview.active").wait_for(timeout=30000)
         page.wait_for_timeout(1250)
 
         for view, filename in (
