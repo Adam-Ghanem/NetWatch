@@ -81,6 +81,8 @@ The supported FastAPI dashboard uses patched Pillow 13.0.0 and does not install 
 
 Authorization-first, evidence-driven, scope-controlled, and local-first. Never commit secrets or use NetWatch against systems you are not authorized to assess.
 
+See the [2026-10-22 security/CI evidence snapshot](docs/security-audit-2026-10-22.md) for exact passing workflow SHAs, regression coverage, and the open production-security gates.
+
 ## Community recognition
 
 The [XERJ Corpus Hub contributor profile](https://hub.xerj.org/contributors/Adam-Ghanem) lists NetWatch as **selected** for its PCAP-analysis evidence work (selected commit `e8f6d39132`, 10 October 2026). As of 22 October 2026, the listing is **in licence review**, not a live or installable corpus. See [XERJ recognition and status notes](docs/XERJ.md). This is attribution and selection, **not** an independent audit, certification, or endorsement of NetWatch's security posture.
