@@ -13,6 +13,7 @@
   <a href="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml"><img src="https://github.com/Adam-Ghanem/NetWatch/actions/workflows/python-ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/License-MIT-2c0f50.svg" alt="MIT License">
+  <a href="https://hub.xerj.org/contributors/Adam-Ghanem"><img src="https://hub.xerj.org/contributors/Adam-Ghanem/badge.svg" alt="XERJ Corpus Hub contributor"></a>
 </p>
 
 > **NetWatch is a defensive tool.** Use it only on networks and devices you own or are explicitly authorized to assess.
@@ -79,6 +80,10 @@ Open `http://127.0.0.1:8000`.
 The supported FastAPI dashboard uses patched Pillow 13.0.0 and does not install the older Streamlit frontend. Legacy Streamlit execution is temporarily disabled because published releases still require vulnerable Pillow < 13. See [deployment guidance](docs/deployment.md).
 
 Authorization-first, evidence-driven, scope-controlled, and local-first. Never commit secrets or use NetWatch against systems you are not authorized to assess.
+
+## Community recognition
+
+The [XERJ Corpus Hub contributor profile](https://hub.xerj.org/contributors/Adam-Ghanem) lists NetWatch as **selected** for its PCAP-analysis evidence work (selected commit `e8f6d39132`, 10 October 2026). As of 22 October 2026, the listing is **in licence review**, not a live or installable corpus. See [XERJ recognition and status notes](docs/XERJ.md). This is attribution and selection, **not** an independent audit, certification, or endorsement of NetWatch's security posture.
 
 ## License
 
