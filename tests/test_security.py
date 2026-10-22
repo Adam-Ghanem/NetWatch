@@ -1,3 +1,5 @@
+import pytest
+
 from security import classify_port_risk, validate_cidr, validate_target_ip
 
 
@@ -58,3 +60,44 @@ def test_risk_classification():
     assert classify_port_risk(23, True) == "High"
     assert classify_port_risk(22, True) == "Medium"
     assert classify_port_risk(443, False) == "None"
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "0.0.0.0",
+        "8.8.8.8",
+        "224.0.0.1",
+        "255.255.255.255",
+        "2001:db8::1",
+        "::ffff:192.168.1.1",
+        "192.168.1.1%eth0",
+        "192.168.1.1#unexpected",
+        "fd00::1%eth0",
+        "fe80::1%",
+        "fe80::1%eth0;id",
+        "fe80::1%eth0%extra",
+        "fe80::1%eth0/../",
+    ],
+)
+def test_target_validation_fails_closed_on_unsafe_or_malformed_input(target):
+    result = validate_target_ip(target)
+    assert not result.ok
+
+
+@pytest.mark.parametrize(
+    "cidr",
+    [
+        "0.0.0.0/0",
+        "172.32.0.0/16",
+        "192.0.2.0/24",
+        "224.0.0.0/4",
+        "255.255.255.255/32",
+        "::/0",
+        "10.0.0.0/8",
+        "192.168.0.0/16",
+    ],
+)
+def test_network_validation_rejects_unapproved_or_oversized_ranges(cidr):
+    result = validate_cidr(cidr)
+    assert not result.ok
