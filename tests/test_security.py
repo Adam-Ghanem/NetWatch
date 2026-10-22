@@ -61,6 +61,7 @@ def test_risk_classification():
     assert classify_port_risk(22, True) == "Medium"
     assert classify_port_risk(443, False) == "None"
 
+
 @pytest.mark.parametrize(
     "target",
     [
