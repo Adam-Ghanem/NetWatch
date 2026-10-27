@@ -17,6 +17,8 @@ This document records the defensive controls used in NetWatch.
 ## API boundary
 
 - Protected endpoints require a non-placeholder Admin, Operator, or Viewer key of at least 32 characters.
+- Failed API-key and OIDC authentication attempts are counted in a bounded, in-memory sliding window before credential/token validation. Defaults: **120 failed attempts per 60 seconds per ASGI client peer**, with a limit of 4,096 peer buckets and a shared overflow budget. Requests after the limit return HTTP `429` and a `Retry-After` header. Successful requests and infrastructure errors (`503`) do not add failures; health endpoints do not use this auth limiter. No presented API keys or bearer tokens are recorded.
+- This defense is **single-process**, not distributed, and can temporarily block legitimate users sharing a proxy/NAT address if that peer is abused. An approved reverse proxy must enforce its own per-client abuse controls and tightly restrict which addresses are allowed to provide forwarded client identity; do not rely on untrusted `X-Forwarded-For` input. The authenticated `/api/metrics` endpoint exports fixed, label-free totals for failed attempts and blocked requests, plus the active peer-bucket gauge; it never exports source IPs, keys, or tokens. Configurable with `NETWATCH_AUTH_FAILURE_LIMIT`, `NETWATCH_AUTH_FAILURE_WINDOW_SECONDS`, and `NETWATCH_AUTH_FAILURE_MAX_PEERS`.
 - Viewer, Operator, and Admin capabilities are enforced on the server; dashboard disabling is only a usability layer.
 - CORS origins and HTTP Host headers use explicit local allowlists.
 - Wildcard-only allowlists fall back to safe local defaults.
