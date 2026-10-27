@@ -1128,6 +1128,7 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
     snapshot = operations_metrics()
     intelligence = intelligence_metrics()
     queue = enterprise_queue_metrics()
+    auth_abuse = _auth_failure_limiter.counters()
     with _http_metrics_lock:
         http_snapshot = {
             "requests": _http_requests_total,
@@ -1155,6 +1156,9 @@ def metrics(_: AuthContext = Depends(require_api_access)) -> PlainTextResponse:
         "netwatch_outbox_dead_letter_total": queue["outbox_dead_letter"],
         "netwatch_jobs_active_total": queue["jobs_active"],
         "netwatch_jobs_failed_total": queue["jobs_failed"],
+        "netwatch_auth_failed_attempts_total": auth_abuse["failures"],
+        "netwatch_auth_blocked_requests_total": auth_abuse["blocked"],
+        "netwatch_auth_peer_buckets": auth_abuse["peer_buckets"],
         "netwatch_http_requests_total": http_snapshot["requests"],
         "netwatch_http_server_errors_total": http_snapshot["server_errors"],
         "netwatch_http_active_requests": http_snapshot["active_requests"],
