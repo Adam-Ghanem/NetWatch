@@ -74,6 +74,7 @@ def test_capture_has_a_separate_bounded_budget():
         [(b"content-length", b"-2")],
         [(b"content-length", b"+2")],
         [(b"content-length", b"1_0")],
+        [(b"content-length", b"9" * 5000)],
     ],
 )
 def test_rejects_ambiguous_and_invalid_content_length(headers):
