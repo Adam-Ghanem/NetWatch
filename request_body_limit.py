@@ -44,10 +44,12 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        limit = (
-            self.max_capture_bytes
-            if scope["path"].startswith("/api/traffic/offline/")
-            else self.max_json_bytes
+        offline_capture = scope["path"].startswith("/api/traffic/offline/")
+        limit = self.max_capture_bytes if offline_capture else self.max_json_bytes
+        too_large_detail = (
+            "Capture input exceeds the safety limit."
+            if offline_capture
+            else "Request body exceeds the size limit."
         )
         declared_lengths = [
             value for name, value in scope.get("headers", []) if name.lower() == b"content-length"
@@ -63,7 +65,7 @@ class RequestBodyLimitMiddleware:
                 return
             if int(declared_lengths[0]) > limit:
                 await self._reject(
-                    scope, receive, send, 413, "Request body exceeds the size limit."
+                    scope, receive, send, 413, too_large_detail
                 )
                 return
 
@@ -90,7 +92,7 @@ class RequestBodyLimitMiddleware:
         except _BodyTooLarge:
             if response_started:
                 raise
-            await self._reject(scope, receive, send, 413, "Request body exceeds the size limit.")
+            await self._reject(scope, receive, send, 413, too_large_detail)
 
     @staticmethod
     async def _reject(
