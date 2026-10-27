@@ -64,9 +64,7 @@ class RequestBodyLimitMiddleware:
                 await self._reject(scope, receive, send, 400, "Invalid Content-Length.")
                 return
             if int(declared_lengths[0]) > limit:
-                await self._reject(
-                    scope, receive, send, 413, too_large_detail
-                )
+                await self._reject(scope, receive, send, 413, too_large_detail)
                 return
 
         received = 0
