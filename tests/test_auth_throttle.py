@@ -60,9 +60,12 @@ def test_stale_peer_slots_are_reclaimed_before_overflow(monkeypatch):
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
+    assert limiter.counters() == {"failures": 1, "blocked": 0, "peer_buckets": 1}
     assert set(limiter._failures) == {"127.0.0.1"}
     assert limiter.retry_after("127.0.0.1") is not None
+    assert limiter.counters()["blocked"] == 1
     limiter.clear()
+    assert limiter.counters() == {"failures": 0, "blocked": 0, "peer_buckets": 0}
     assert limiter.retry_after("127.0.0.1") is None
 
 
@@ -111,6 +114,21 @@ def test_authentication_is_blocked_before_key_validation_and_ignores_forwarded_f
     assert "bad-three" not in blocked.text
     assert legitimate.status_code == 429
     assert health.status_code == 200
+
+    # A separate authorized peer can export low-cardinality monitoring data.
+    monkeypatch.setattr(
+        api,
+        "_auth_failure_limiter",
+        AuthenticationFailureLimiter(max_failures=5, window_seconds=60),
+    )
+    with TestClient(api.app, base_url="http://127.0.0.1") as client:
+        metrics = client.get("/api/metrics", headers={"X-NetWatch-Key": TEST_API_KEY})
+    assert metrics.status_code == 200
+    assert "netwatch_auth_failed_attempts_total" in metrics.text
+    assert "netwatch_auth_blocked_requests_total" in metrics.text
+    assert "netwatch_auth_peer_buckets" in metrics.text
+    assert "8.8.8.8" not in metrics.text
+    assert TEST_API_KEY not in metrics.text
 
 
 def test_only_authentication_failures_increment_throttle(monkeypatch):
