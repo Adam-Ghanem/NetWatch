@@ -31,6 +31,8 @@ class AuthenticationFailureLimiter:
         self._lock = threading.Lock()
         self._failures: dict[str, deque[float]] = {}
         self._overflow: deque[float] = deque()
+        self._total_failures = 0
+        self._total_blocked = 0
 
     def _expire(self, events: deque[float], now: float) -> None:
         cutoff = now - self.window_seconds
@@ -70,6 +72,7 @@ class AuthenticationFailureLimiter:
             bucket = self._bucket(peer, now, create=False)
             if len(bucket) < self.max_failures:
                 return None
+            self._total_blocked += 1
             return max(1, math.ceil(self.window_seconds - (now - bucket[0])))
 
     def record_failure(self, peer: str) -> None:
@@ -78,12 +81,24 @@ class AuthenticationFailureLimiter:
         with self._lock:
             bucket = self._bucket(peer, now, create=True)
             bucket.append(now)
+            self._total_failures += 1
             # Keep storage bounded if a caller forgot to check before recording.
             while len(bucket) > self.max_failures:
                 bucket.popleft()
+
+    def counters(self) -> dict[str, int]:
+        """Fixed numeric telemetry with no client identifiers or credentials."""
+        with self._lock:
+            return {
+                "failures": self._total_failures,
+                "blocked": self._total_blocked,
+                "peer_buckets": len(self._failures),
+            }
 
     def clear(self) -> None:
         """Reset in-memory state, primarily for deterministic test isolation."""
         with self._lock:
             self._failures.clear()
             self._overflow.clear()
+            self._total_failures = 0
+            self._total_blocked = 0
