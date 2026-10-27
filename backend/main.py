@@ -148,6 +148,7 @@ from pcap_import import MAX_PCAP_BYTES, MAX_PCAP_PACKETS
 from port_scanner import scan_ports
 from readiness_store import readiness_center
 from report_builder import build_html_report, build_markdown_report, build_pdf_report
+from request_body_limit import RequestBodyLimitMiddleware
 from retention_store import cleanup_retention, retention_status
 from risk_engine import summarize_exposure, top_recommendations
 from security import validate_cidr, validate_target_ip
@@ -233,6 +234,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-NetWatch-Key"],
 )
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(API_ALLOWED_HOSTS))
+app.add_middleware(RequestBodyLimitMiddleware)
 
 
 @app.exception_handler(AuditIntegrityError)
