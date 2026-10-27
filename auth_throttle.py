@@ -49,6 +49,9 @@ class AuthenticationFailureLimiter:
             self._expire(bucket, now)
             return bucket
         if not create:
+            # Fresh peers should not inherit overflow penalties when free slots exist.
+            if len(self._failures) < self.max_peers:
+                return deque()
             self._expire(self._overflow, now)
             return self._overflow
         if len(self._failures) >= self.max_peers:
