@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from advisory_engine import advice_to_markdown, build_advice
+from auth_throttle import AuthenticationFailureLimiter
 from ai_advisor import (
     AIProviderError,
     build_deidentified_snapshot,
@@ -57,6 +58,9 @@ from config import (
     API_RATE_LIMIT_WINDOW_SECONDS,
     APP_NAME,
     APP_VERSION,
+    AUTH_FAILURE_LIMIT,
+    AUTH_FAILURE_MAX_PEERS,
+    AUTH_FAILURE_WINDOW_SECONDS,
     DEFAULT_API_KEY_PLACEHOLDER,
     MAINTENANCE_MAX_DURATION_DAYS,
     MAX_CAPTURE_PACKETS,
@@ -310,6 +314,11 @@ async def security_headers(request: Request, call_next):
 
 _api_key_header = APIKeyHeader(name="X-NetWatch-Key", auto_error=False)
 _bearer_header = HTTPBearer(auto_error=False)
+_auth_failure_limiter = AuthenticationFailureLimiter(
+    max_failures=AUTH_FAILURE_LIMIT,
+    window_seconds=AUTH_FAILURE_WINDOW_SECONDS,
+    max_peers=AUTH_FAILURE_MAX_PEERS,
+)
 _MAX_API_RATE_LIMIT_BUCKETS = 50_000
 _MAX_INTELLIGENCE_RATE_LIMIT_BUCKETS = 10_000
 _rate_lock = threading.Lock()
@@ -601,10 +610,10 @@ def _enforce_intelligence_rate_limit(identity: str) -> None:
         events.append(now)
 
 
-def require_api_access(
+def _authenticate_api_access(
     request: Request,
-    supplied_key: str | None = Security(_api_key_header),
-    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_header),
+    supplied_key: str | None,
+    bearer: HTTPAuthorizationCredentials | None,
 ) -> AuthContext:
     authorization_headers = request.headers.getlist("authorization")
     role_key_headers = request.headers.getlist("x-netwatch-key")
@@ -701,6 +710,29 @@ def require_api_access(
     )
     _enforce_rate_limit(_rate_identity(request, context))
     return context
+
+
+def require_api_access(
+    request: Request,
+    supplied_key: str | None = Security(_api_key_header),
+    bearer: HTTPAuthorizationCredentials | None = Security(_bearer_header),
+) -> AuthContext:
+    """Throttle invalid credentials before verification, without storing secrets."""
+    # Only use the real socket peer; forwarded IP headers can be forged by clients.
+    peer = request.client.host if request.client else "unknown"
+    retry_after = _auth_failure_limiter.retry_after(peer)
+    if retry_after is not None:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed authentication attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    try:
+        return _authenticate_api_access(request, supplied_key, bearer)
+    except HTTPException as exc:
+        if exc.status_code in {401, 403}:
+            _auth_failure_limiter.record_failure(peer)
+        raise
 
 
 def require_operator_access(
