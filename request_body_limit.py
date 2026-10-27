@@ -54,7 +54,11 @@ class RequestBodyLimitMiddleware:
         ]
         if declared_lengths:
             # Duplicate or non-decimal lengths are ambiguous at proxy boundaries.
-            if len(declared_lengths) != 1 or not declared_lengths[0].isdigit():
+            if (
+                len(declared_lengths) != 1
+                or not 1 <= len(declared_lengths[0]) <= 20
+                or not declared_lengths[0].isdigit()
+            ):
                 await self._reject(scope, receive, send, 400, "Invalid Content-Length.")
                 return
             if int(declared_lengths[0]) > limit:
