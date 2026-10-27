@@ -7,9 +7,10 @@ after body parsing in FastAPI, so they cannot protect the parser by themselves.
 
 from __future__ import annotations
 
-from pcap_import import MAX_PCAP_BYTES
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from pcap_import import MAX_PCAP_BYTES
 
 MAX_API_JSON_BYTES = 256 * 1024
 
