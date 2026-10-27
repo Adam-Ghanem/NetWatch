@@ -29,9 +29,27 @@ def test_summarizes_bidirectional_payload_without_retaining_content():
     assert summary["payload_bytes"] == 920
     assert summary["originator_payload_bytes"] == 120
     assert summary["responder_payload_bytes"] == 800
+    assert summary["payload_flow_count"] == 1
     assert summary["bidirectional_payload_flow_count"] == 1
     assert summary["unidirectional_payload_flow_count"] == 0
+    assert summary["largest_payload_flow_bytes"] == 920
+    assert summary["largest_payload_flow_percent"] == 100.0
     assert summary["payload_retained"] is False
+
+
+def test_reports_largest_flow_share_across_multiple_payload_flows():
+    records = [
+        _record("10.0.0.1", "10.0.0.2", 50000, 443, 300),
+        _record("10.0.0.2", "10.0.0.1", 443, 50000, 200),
+        _record("10.0.0.3", "10.0.0.4", 51000, 80, 250),
+        _record("10.0.0.5", "10.0.0.6", 52000, 22, 250),
+    ]
+
+    summary = tcp_payload_evidence_summary(records)
+
+    assert summary["payload_flow_count"] == 3
+    assert summary["largest_payload_flow_bytes"] == 500
+    assert summary["largest_payload_flow_percent"] == 50.0
 
 
 def test_reports_missing_metadata_instead_of_guessing_from_frame_length():
@@ -48,6 +66,9 @@ def test_reports_missing_metadata_instead_of_guessing_from_frame_length():
 
     assert summary["payload_bytes"] == 0
     assert summary["payload_segment_count"] == 0
+    assert summary["payload_flow_count"] == 0
+    assert summary["largest_payload_flow_bytes"] == 0
+    assert summary["largest_payload_flow_percent"] == 0.0
     assert summary["metadata_missing_record_count"] == 1
 
 
