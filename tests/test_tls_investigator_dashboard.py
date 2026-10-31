@@ -81,12 +81,22 @@ def test_tls_investigator_is_linked_from_dashboard_and_command_palette() -> None
     assert "id: 'tls-investigator'" in app
     assert "href: '/tls-investigator.html'" in app
     assert "window.location.assign(command.href)" in app
-    assert "netwatchApiKey" not in dashboard.split('href="/tls-investigator.html"')[0][-100:]
+    assert 'href="/tls-investigator.html?' not in dashboard
 
 
 def test_tls_investigator_stylesheet_exists_and_is_responsive() -> None:
     css = Path("frontend/tls-investigator.css").read_text(encoding="utf-8")
-    for selector in (".shell", ".panel", ".metric", ".filter-grid", ".facet", ".timeline", ".bar", ".pill", ".table-wrap"):
+    for selector in (
+        ".shell",
+        ".panel",
+        ".metric",
+        ".filter-grid",
+        ".facet",
+        ".timeline",
+        ".bar",
+        ".pill",
+        ".table-wrap",
+    ):
         assert selector in css
     assert "@media (max-width: 600px)" in css
     assert "prefers-reduced-motion" in css
