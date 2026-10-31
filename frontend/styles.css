@@ -126,6 +126,8 @@ code {
   border-radius: 7px;
   color: #aaa8b6;
   background: transparent;
+  text-decoration: none;
+  cursor: pointer;
   white-space: nowrap;
   font-size: 0.81rem;
   font-weight: 650;

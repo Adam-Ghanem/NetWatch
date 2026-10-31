@@ -57,6 +57,7 @@ const commandCatalog = [
   { id: 'network', label: 'Start a network scan', description: 'Open the authorization-first private network discovery form.', view: 'network', marker: 'NS', tag: 'Scan', keywords: 'cidr discover hosts assets' },
   { id: 'host', label: 'Check one host', description: 'Profile an approved device without starting a broad scan.', view: 'host', marker: 'HC', tag: 'Scan', keywords: 'ip device ping profile' },
   { id: 'ports', label: 'Audit TCP services', description: 'Review the bounded common-service exposure list.', view: 'ports', marker: 'PA', tag: 'Scan', keywords: 'ports tcp services exposure' },
+  { id: 'tls-investigator', label: 'Open TLS investigator', description: 'Investigate retained TLS changes and certificate posture without new probes.', href: '/tls-investigator.html', marker: 'TLS', tag: 'Analysis', keywords: 'tls certificates expiry downgrade cipher history' },
   { id: 'traffic', label: 'Explore live traffic', description: 'Capture bounded packet headers and review protocols, conversations, and devices.', view: 'traffic', marker: 'TX', tag: 'Observe', keywords: 'wireshark packet traffic protocol capture', requires: 'capture' },
   { id: 'inventory', label: 'Open asset inventory', description: 'Review monitored devices, ownership, and business context.', view: 'inventory', marker: 'AI', tag: 'Data', keywords: 'assets devices owner department' },
   { id: 'advisor', label: 'Open risk advisor', description: 'Review evidence-backed priorities and recommended next steps.', view: 'advisor', marker: 'RA', tag: 'Analysis', keywords: 'priority advice intelligence' },
@@ -1328,6 +1329,10 @@ function executeCommand(command) {
   closeCommandPalette();
   if (command.view) {
     navigate(command.view);
+    return;
+  }
+  if (command.href === '/tls-investigator.html') {
+    window.location.assign(command.href);
     return;
   }
   if (command.action === 'refresh') $('#refresh').click();
