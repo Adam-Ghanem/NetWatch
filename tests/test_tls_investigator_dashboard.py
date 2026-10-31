@@ -100,4 +100,5 @@ def test_tls_investigator_stylesheet_exists_and_is_responsive() -> None:
         assert selector in css
     assert "@media (max-width: 600px)" in css
     assert "prefers-reduced-motion" in css
+    assert '<meta name="color-scheme" content="light">' in _html()
     assert "@import" not in css
