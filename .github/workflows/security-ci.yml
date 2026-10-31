@@ -66,6 +66,8 @@ jobs:
       - name: Validate frontend JavaScript
         run: |
           node --check frontend/app.js
+          node --check frontend/app-core.js
+          node --check frontend/tls-investigator.js
           node --check frontend/ui-polish.js
           node --check frontend/theme-toggle.js
 
