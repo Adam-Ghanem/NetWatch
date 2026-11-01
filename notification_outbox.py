@@ -67,9 +67,7 @@ def enqueue_notification_receipts(conn: sqlite3.Connection, alert: dict[str, Any
     alert_id = int(alert.get("id", 0))
     if alert_id <= 0:
         return 0
-    payload = build_alert_notification_payload(
-        {**alert, "_notification_event": "alert_created"}
-    )
+    payload = build_alert_notification_payload({**alert, "_notification_event": "alert_created"})
     now = _iso(_now())
     created = 0
     for channel in notification_channels():
@@ -104,6 +102,16 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
     claimed: list[dict[str, Any]] = []
     with _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            """
+            UPDATE notification_deliveries
+            SET status = 'dead', claimed_at = '', claim_token = '',
+                last_result = 'retry_exhausted'
+            WHERE status = 'pending' AND attempts >= ?
+              AND (claimed_at = '' OR claimed_at <= ?)
+            """,
+            (MAX_DELIVERY_ATTEMPTS, _iso(now - timedelta(seconds=CLAIM_STALE_SECONDS))),
+        )
         rows = conn.execute(
             """
             SELECT * FROM notification_deliveries
@@ -112,8 +120,10 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
             ORDER BY id ASC LIMIT ?
             """,
             (
-                _iso(now), _iso(now - timedelta(seconds=CLAIM_STALE_SECONDS)),
-                MAX_DELIVERY_ATTEMPTS, max(1, min(int(limit), MAX_BATCH)),
+                _iso(now),
+                _iso(now - timedelta(seconds=CLAIM_STALE_SECONDS)),
+                MAX_DELIVERY_ATTEMPTS,
+                max(1, min(int(limit), MAX_BATCH)),
             ),
         ).fetchall()
         for row in rows:
@@ -140,14 +150,14 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
         attempts = int(item["attempts"]) + 1
         deferred = status in {"disabled", "circuit_open"}
         state = (
-            "delivered" if status == "delivered"
-            else "pending" if deferred or attempts < MAX_DELIVERY_ATTEMPTS
-            else "dead"
+            "delivered"
+            if status == "delivered"
+            else "pending" if deferred or attempts < MAX_DELIVERY_ATTEMPTS else "dead"
         )
         delay = (
-            0 if state == "delivered"
-            else 300 if deferred
-            else min(3600, 30 * 2 ** min(attempts - 1, 7))
+            0
+            if state == "delivered"
+            else 300 if deferred else min(3600, 30 * 2 ** min(attempts - 1, 7))
         )
         with _connect() as conn:
             cursor = conn.execute(
@@ -158,17 +168,22 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
                 WHERE id = ? AND status = 'pending' AND claim_token = ?
                 """,
                 (
-                    state, _iso(_now() + timedelta(seconds=delay)),
+                    state,
+                    _iso(_now() + timedelta(seconds=delay)),
                     _iso(_now()) if state == "delivered" else "",
                     status if status in {"delivered", "disabled", "circuit_open"} else "failed",
-                    int(deferred), item["id"], token,
+                    int(deferred),
+                    item["id"],
+                    token,
                 ),
             )
         if cursor.rowcount:
             counters[
-                "delivered" if state == "delivered"
-                else "dead" if state == "dead"
-                else "retry_pending"
+                (
+                    "delivered"
+                    if state == "delivered"
+                    else "dead" if state == "dead" else "retry_pending"
+                )
             ] += 1
     return counters
 

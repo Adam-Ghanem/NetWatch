@@ -29,8 +29,11 @@ def _enabled(monkeypatch):
 
 def _alert(alert_id=42, severity="Critical"):
     return {
-        "id": alert_id, "severity": severity, "status": "open",
-        "category": "asset_not_observed", "target": "secret.internal (10.0.0.5)",
+        "id": alert_id,
+        "severity": severity,
+        "status": "open",
+        "category": "asset_not_observed",
+        "target": "secret.internal (10.0.0.5)",
         "occurrence_count": 1,
     }
 
@@ -41,9 +44,7 @@ def test_queue_is_idempotent_and_stores_no_urls_or_raw_targets(monkeypatch, tmp_
     with inventory_store._connect() as conn:
         assert outbox.enqueue_notification_receipts(conn, _alert()) == 1
         assert outbox.enqueue_notification_receipts(conn, _alert()) == 0
-        content = conn.execute(
-            "SELECT payload FROM notification_deliveries"
-        ).fetchone()[0]
+        content = conn.execute("SELECT payload FROM notification_deliveries").fetchone()[0]
     assert "secret.internal" not in content
     assert "10.0.0.5" not in content
     assert "private-token" not in content
@@ -76,7 +77,8 @@ def test_transient_failure_is_delayed_and_does_not_hammer(monkeypatch, tmp_path)
     with inventory_store._connect() as conn:
         outbox.enqueue_notification_receipts(conn, _alert())
     monkeypatch.setattr(
-        outbox, "deliver_stored_notification",
+        outbox,
+        "deliver_stored_notification",
         lambda kind, payload: notifications.ChannelNotificationResult("webhook", "failed", 1),
     )
     assert outbox.process_notification_receipts_once()["retry_pending"] == 1
@@ -90,7 +92,8 @@ def test_deferred_disabled_channel_does_not_consume_retry_budget(monkeypatch, tm
     with inventory_store._connect() as conn:
         outbox.enqueue_notification_receipts(conn, _alert())
     monkeypatch.setattr(
-        outbox, "deliver_stored_notification",
+        outbox,
+        "deliver_stored_notification",
         lambda kind, payload: notifications.ChannelNotificationResult("webhook", "disabled"),
     )
     assert outbox.process_notification_receipts_once()["retry_pending"] == 1
@@ -114,9 +117,7 @@ def test_case_creation_is_atomic_and_does_not_enqueue_in_memory(monkeypatch, tmp
     inventory_store.record_network_scan(
         "192.168.61.0/30", [{"IP Address": "192.168.61.1", "Status": "Online"}]
     )
-    inventory_store.update_asset_context(
-        "192.168.61.1", criticality="Critical", actor_role="admin"
-    )
+    inventory_store.update_asset_context("192.168.61.1", criticality="Critical", actor_role="admin")
     missing = inventory_store.record_network_scan("192.168.61.0/30", [])
     summary = operations_store.create_alerts_for_changes(missing)
     assert summary.created == 1
@@ -129,19 +130,21 @@ def test_admin_status_has_no_raw_payloads_and_viewer_is_denied(monkeypatch, tmp_
     _enabled(monkeypatch)
     monkeypatch.setenv("NETWATCH_API_KEY", "admin-outbox-key-with-at-least-32-characters")
     monkeypatch.setenv("NETWATCH_VIEWER_KEY", "viewer-outbox-key-with-at-least-32-characters")
-    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", "independent-audit-key-with-at-least-32-characters")
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY", "independent-audit-key-with-at-least-32-characters"
+    )
     monkeypatch.setenv("NETWATCH_OIDC_ENABLED", "false")
     with inventory_store._connect() as conn:
         outbox.enqueue_notification_receipts(conn, _alert())
-    with TestClient(api.app, base_url="http://127.0.0.1") as client:
-        viewer = client.get(
-            "/api/notifications/status",
-            headers={"X-NetWatch-Key": "viewer-outbox-key-with-at-least-32-characters"},
-        )
-        admin = client.get(
-            "/api/notifications/status",
-            headers={"X-NetWatch-Key": "admin-outbox-key-with-at-least-32-characters"},
-        )
+    client = TestClient(api.app, base_url="http://127.0.0.1")
+    viewer = client.get(
+        "/api/notifications/status",
+        headers={"X-NetWatch-Key": "viewer-outbox-key-with-at-least-32-characters"},
+    )
+    admin = client.get(
+        "/api/notifications/status",
+        headers={"X-NetWatch-Key": "admin-outbox-key-with-at-least-32-characters"},
+    )
     assert viewer.status_code == 403
     assert admin.status_code == 200
     assert admin.json()["durable_alert_created_enabled"] is True

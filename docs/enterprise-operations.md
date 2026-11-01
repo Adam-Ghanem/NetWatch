@@ -30,9 +30,9 @@ The platform review must verify that API replicas are stateless, worker leases a
 
 Set `NETWATCH_DURABLE_NOTIFICATIONS_ENABLED=true` and configure an HTTPS
 `NETWATCH_WEBHOOK_URL` or `NETWATCH_SLACK_WEBHOOK_URL`. Newly created alert
-cases meeting the minimum severity threshold write one encrypted-at-rest-only-if-
-disk-encryption-is-configured (SQLite plaintext) receipt per channel inside the
-case transaction. The background notification loop processes at most 20 receipts
+cases meeting the minimum severity threshold write one SQLite receipt per
+channel inside the case transaction. SQLite data is plaintext unless the
+operator configures disk encryption. The background notification loop processes at most 20 receipts
 per cycle, applies bounded retries, and marks exhausted deliveries dead.
 Only allowlisted notification payloads are retained, deidentified by default;
 raw targets are stored **only** when `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`.
