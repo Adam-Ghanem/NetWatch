@@ -71,3 +71,34 @@ def test_tls_investigator_dashboard_persists_shareable_scope_without_secrets() -
         javascript.index("function syncScopeToUrl") : javascript.index("function labelize")
     ]
     assert "netwatchApiKey" not in sync_scope
+
+
+def test_tls_investigator_is_linked_from_dashboard_and_command_palette() -> None:
+    dashboard = Path("frontend/index.html").read_text(encoding="utf-8")
+    app = Path("frontend/app-core.js").read_text(encoding="utf-8")
+    assert '<a class="nav-item" href="/tls-investigator.html">' in dashboard
+    assert "TLS investigator</span></a>" in dashboard
+    assert "id: 'tls-investigator'" in app
+    assert "href: '/tls-investigator.html'" in app
+    assert "window.location.assign(command.href)" in app
+    assert 'href="/tls-investigator.html?' not in dashboard
+
+
+def test_tls_investigator_stylesheet_exists_and_is_responsive() -> None:
+    css = Path("frontend/tls-investigator.css").read_text(encoding="utf-8")
+    for selector in (
+        ".shell",
+        ".panel",
+        ".metric",
+        ".filter-grid",
+        ".facet",
+        ".timeline",
+        ".bar",
+        ".pill",
+        ".table-wrap",
+    ):
+        assert selector in css
+    assert "@media (max-width: 600px)" in css
+    assert "prefers-reduced-motion" in css
+    assert '<meta name="color-scheme" content="light">' in _html()
+    assert "@import" not in css
