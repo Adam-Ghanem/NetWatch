@@ -24,8 +24,8 @@ from config import (
 )
 from device_identity import normalize_mac
 from enterprise_store import create_enterprise_schema
-from notification_outbox import create_notification_delivery_schema
 from intelligence_store import create_intelligence_schema
+from notification_outbox import create_notification_delivery_schema
 from operations_store import create_operations_schema
 
 DATA_DIR = Path(os.getenv("NETWATCH_DATA_DIR", "data"))

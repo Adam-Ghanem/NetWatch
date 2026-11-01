@@ -125,8 +125,8 @@ from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
 from notification_outbox import notification_delivery_status, process_notification_receipts_once
 from notifications import (
-    notification_channel_status,
     durable_notifications_enabled,
+    notification_channel_status,
     notifications_enabled,
     send_alert_notification,
 )
