@@ -18,8 +18,10 @@ from config import (
     SCAN_POLICY_MIN_INTERVAL_MINUTES,
 )
 from enterprise_store import enqueue_outbox_event, enterprise_queue_status
+from notification_outbox import enqueue_notification_receipts
 from notifications import (
     NotificationResult,
+    durable_notifications_enabled,
     enqueue_alert_notification,
     notifications_enabled,
     send_alert_notification,
@@ -780,6 +782,9 @@ def enterprise_queue_metrics() -> dict[str, int]:
 
 
 def _queue_alert_notification_safely(alert: dict[str, Any], *, event: str) -> None:
+    if durable_notifications_enabled():
+        # Persisted notifications were queued atomically with the case.
+        return
     notification = {**alert, "_notification_event": event}
     try:
         enqueue_alert_notification(notification)
@@ -888,6 +893,8 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             created += int(was_created)
             refreshed += int(not was_created)
             if was_created:
+                if durable_notifications_enabled():
+                    enqueue_notification_receipts(conn, alert)
                 pending_notifications.append(alert)
 
         for ip_address in changes.returned_assets:
@@ -903,6 +910,8 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             created += int(was_created)
             refreshed += int(not was_created)
             if was_created:
+                if durable_notifications_enabled():
+                    enqueue_notification_receipts(conn, alert)
                 pending_notifications.append(alert)
 
         for ip_address in changes.not_observed_assets:
@@ -928,6 +937,8 @@ def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSumma
             refreshed += int(not was_created)
             if was_created:
                 _record_alert_outbox_event(conn, alert)
+                if durable_notifications_enabled():
+                    enqueue_notification_receipts(conn, alert)
                 pending_notifications.append(alert)
 
         _prune_alerts(conn)

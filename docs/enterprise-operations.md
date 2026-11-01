@@ -26,6 +26,27 @@ Before Stage A promotion, reviewers must confirm that the signed image digest, s
 
 The platform review must verify that API replicas are stateless, worker leases are bounded and renewable, jobs are idempotent, retry storms are capped, dead-letter events have an owner, and no worker can select an arbitrary network target. The data review must verify tenant/resource scope, encryption and key rotation, retention/deletion policy, export controls, and recovery from a staging backup. The security review must verify that traffic capture remains metadata-only, payloads are never persisted, outbound notifications remain redacted by default, and advisory intelligence cannot start scans or mutate cases.
 
+## Single-instance durable alert delivery (opt-in)
+
+Set `NETWATCH_DURABLE_NOTIFICATIONS_ENABLED=true` and configure an HTTPS
+`NETWATCH_WEBHOOK_URL` or `NETWATCH_SLACK_WEBHOOK_URL`. Newly created alert
+cases meeting the minimum severity threshold write one encrypted-at-rest-only-if-
+disk-encryption-is-configured (SQLite plaintext) receipt per channel inside the
+case transaction. The background notification loop processes at most 20 receipts
+per cycle, applies bounded retries, and marks exhausted deliveries dead.
+Only allowlisted notification payloads are retained, deidentified by default;
+raw targets are stored **only** when `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`.
+Admin `GET /api/notifications/status` shows receipt status and counters, not
+webhook URLs, serialized payloads or secrets.
+
+**Limitations:** this is **at-least-once**, not exactly-once delivery. If NetWatch
+crashes after a webhook accepts a notification but before local acknowledgement,
+the same event may be sent again. Consumers should deduplicate the stable
+`event_id`. SLA-breach notifications retain their legacy non-durable path for
+now. Existing in-memory alerts are not backfilled. Pending receipts persist
+across restarts but depend on the single local SQLite volume; protect it with
+backups and disk encryption. Do not scale the SQLite worker across replicas.
+
 ## Incident response
 
 When readiness fails, keep liveness separate from dependency health and stop automated promotion. When audit integrity fails, pause privileged mutations and preserve the database and audit key for forensic review. When the queue grows or dead-letter counts increase, stop increasing worker concurrency, inspect the sink or dependency, replay only idempotent events, and record the operator decision. When a scan scope or authorization issue is suspected, disable the affected policy, preserve approval evidence, and do not broaden the target to restore apparent coverage.

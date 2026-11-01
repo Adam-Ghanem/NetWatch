@@ -123,8 +123,10 @@ from inventory_store import (
 )
 from network_scanner import scan_network
 from network_tools import guess_gateway, network_profile
+from notification_outbox import notification_delivery_status, process_notification_receipts_once
 from notifications import (
     notification_channel_status,
+    durable_notifications_enabled,
     notifications_enabled,
     send_alert_notification,
 )
@@ -1003,8 +1005,10 @@ def _notification_loop(stop_event: threading.Event) -> None:
     while not stop_event.is_set():
         try:
             notify_overdue_alert_transitions()
+            if durable_notifications_enabled():
+                process_notification_receipts_once()
         except Exception:
-            LOGGER.error("notification_sla_check_failed_safely")
+            LOGGER.error("notification_delivery_cycle_failed_safely")
         stop_event.wait(30)
 
 
@@ -2012,7 +2016,11 @@ def update_alert(
 def notifications_status(
     _: AuthContext = Depends(require_admin_access),
 ) -> dict[str, Any]:
-    return {"channels": notification_channel_status()}
+    return {
+        "channels": notification_channel_status(),
+        "durable_alert_created_enabled": durable_notifications_enabled(),
+        "delivery": notification_delivery_status(),
+    }
 
 
 @app.post("/api/notifications/test")

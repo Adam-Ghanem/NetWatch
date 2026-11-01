@@ -24,6 +24,7 @@ from config import (
 )
 from device_identity import normalize_mac
 from enterprise_store import create_enterprise_schema
+from notification_outbox import create_notification_delivery_schema
 from intelligence_store import create_intelligence_schema
 from operations_store import create_operations_schema
 
@@ -248,6 +249,7 @@ def init_db() -> None:
         create_operations_schema(conn)
         create_intelligence_schema(conn)
         create_enterprise_schema(conn)
+        create_notification_delivery_schema(conn)
         conn.execute("PRAGMA user_version = 11")
 
 
