@@ -2163,9 +2163,7 @@ def tls_investigator_export(
         content=content,
         media_type=media_types[export_format],
         headers={
-            "Content-Disposition": (
-                f'attachment; filename="netwatch-tls-evidence.{export_format}"'
-            ),
+            "Content-Disposition": f'attachment; filename="netwatch-tls-evidence.{export_format}"',
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
         },
