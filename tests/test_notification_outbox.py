@@ -117,8 +117,13 @@ def test_case_creation_is_atomic_and_does_not_enqueue_in_memory(monkeypatch, tmp
         "192.168.61.0/30", [{"IP Address": "192.168.61.1", "Status": "Online"}]
     )
     inventory_store.update_asset_context(
-        "192.168.61.1", owner="IT", department="Ops", location="Lab",
-        criticality="Critical", notes="Gateway", actor_role="admin",
+        "192.168.61.1",
+        owner="IT",
+        department="Ops",
+        location="Lab",
+        criticality="Critical",
+        notes="Gateway",
+        actor_role="admin",
     )
     missing = inventory_store.record_network_scan("192.168.61.0/30", [])
     summary = operations_store.create_alerts_for_changes(missing)
