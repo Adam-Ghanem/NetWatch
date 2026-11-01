@@ -105,9 +105,7 @@ def test_tls_export_requires_authentication_and_rejects_invalid_bounds(
     assert invalid_format.status_code == 422
 
 
-def test_viewer_exports_same_filtered_retained_tls_evidence(
-    monkeypatch, tmp_path
-):
+def test_viewer_exports_same_filtered_retained_tls_evidence(monkeypatch, tmp_path):
     captured = []
 
     def fake_snapshot(**kwargs):
