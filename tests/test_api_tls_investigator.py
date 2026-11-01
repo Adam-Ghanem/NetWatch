@@ -87,9 +87,7 @@ def test_tls_investigator_query_bounds_are_enforced(monkeypatch, tmp_path):
     assert invalid_limit.status_code == 422
 
 
-def test_tls_export_requires_authentication_and_rejects_invalid_bounds(
-    monkeypatch, tmp_path
-):
+def test_tls_export_requires_authentication_and_rejects_invalid_bounds(monkeypatch, tmp_path):
     with _client(monkeypatch, tmp_path) as client:
         missing_key = client.get("/api/tls/investigator/export.csv")
         invalid_limit = client.get(
@@ -97,9 +95,7 @@ def test_tls_export_requires_authentication_and_rejects_invalid_bounds(
             headers=VIEWER_HEADERS,
             params={"limit": 1001},
         )
-        invalid_format = client.get(
-            "/api/tls/investigator/export.xml", headers=VIEWER_HEADERS
-        )
+        invalid_format = client.get("/api/tls/investigator/export.xml", headers=VIEWER_HEADERS)
     assert missing_key.status_code == 401
     assert invalid_limit.status_code == 422
     assert invalid_format.status_code == 422

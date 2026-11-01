@@ -2149,9 +2149,7 @@ def tls_investigator_export(
             severity=severity,
             alerts_only=alerts_only,
         )
-        content = export_tls_investigator(
-            snapshot, export_format=export_format, limit=limit
-        )
+        content = export_tls_investigator(snapshot, export_format=export_format, limit=limit)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     media_types = {
