@@ -102,3 +102,20 @@ def test_tls_investigator_stylesheet_exists_and_is_responsive() -> None:
     assert "prefers-reduced-motion" in css
     assert '<meta name="color-scheme" content="light">' in _html()
     assert "@import" not in css
+
+
+def test_tls_investigator_export_is_same_origin_authenticated_and_bounded() -> None:
+    html = _html()
+    javascript = _javascript()
+    assert 'id="export-format"' in html
+    assert 'id="export"' in html
+    assert "function investigatorExportUrl" in javascript
+    assert "/api/tls/investigator/export." in javascript
+    assert "return investigatorUrl().replace(" in javascript
+    assert "validateInvestigatorScope()" in javascript
+    assert "headers: { 'X-NetWatch-Key': key" in javascript
+    assert "cache: 'no-store'" in javascript
+    assert "URL.createObjectURL" in javascript
+    assert "URL.revokeObjectURL" in javascript
+    assert "['csv', 'json', 'ndjson'].includes(format)" in javascript
+    assert "certificate SHA-256 fingerprints" in html

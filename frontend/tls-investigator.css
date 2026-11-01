@@ -116,3 +116,8 @@ tbody tr:hover { background: #f8fcf9; }
   .actions > button { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+
+.download-format { display: flex; align-items: center; gap: 8px; color: #345f59; font-size: .85rem; font-weight: 700; }
+.download-format select { width: auto; min-width: 108px; }
+.export-privacy { margin: -8px 0 20px; color: #59776e; font-size: .81rem; }
+#export:disabled { opacity: .65; cursor: wait; }
