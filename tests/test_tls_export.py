@@ -87,6 +87,6 @@ def test_export_rejects_invalid_limits(limit):
 
 def test_export_rejects_unsupported_format_and_malformed_snapshot():
     with pytest.raises(ValueError, match="format"):
-        export_tls_investigator(_snapshot(), export_format="xml")
+        export_tls_investigator(_snapshot(), export_format="xml")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="list"):
         export_tls_investigator({"items": "not a list"}, export_format="json")
