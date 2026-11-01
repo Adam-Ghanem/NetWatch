@@ -111,12 +111,15 @@ def test_threshold_and_unconfigured_channel_do_not_queue(monkeypatch, tmp_path):
 def test_case_creation_is_atomic_and_does_not_enqueue_in_memory(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
-    queued = []
+    queued: list[dict[str, object]] = []
     monkeypatch.setattr(operations_store, "enqueue_alert_notification", queued.append)
     inventory_store.record_network_scan(
         "192.168.61.0/30", [{"IP Address": "192.168.61.1", "Status": "Online"}]
     )
-    inventory_store.update_asset_context("192.168.61.1", criticality="Critical", actor_role="admin")
+    inventory_store.update_asset_context(
+        "192.168.61.1", owner="IT", department="Ops", location="Lab",
+        criticality="Critical", notes="Gateway", actor_role="admin",
+    )
     missing = inventory_store.record_network_scan("192.168.61.0/30", [])
     summary = operations_store.create_alerts_for_changes(missing)
     assert summary.created == 1
