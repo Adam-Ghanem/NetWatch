@@ -72,6 +72,63 @@ function investigatorUrl() {
   return `/api/tls/investigator?${params.toString()}`;
 }
 
+function validateInvestigatorScope() {
+  const limit = Number(valueOf('#filter-limit') || 100);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return 'Result limit must be between 1 and 1,000.';
+  const port = valueOf('#filter-port');
+  if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) return 'Port must be between 1 and 65,535.';
+  return '';
+}
+
+function investigatorExportUrl(format) {
+  // Use the same filtered and bounded query as the on-screen investigation.
+  return investigatorUrl().replace(
+    '/api/tls/investigator?',
+    `/api/tls/investigator/export.${format}?`,
+  );
+}
+
+async function downloadEvidence() {
+  const key = String(keyInput.value || '').trim();
+  if (!key) return setStatus('A Viewer, Operator, or Admin API key is required.', 'error');
+  const invalidScope = validateInvestigatorScope();
+  if (invalidScope) return setStatus(invalidScope, 'error');
+  const format = valueOf('#export-format');
+  if (!['csv', 'json', 'ndjson'].includes(format)) return setStatus('Invalid export format.', 'error');
+  const button = document.querySelector('#export');
+  button.disabled = true;
+  syncScopeToUrl();
+  setStatus(`Exporting filtered TLS evidence as ${format.toUpperCase()}…`);
+  try {
+    const response = await fetch(investigatorExportUrl(format), {
+      headers: { 'X-NetWatch-Key': key, Accept: 'application/octet-stream' },
+      cache: 'no-store', credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      let detail = `Export failed (${response.status}).`;
+      try { const error = await response.json(); detail = String(error.detail || detail); } catch (_) { /* non-JSON */ }
+      throw new Error(detail);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    try {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `netwatch-tls-evidence.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+    setStatus(`Downloaded ${format.toUpperCase()} filtered TLS evidence.`, 'success');
+  } catch (error) {
+    setStatus(error.message || 'Unable to export TLS evidence.', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function labelize(value) {
   return String(value || '—').replaceAll('_', ' ');
 }
@@ -218,10 +275,8 @@ function renderSnapshot(payload) {
 async function loadEvidence() {
   const key = String(keyInput.value || '').trim();
   if (!key) return setStatus('A Viewer, Operator, or Admin API key is required.', 'error');
-  const limit = Number(valueOf('#filter-limit') || 100);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) return setStatus('Result limit must be between 1 and 1,000.', 'error');
-  const port = valueOf('#filter-port');
-  if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) return setStatus('Port must be between 1 and 65,535.', 'error');
+  const invalidScope = validateInvestigatorScope();
+  if (invalidScope) return setStatus(invalidScope, 'error');
   syncScopeToUrl();
   setStatus('Loading bounded retained TLS evidence…');
   try {
@@ -249,6 +304,7 @@ document.querySelector('#save-key').addEventListener('click', () => {
   loadEvidence();
 });
 document.querySelector('#apply').addEventListener('click', loadEvidence);
+document.querySelector('#export').addEventListener('click', downloadEvidence);
 document.querySelector('#clear').addEventListener('click', () => {
   ['#filter-ip', '#filter-port', '#filter-change', '#filter-severity'].forEach((selector) => { document.querySelector(selector).value = ''; });
   document.querySelector('#filter-protocol').value = '';

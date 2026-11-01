@@ -49,9 +49,15 @@
         <label class="check"><input id="alerts-only" type="checkbox"><span>Recommended alerts only</span></label>
         <button id="apply" class="primary" type="button">Refresh evidence</button>
         <button id="clear" type="button">Clear pivots</button>
+        <label class="download-format" for="export-format">Export
+          <select id="export-format" aria-label="Evidence export format"><option value="csv">CSV</option><option value="json">JSON</option><option value="ndjson">NDJSON</option></select>
+        </label>
+        <button id="export" type="button">Download evidence</button>
         <span id="status" class="status" role="status">Enter an API key, then load retained TLS evidence.</span>
       </div>
     </section>
+
+    <p class="export-privacy">Exports reflect the selected filters and may include device IP addresses and certificate SHA-256 fingerprints. Do not share outside your authorized team.</p>
 
     <section class="panel">
       <div class="panel-head"><div><p class="eyebrow">Facets</p><h2>Change distribution</h2></div><span id="facet-summary" class="muted">No evidence loaded</span></div>

@@ -26,7 +26,7 @@ NetWatch is a self-hosted network visibility platform for authorized networks.
 - Device / OS intelligence
 - Change detection
 - Service review
-- [TLS Investigator](frontend/tls-investigator.html) for retained certificate/TLS change evidence
+- [TLS Investigator](frontend/tls-investigator.html) for retained certificate/TLS change evidence, with authenticated CSV/JSON/NDJSON export
 - Evidence & history
 - Optional AI investigation with your own API key
 
