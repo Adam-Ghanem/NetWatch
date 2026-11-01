@@ -195,6 +195,11 @@ def notifications_enabled() -> bool:
     return any(channel.enabled for channel in notification_channels())
 
 
+def durable_notifications_enabled() -> bool:
+    """Opt-in SQLite outbox for case-created notifications, disabled by default."""
+    return _runtime_bool("NETWATCH_DURABLE_NOTIFICATIONS_ENABLED", False)
+
+
 def _runtime_bool(name: str, fallback: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -423,6 +428,18 @@ def _deliver(channel: NotificationChannel, payload: dict[str, Any]) -> ChannelNo
         return ChannelNotificationResult(channel.kind, "delivered", attempts)
     _record_channel_failure(channel.kind)  # pragma: no cover - loop always returns
     return ChannelNotificationResult(channel.kind, "failed", attempts)
+
+
+def deliver_stored_notification(kind: str, payload: dict[str, Any]) -> ChannelNotificationResult:
+    """Bypass RAM debounce only for DB-deduped, channel-scoped events."""
+    for channel in notification_channels():
+        if channel.kind == kind:
+            if not channel.enabled:
+                return ChannelNotificationResult(channel.kind, "disabled")
+            if not _circuit_allows(channel.kind):
+                return ChannelNotificationResult(channel.kind, "circuit_open")
+            return _deliver(channel, payload)
+    raise ValueError("Unsupported notification channel.")
 
 
 def _result_reason(results: tuple[ChannelNotificationResult, ...]) -> str:
