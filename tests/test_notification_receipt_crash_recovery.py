@@ -25,7 +25,9 @@ def _setup(monkeypatch, tmp_path):
 
 
 def _stale_time():
-    return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+    return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(
+        timespec="seconds"
+    )
 
 
 def test_stale_claim_is_recovered_without_duplicate_receipt(monkeypatch, tmp_path):
