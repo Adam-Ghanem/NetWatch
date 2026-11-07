@@ -43,12 +43,21 @@ def _expected_digest(value: str | None) -> str | None:
     return normalized
 
 
+def _require_standalone(path: Path) -> None:
+    """Reject paths that could silently depend on unverified SQLite sidecars."""
+    if path.is_symlink():
+        raise ValueError("Backup must be a regular file, not a symbolic link.")
+    if any(Path(f"{path}{suffix}").exists() for suffix in ("-wal", "-shm", "-journal")):
+        raise ValueError("Backup has SQLite sidecar files; export a standalone snapshot.")
+
+
 def verify(
     path: Path,
     expected_schema: int | None = None,
     expected_sha256: str | None = None,
 ) -> dict[str, object]:
     """Verify a *stopped, standalone* SQLite snapshot without changing it."""
+    _require_standalone(path)
     if not path.is_file() or path.stat().st_size == 0:
         raise ValueError("Backup file is missing or empty.")
     if expected_schema is not None and expected_schema < 1:
@@ -93,6 +102,7 @@ def verify(
             for table in TABLES
         }
 
+    _require_standalone(path)
     after = path.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError("Backup changed during verification; use an offline snapshot.")
