@@ -35,8 +35,10 @@ def test_backup_verification_is_read_only_and_checks_schema(tmp_path):
     assert report["schema_version"] == 10
     assert report["sha256"] == expected_hash
     assert report["bytes"] == len(original)
-    assert report["counts"]["assets"] == 1
-    assert set(report["counts"]) == set(TABLES)
+    counts = report["counts"]
+    assert isinstance(counts, dict)
+    assert counts["assets"] == 1
+    assert set(counts) == set(TABLES)
     assert report["read_only"] is True
     assert path.read_bytes() == original
 
@@ -100,7 +102,9 @@ def test_backup_verification_handles_reserved_uri_characters(tmp_path):
     report = verify(path, expected_schema=10)
 
     assert report["integrity"] == "ok"
-    assert report["counts"]["assets"] == 1
+    counts = report["counts"]
+    assert isinstance(counts, dict)
+    assert counts["assets"] == 1
 
 
 def test_backup_verification_rejects_non_sqlite_data(tmp_path):
