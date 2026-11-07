@@ -82,6 +82,8 @@ The supported FastAPI dashboard uses patched Pillow 13.0.0 and does not install 
 
 Authorization-first, evidence-driven, scope-controlled, and local-first. Never commit secrets or use NetWatch against systems you are not authorized to assess.
 
+For backup recovery, the [offline SQLite backup verifier](docs/backup-verification.md) checks required tables, foreign keys, schema, and SHA-256 before a staging restore. It does not replace encrypted off-host backups or recovery testing.
+
 See the [2026-10-22 security/CI evidence snapshot](docs/security-audit-2026-10-22.md) for exact passing workflow SHAs, regression coverage, and the open production-security gates.
 
 ## Community recognition
