@@ -12,6 +12,7 @@ import hashlib
 import hmac
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 TABLES = (
@@ -63,7 +64,7 @@ def verify(
 
     # as_uri() percent-encodes filenames containing '?' and '#', unlike raw file: paths.
     uri = f"{path.resolve().as_uri()}?mode=ro"
-    with sqlite3.connect(uri, uri=True) as connection:
+    with closing(sqlite3.connect(uri, uri=True)) as connection:
         connection.execute("PRAGMA query_only = ON")
         result = connection.execute("PRAGMA integrity_check").fetchone()
         integrity = str(result[0]) if result else ""
