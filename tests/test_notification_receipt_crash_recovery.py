@@ -63,6 +63,7 @@ def test_exhausted_stale_claim_becomes_dead_without_delivery(monkeypatch, tmp_pa
             (_stale_time(), outbox.MAX_DELIVERY_ATTEMPTS),
         )
     sent = []
+
     def record_delivery(*args):
         sent.append(args)
 
