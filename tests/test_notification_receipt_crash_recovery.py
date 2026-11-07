@@ -19,9 +19,9 @@ def _setup(monkeypatch, tmp_path):
     monkeypatch.setenv("NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS", "false")
     notifications._reset_notification_state_for_tests()
     with inventory_store._connect() as conn:
-        assert outbox.enqueue_notification_receipts(
-            conn, {"id": 451, "severity": "Critical", "status": "open"}
-        ) == 1
+        alert = {"id": 451, "severity": "Critical", "status": "open"}
+        queued = outbox.enqueue_notification_receipts(conn, alert)
+        assert queued == 1
 
 
 def _stale_time():
@@ -63,9 +63,10 @@ def test_exhausted_stale_claim_becomes_dead_without_delivery(monkeypatch, tmp_pa
             (_stale_time(), outbox.MAX_DELIVERY_ATTEMPTS),
         )
     sent = []
-    monkeypatch.setattr(
-        outbox, "deliver_stored_notification", lambda *args: sent.append(args)
-    )
+    def record_delivery(*args):
+        sent.append(args)
+
+    monkeypatch.setattr(outbox, "deliver_stored_notification", record_delivery)
     assert outbox.process_notification_receipts_once()["claimed"] == 0
     assert sent == []
     with inventory_store._connect() as conn:
