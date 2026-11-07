@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Hardened offline SQLite backup verification: fail closed on missing required tables, invalid schema versions and foreign-key violations; add SHA-256 fingerprint and optional independently trusted digest comparison.
+- Added regression tests for incomplete/invalid snapshots, tampered digests, orphaned records, and reserved filename characters, plus an operator recovery-verification runbook.
+
 - Upgraded `cryptography` to 50.0.0 to resolve the dependency vulnerability identified by the security audit.
 - Added a protected per-asset evidence timeline API and Inventory dashboard panel combining discovery changes, direct checks, and network observations with IPv4 validation and bounded limits.
 - Added storage and API regression coverage for timeline scoping, bounded results, authentication, and invalid targets.
