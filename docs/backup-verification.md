@@ -15,6 +15,8 @@ can download a consistent snapshot. The verifier below works **offline** and
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
 - Whether the file changed during verification (size and modification time)
+- Reject symbolic-link inputs and SQLite `-wal`, `-shm`, or `-journal`
+  sidecars; verify a standalone export rather than a multi-file live database
 
 A missing required table, broken reference, failed integrity check, unexpected
 version, or mismatched digest returns a nonzero process exit code.
@@ -23,7 +25,9 @@ version, or mismatched digest returns a nonzero process exit code.
 
 First download a **snapshot** through the Admin dashboard. Do not point this
 tool at a live database file or copy a running SQLite database with a normal
-filesystem copy; WAL state may be incomplete.
+filesystem copy; WAL state may be incomplete. The verifier rejects sidecars
+and symbolic links, but this does not eliminate all concurrent replacement or
+filesystem race conditions. Use a trusted, stopped, access-controlled snapshot.
 
 ~~~bash
 python scripts/verify_sqlite_backup.py --expected-schema 10 backup.sqlite3
