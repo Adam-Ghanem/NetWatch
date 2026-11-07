@@ -15,8 +15,11 @@ class TcpPayloadEvidenceSummary(TypedDict):
     payload_bytes: int
     originator_payload_bytes: int
     responder_payload_bytes: int
+    payload_flow_count: int
     bidirectional_payload_flow_count: int
     unidirectional_payload_flow_count: int
+    largest_payload_flow_bytes: int
+    largest_payload_flow_percent: float
     metadata_missing_record_count: int
     truncated: bool
     payload_retained: bool
@@ -67,9 +70,10 @@ def tcp_payload_evidence_summary(
 
     NetWatch's PCAP/PCAPNG sequence extractor already records TCP segment length while
     discarding payload bytes. This summary turns that metadata into analyst-friendly
-    evidence about how much application data was observed and whether data moved in
-    one or both directions. Missing segment-length metadata is reported explicitly;
-    Ethernet frame length is never treated as TCP payload.
+    evidence about how much application data was observed, whether data moved in one
+    or both directions, and whether one flow dominates the observed TCP payload.
+    Missing segment-length metadata is reported explicitly; Ethernet frame length is
+    never treated as TCP payload.
     """
     _validate_record_limit(record_limit)
 
@@ -120,6 +124,10 @@ def tcp_payload_evidence_summary(
     unidirectional = len(flows) - bidirectional
     originator_bytes = sum(flow["originator_bytes"] for flow in flows.values())
     responder_bytes = sum(flow["responder_bytes"] for flow in flows.values())
+    flow_payload_bytes = [
+        flow["originator_bytes"] + flow["responder_bytes"] for flow in flows.values()
+    ]
+    largest_flow_bytes = max(flow_payload_bytes, default=0)
 
     return {
         "record_count": total,
@@ -129,8 +137,11 @@ def tcp_payload_evidence_summary(
         "payload_bytes": payload_bytes,
         "originator_payload_bytes": originator_bytes,
         "responder_payload_bytes": responder_bytes,
+        "payload_flow_count": len(flows),
         "bidirectional_payload_flow_count": bidirectional,
         "unidirectional_payload_flow_count": unidirectional,
+        "largest_payload_flow_bytes": largest_flow_bytes,
+        "largest_payload_flow_percent": _percent(largest_flow_bytes, payload_bytes),
         "metadata_missing_record_count": missing,
         "truncated": truncated,
         "payload_retained": False,
