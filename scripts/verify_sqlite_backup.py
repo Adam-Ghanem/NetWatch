@@ -37,7 +37,9 @@ def _expected_digest(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
+    if len(normalized) != 64 or any(
+        char not in "0123456789abcdef" for char in normalized
+    ):
         raise ValueError("Expected SHA-256 must be exactly 64 hexadecimal characters.")
     return normalized
 
@@ -76,7 +78,9 @@ def verify(
 
         present = {
             row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
         }
         missing = sorted(set(TABLES) - present)
         if missing:
