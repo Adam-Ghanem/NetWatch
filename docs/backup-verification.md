@@ -37,8 +37,13 @@ Use a trusted, stopped,
 access-controlled snapshot.
 
 ~~~bash
-python scripts/verify_sqlite_backup.py --expected-schema 10 backup.sqlite3
+python scripts/verify_sqlite_backup.py --expected-schema 11 backup.sqlite3
 ~~~
+
+The current `inventory_store.init_db()` schema is **11**. The examples above
+are for snapshots from that version; for an older, intentionally retained
+snapshot, use its actual schema version and validate migration compatibility
+in isolated staging. Do not disable the version check to force a restore.
 
 Record the SHA-256 in the JSON result in your recovery register. After
 transferring the backup, verify the destination against the digest from a
@@ -46,7 +51,7 @@ separately authenticated channel:
 
 ~~~bash
 python scripts/verify_sqlite_backup.py \
-  --expected-schema 10 \
+  --expected-schema 11 \
   --expected-sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   backup.sqlite3
 ~~~
