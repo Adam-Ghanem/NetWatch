@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 
 import scripts.verify_sqlite_backup as backup_verifier
@@ -177,8 +178,6 @@ def test_backup_verification_detects_content_change_with_unchanged_metadata(
                 original_byte = backup.read(1)
                 backup.seek(100)
                 backup.write(bytes([original_byte[0] ^ 1]))
-            import os
-
             os.utime(candidate, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
         return original_hash(candidate)
 
