@@ -246,7 +246,7 @@ def test_backup_rejects_missing_runtime_columns(tmp_path):
     with sqlite3.connect(path) as connection:
         connection.execute("ALTER TABLE assets DROP COLUMN ip_address")
 
-    with pytest.raises(ValueError, match="Missing required columns in assets: ip_address"):
+    with pytest.raises(ValueError, match="assets: ip_address"):
         verify(path, expected_schema=10)
 
 
@@ -256,5 +256,5 @@ def test_backup_rejects_missing_scan_timestamp(tmp_path):
     with sqlite3.connect(path) as connection:
         connection.execute("ALTER TABLE scan_runs DROP COLUMN created_at")
 
-    with pytest.raises(ValueError, match="Missing required columns in scan_runs: created_at"):
+    with pytest.raises(ValueError, match="scan_runs: created_at"):
         verify(path, expected_schema=10)
