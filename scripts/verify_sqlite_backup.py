@@ -47,6 +47,8 @@ def _require_standalone(path: Path) -> None:
     """Reject paths that could silently depend on unverified SQLite sidecars."""
     if path.is_symlink():
         raise ValueError("Backup must be a regular file, not a symbolic link.")
+    if path.is_file() and path.stat().st_nlink != 1:
+        raise ValueError("Backup must not have hard links; copy a standalone snapshot.")
     if any(
         sidecar.exists() or sidecar.is_symlink()
         for suffix in ("-wal", "-shm", "-journal")
