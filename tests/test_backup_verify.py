@@ -159,9 +159,7 @@ def test_backup_verification_rejects_dangling_sidecar_symlinks(tmp_path, suffix)
         verify(path, expected_schema=10)
 
 
-def test_backup_verification_detects_content_change_with_unchanged_metadata(
-    tmp_path, monkeypatch
-):
+def test_backup_rejects_same_metadata_content_mutation(tmp_path, monkeypatch):
     path = tmp_path / "backup.sqlite3"
     _backup(path)
     original_stat = path.stat()
