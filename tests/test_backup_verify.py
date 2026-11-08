@@ -139,3 +139,19 @@ def test_backup_verification_rejects_symlink(tmp_path):
 
     with pytest.raises(ValueError, match="symbolic link"):
         verify(alias, expected_schema=10)
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_verification_rejects_dangling_sidecar_symlinks(tmp_path, suffix):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    sidecar = tmp_path / f"backup.sqlite3{suffix}"
+    try:
+        sidecar.symlink_to(tmp_path / "nonexistent-sidecar")
+    except (NotImplementedError, OSError):
+        pytest.skip("Symbolic links are unavailable on this platform")
+
+    assert sidecar.is_symlink()
+    assert not sidecar.exists()
+    with pytest.raises(ValueError, match="sidecar files"):
+        verify(path, expected_schema=10)
