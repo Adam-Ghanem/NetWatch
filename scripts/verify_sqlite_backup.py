@@ -108,6 +108,8 @@ def verify(
 
     _require_standalone(path)
     after = path.stat()
+    if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
+        raise ValueError("Backup file identity changed during verification; use an offline snapshot.")
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError("Backup changed during verification; use an offline snapshot.")
     if not hmac.compare_digest(digest, _file_sha256(path)):
