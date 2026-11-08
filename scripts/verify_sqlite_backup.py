@@ -24,6 +24,11 @@ TABLES = (
     "service_findings",
 )
 _HASH_CHUNK_BYTES = 1024 * 1024
+# Minimal runtime columns; this is not a complete migration compatibility audit.
+REQUIRED_COLUMNS = {
+    "assets": ("ip_address",),
+    "scan_runs": ("created_at",),
+}
 
 
 def _file_sha256(path: Path) -> str:
@@ -97,6 +102,12 @@ def verify(
         missing = sorted(set(TABLES) - present)
         if missing:
             raise ValueError(f"Missing required NetWatch tables: {', '.join(missing)}.")
+
+        for table, required in REQUIRED_COLUMNS.items():
+            columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            absent = sorted(set(required) - columns)
+            if absent:
+                raise ValueError(f"Missing required columns in {table}: {', '.join(absent)}.")
 
         # Fetch one violation only; a damaged backup must not force an unbounded result.
         violation = connection.execute("PRAGMA foreign_key_check").fetchone()
