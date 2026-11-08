@@ -19,6 +19,10 @@ def _backup(path, *, schema=10):
                     "CREATE TABLE operation_alerts ("
                     "id INTEGER PRIMARY KEY, asset_id INTEGER REFERENCES assets(id))"
                 )
+            elif table == "assets":
+                connection.execute("CREATE TABLE assets (id INTEGER PRIMARY KEY, ip_address TEXT)")
+            elif table == "scan_runs":
+                connection.execute("CREATE TABLE scan_runs (id INTEGER PRIMARY KEY, created_at TEXT)")
             else:
                 connection.execute(f"CREATE TABLE {table} (id INTEGER PRIMARY KEY)")
         connection.execute("INSERT INTO assets DEFAULT VALUES")
@@ -234,3 +238,23 @@ def test_backup_verification_accepts_independent_copy(tmp_path):
     copy.write_bytes(path.read_bytes())
 
     assert verify(copy, expected_schema=10)["integrity"] == "ok"
+
+
+def test_backup_rejects_missing_runtime_columns(tmp_path):
+    path = tmp_path / "missing-columns.sqlite3"
+    _backup(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("ALTER TABLE assets DROP COLUMN ip_address")
+
+    with pytest.raises(ValueError, match="Missing required columns in assets: ip_address"):
+        verify(path, expected_schema=10)
+
+
+def test_backup_rejects_missing_scan_timestamp(tmp_path):
+    path = tmp_path / "missing-timestamp.sqlite3"
+    _backup(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("ALTER TABLE scan_runs DROP COLUMN created_at")
+
+    with pytest.raises(ValueError, match="Missing required columns in scan_runs: created_at"):
+        verify(path, expected_schema=10)
