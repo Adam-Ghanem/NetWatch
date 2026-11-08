@@ -21,6 +21,11 @@ def _backup(path, *, schema=10):
                 )
             elif table == "assets":
                 connection.execute("CREATE TABLE assets (id INTEGER PRIMARY KEY, ip_address TEXT)")
+            elif table == "network_observations":
+                connection.execute(
+                    "CREATE TABLE network_observations ("
+                    "id INTEGER PRIMARY KEY, scan_run_id INTEGER, ip_address TEXT)"
+                )
             elif table == "scan_runs":
                 connection.execute(
                     "CREATE TABLE scan_runs (id INTEGER PRIMARY KEY, created_at TEXT)"
@@ -259,4 +264,15 @@ def test_backup_rejects_missing_scan_timestamp(tmp_path):
         connection.execute("ALTER TABLE scan_runs DROP COLUMN created_at")
 
     with pytest.raises(ValueError, match="scan_runs: created_at"):
+        verify(path, expected_schema=10)
+
+
+@pytest.mark.parametrize("column", ["scan_run_id", "ip_address"])
+def test_backup_rejects_missing_observation_linkage_columns(tmp_path, column):
+    path = tmp_path / "missing-observation-column.sqlite3"
+    _backup(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute(f"ALTER TABLE network_observations DROP COLUMN {column}")
+
+    with pytest.raises(ValueError, match=f"network_observations: {column}"):
         verify(path, expected_schema=10)
