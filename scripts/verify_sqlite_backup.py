@@ -104,14 +104,10 @@ def verify(
             raise ValueError(f"Missing required NetWatch tables: {', '.join(missing)}.")
 
         for table, required in REQUIRED_COLUMNS.items():
-            columns = {
-                row[1] for row in connection.execute(f"PRAGMA table_info({table})")
-            }
+            columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
             absent = sorted(set(required) - columns)
             if absent:
-                raise ValueError(
-                    f"Missing required columns in {table}: {', '.join(absent)}."
-                )
+                raise ValueError(f"Missing required columns in {table}: {', '.join(absent)}.")
 
         # Fetch one violation only; a damaged backup must not force an unbounded result.
         violation = connection.execute("PRAGMA foreign_key_check").fetchone()
