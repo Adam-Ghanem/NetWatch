@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 
+import scripts.verify_sqlite_backup as backup_verifier
+
 import pytest
 
 from scripts.verify_sqlite_backup import TABLES, verify
@@ -155,3 +157,34 @@ def test_backup_verification_rejects_dangling_sidecar_symlinks(tmp_path, suffix)
     assert not sidecar.exists()
     with pytest.raises(ValueError, match="sidecar files"):
         verify(path, expected_schema=10)
+
+
+def test_backup_verification_detects_content_change_with_unchanged_metadata(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original_stat = path.stat()
+    original_hash = backup_verifier._file_sha256
+    calls = 0
+
+    def hash_with_mutation(candidate):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            with candidate.open("r+b") as backup:
+                backup.seek(100)
+                original_byte = backup.read(1)
+                backup.seek(100)
+                backup.write(bytes([original_byte[0] ^ 1]))
+            import os
+
+            os.utime(candidate, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+        return original_hash(candidate)
+
+    monkeypatch.setattr(backup_verifier, "_file_sha256", hash_with_mutation)
+    with pytest.raises(ValueError, match="content changed"):
+        verify(path, expected_schema=10)
+    assert calls == 2
+    assert path.stat().st_size == original_stat.st_size
+    assert path.stat().st_mtime_ns == original_stat.st_mtime_ns
