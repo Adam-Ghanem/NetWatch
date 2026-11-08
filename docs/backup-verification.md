@@ -16,7 +16,8 @@ can download a consistent snapshot. The verifier below works **offline** and
   trusted channel
 - Whether the file changed during verification (size and modification time)
 - Reject symbolic-link inputs and SQLite `-wal`, `-shm`, or `-journal`
-  sidecars; verify a standalone export rather than a multi-file live database
+  sidecars (including dangling symlinks); verify a standalone export rather
+  than a multi-file live database
 
 A missing required table, broken reference, failed integrity check, unexpected
 version, or mismatched digest returns a nonzero process exit code.
