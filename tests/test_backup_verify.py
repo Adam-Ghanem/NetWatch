@@ -4,10 +4,9 @@ import hashlib
 import os
 import sqlite3
 
-import scripts.verify_sqlite_backup as backup_verifier
-
 import pytest
 
+import scripts.verify_sqlite_backup as backup_verifier
 from scripts.verify_sqlite_backup import TABLES, verify
 
 
