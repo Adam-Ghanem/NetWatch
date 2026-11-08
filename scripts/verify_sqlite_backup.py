@@ -28,6 +28,7 @@ _HASH_CHUNK_BYTES = 1024 * 1024
 REQUIRED_COLUMNS = {
     "assets": ("ip_address",),
     "scan_runs": ("created_at",),
+    "network_observations": ("scan_run_id", "ip_address"),
 }
 
 
