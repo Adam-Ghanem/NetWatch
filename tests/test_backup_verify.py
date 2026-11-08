@@ -20,9 +20,7 @@ def _backup(path, *, schema=10):
                     "id INTEGER PRIMARY KEY, asset_id INTEGER REFERENCES assets(id))"
                 )
             elif table == "assets":
-                connection.execute(
-                    "CREATE TABLE assets (id INTEGER PRIMARY KEY, ip_address TEXT)"
-                )
+                connection.execute("CREATE TABLE assets (id INTEGER PRIMARY KEY, ip_address TEXT)")
             elif table == "scan_runs":
                 connection.execute(
                     "CREATE TABLE scan_runs (id INTEGER PRIMARY KEY, created_at TEXT)"
