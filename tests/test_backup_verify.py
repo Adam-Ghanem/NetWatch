@@ -209,3 +209,28 @@ def test_backup_rejects_same_content_file_replacement(tmp_path, monkeypatch):
     assert calls == 2
     assert path.stat().st_size == original.st_size
     assert path.stat().st_mtime_ns == original.st_mtime_ns
+
+
+def test_backup_verification_rejects_hardlinked_snapshot(tmp_path):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    alias = tmp_path / "linked.sqlite3"
+    try:
+        os.link(path, alias)
+    except (NotImplementedError, OSError):
+        pytest.skip("Hard links are unavailable on this filesystem")
+
+    with pytest.raises(ValueError, match="hard links"):
+        verify(path, expected_schema=10)
+    with pytest.raises(ValueError, match="hard links"):
+        verify(alias, expected_schema=10)
+    assert path.stat().st_nlink == 2
+
+
+def test_backup_verification_accepts_independent_copy(tmp_path):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    copy = tmp_path / "independent.sqlite3"
+    copy.write_bytes(path.read_bytes())
+
+    assert verify(copy, expected_schema=10)["integrity"] == "ok"
