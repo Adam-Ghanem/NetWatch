@@ -14,7 +14,8 @@ can download a consistent snapshot. The verifier below works **offline** and
 - Row counts for those tables
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
-- Whether the file changed during verification (size, modification time, and\n  a second SHA-256 digest after SQLite checks)
+- Whether the file changed during verification (file identity, size,
+  modification time, and a second SHA-256 digest after SQLite checks)
 - Reject symbolic-link inputs and SQLite `-wal`, `-shm`, or `-journal`
   sidecars (including dangling symlinks); verify a standalone export rather
   than a multi-file live database
@@ -28,7 +29,12 @@ First download a **snapshot** through the Admin dashboard. Do not point this
 tool at a live database file or copy a running SQLite database with a normal
 filesystem copy; WAL state may be incomplete. The verifier rejects sidecars
 and symbolic links, but this does not eliminate all concurrent replacement or
-filesystem race conditions. The second digest catches same-size, same-mtime\ncontent changes between the two reads, but not changes reversed before the\nsecond read or path replacement races. Use a trusted, stopped,\naccess-controlled snapshot.
+filesystem race conditions. The second digest catches same-size, same-mtime
+content changes between the two reads, but not changes reversed before the
+second read or replacement-and-restore races. File identity checks catch
+many atomic replacements but cannot prevent concurrent filesystem races.
+Use a trusted, stopped,
+access-controlled snapshot.
 
 ~~~bash
 python scripts/verify_sqlite_backup.py --expected-schema 10 backup.sqlite3

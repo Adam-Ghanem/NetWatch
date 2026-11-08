@@ -184,3 +184,28 @@ def test_backup_rejects_same_metadata_content_mutation(tmp_path, monkeypatch):
     assert calls == 2
     assert path.stat().st_size == original_stat.st_size
     assert path.stat().st_mtime_ns == original_stat.st_mtime_ns
+
+
+def test_backup_rejects_same_content_file_replacement(tmp_path, monkeypatch):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.stat()
+    require_standalone = backup_verifier._require_standalone
+    calls = 0
+
+    def replace_after_sqlite_checks(candidate):
+        nonlocal calls
+        calls += 1
+        require_standalone(candidate)
+        if calls == 2:
+            replacement = tmp_path / "replacement.sqlite3"
+            replacement.write_bytes(path.read_bytes())
+            os.utime(replacement, ns=(original.st_atime_ns, original.st_mtime_ns))
+            os.replace(replacement, path)
+
+    monkeypatch.setattr(backup_verifier, "_require_standalone", replace_after_sqlite_checks)
+    with pytest.raises(ValueError, match="identity changed"):
+        verify(path, expected_schema=10)
+    assert calls == 2
+    assert path.stat().st_size == original.st_size
+    assert path.stat().st_mtime_ns == original.st_mtime_ns
