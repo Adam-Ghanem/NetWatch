@@ -19,11 +19,14 @@ def test_runtime_schema_snapshot_can_be_opened_and_verified(tmp_path, monkeypatc
 
     inventory_store.init_db()
     # SQLite connection context managers commit/rollback but do not close handles.
-    # Close both before verification so WAL/SHM sidecars cannot remain attached.
+    # Close both before verification; the backup inherits the source WAL mode.
     with closing(sqlite3.connect(source)) as live, closing(
         sqlite3.connect(snapshot)
     ) as destination:
         live.backup(destination)
+        # A WAL-mode backup is not standalone until its journal is normalized.
+        # Switch the isolated destination to DELETE mode before closing it.
+        assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
 
     before = snapshot.read_bytes()
     report = verify(snapshot, expected_schema=11)
