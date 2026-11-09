@@ -80,7 +80,7 @@ example. That older result is not proof of recovery on a production platform.
 `tests/test_backup_runtime_snapshot.py` initializes the real runtime schema in a
 private temporary directory, creates a consistent snapshot with SQLite's backup
 API, verifies it against schema 11, and opens it through a separate read-only
-connection. Run `pytest -q tests/test_backup_runtime_snapshot.py` locally.
+connection. The same test also checks a matching trusted SHA-256 digest, rejects a\nwrong digest and rejects an outdated expected schema version without changing\nthe snapshot. Run `pytest -q tests/test_backup_runtime_snapshot.py` locally.
 This test does **not** restore the full application, validate audit HMAC keys,
 exercise authenticated APIs, or establish production recovery time objectives.
 
