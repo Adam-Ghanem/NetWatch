@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import sqlite3
+
+import pytest
 from contextlib import closing
 
 import inventory_store
@@ -32,6 +35,15 @@ def test_runtime_schema_snapshot_can_be_opened_and_verified(tmp_path, monkeypatc
     assert report["schema_version"] == 11
     assert report["integrity"] == "ok"
     assert report["read_only"] is True
+    assert snapshot.read_bytes() == before
+
+    # Validate a separately supplied digest against a real runtime snapshot.
+    digest = hashlib.sha256(before).hexdigest()
+    assert verify(snapshot, expected_schema=11, expected_sha256=digest)["sha256"] == digest
+    with pytest.raises(ValueError, match="SHA-256 does not match"):
+        verify(snapshot, expected_schema=11, expected_sha256="0" * 64 if digest != "0" * 64 else "1" * 64)
+    with pytest.raises(ValueError, match="Expected schema 10, found 11"):
+        verify(snapshot, expected_schema=10)
     assert snapshot.read_bytes() == before
 
     # Prove the snapshot is actually usable by a fresh SQLite connection.
