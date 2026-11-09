@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 
 import inventory_store
 from scripts.verify_sqlite_backup import verify
@@ -17,7 +18,11 @@ def test_runtime_schema_snapshot_can_be_opened_and_verified(tmp_path, monkeypatc
     monkeypatch.setattr(inventory_store, "DB_FILE", source)
 
     inventory_store.init_db()
-    with sqlite3.connect(source) as live, sqlite3.connect(snapshot) as destination:
+    # SQLite connection context managers commit/rollback but do not close handles.
+    # Close both before verification so WAL/SHM sidecars cannot remain attached.
+    with closing(sqlite3.connect(source)) as live, closing(
+        sqlite3.connect(snapshot)
+    ) as destination:
         live.backup(destination)
 
     before = snapshot.read_bytes()
@@ -28,7 +33,7 @@ def test_runtime_schema_snapshot_can_be_opened_and_verified(tmp_path, monkeypatc
     assert snapshot.read_bytes() == before
 
     # Prove the snapshot is actually usable by a fresh SQLite connection.
-    with sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True) as restored:
+    with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as restored:
         restored.execute("PRAGMA query_only = ON")
         assert restored.execute("PRAGMA user_version").fetchone()[0] == 11
         assert restored.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 0
