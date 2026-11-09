@@ -75,6 +75,15 @@ failed. **Do not restore** if any check fails.
 See [the prior local restore drill](track-a-restore-drill.md) for a dated
 example. That older result is not proof of recovery on a production platform.
 
+## Automated offline smoke coverage
+
+`tests/test_backup_runtime_snapshot.py` initializes the real runtime schema in a
+private temporary directory, creates a consistent snapshot with SQLite's backup
+API, verifies it against schema 11, and opens it through a separate read-only
+connection. Run `pytest -q tests/test_backup_runtime_snapshot.py` locally.
+This test does **not** restore the full application, validate audit HMAC keys,
+exercise authenticated APIs, or establish production recovery time objectives.
+
 ## Security limits
 
 SHA-256 detects accidental transfer errors only when its expected digest comes
