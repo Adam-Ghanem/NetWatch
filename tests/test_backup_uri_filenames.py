@@ -11,7 +11,15 @@ import inventory_store
 from scripts.verify_sqlite_backup import verify
 
 
-@pytest.mark.parametrize("filename", ["snapshot#fragment.sqlite3", "snapshot?mode=rw.sqlite3"])
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "snapshot#fragment.sqlite3",
+        "snapshot?mode=rw.sqlite3",
+        "snapshot%23fragment.sqlite3",
+        "snapshot%3Fmode=rw.sqlite3",
+    ],
+)
 def test_offline_snapshot_with_uri_metacharacters_is_verified(tmp_path, monkeypatch, filename):
     """Verify the actual file, not a truncated URI or query-string target."""
     data_dir = tmp_path / "runtime"
@@ -28,6 +36,7 @@ def test_offline_snapshot_with_uri_metacharacters_is_verified(tmp_path, monkeypa
 
     before = snapshot.read_bytes()
     report = verify(snapshot, expected_schema=11)
+    assert report["path"] == str(snapshot.resolve())
     assert report["integrity"] == "ok"
     assert report["schema_version"] == 11
     assert report["read_only"] is True
