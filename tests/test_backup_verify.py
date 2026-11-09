@@ -276,3 +276,29 @@ def test_backup_rejects_missing_observation_linkage_columns(tmp_path, column):
 
     with pytest.raises(ValueError, match=f"network_observations: {column}"):
         verify(path, expected_schema=10)
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_backup_verification_rejects_symlinked_parent_directory(tmp_path, nested):
+    real_dir = tmp_path / "real"
+    real_dir.mkdir()
+    path = real_dir / "backup.sqlite3"
+    _backup(path)
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(real_dir, target_is_directory=True)
+    except (NotImplementedError, OSError):
+        pytest.skip("Directory symbolic links are unavailable on this platform")
+
+    candidate = alias / "backup.sqlite3"
+    if nested:
+        nested_dir = real_dir / "nested"
+        nested_dir.mkdir()
+        nested_path = nested_dir / "backup.sqlite3"
+        _backup(nested_path)
+        candidate = alias / "nested" / "backup.sqlite3"
+
+    original = candidate.read_bytes()
+    with pytest.raises(ValueError, match="parent directories"):
+        verify(candidate, expected_schema=10)
+    assert candidate.read_bytes() == original
