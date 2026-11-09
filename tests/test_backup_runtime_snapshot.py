@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from contextlib import closing
 
 import pytest
-from contextlib import closing
 
 import inventory_store
 from scripts.verify_sqlite_backup import verify
