@@ -65,5 +65,8 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         assert restored.execute("PRAGMA foreign_key_check").fetchone() is None
 
     assert snapshot.read_bytes() == original
-    sidecars = [tmp_path / f"standalone.sqlite3{suffix}" for suffix in ("-wal", "-shm", "-journal")]
+    sidecars = [
+        tmp_path / f"standalone.sqlite3{suffix}"
+        for suffix in ("-wal", "-shm", "-journal")
+    ]
     assert all(not sidecar.exists() for sidecar in sidecars)
