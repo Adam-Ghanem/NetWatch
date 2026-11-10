@@ -53,7 +53,9 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
     assert report["counts"]["network_observations"] == 1
 
     # Independent read-only connection simulates the recovered evidence consumer.
-    with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as restored:
+    with closing(
+        sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)
+    ) as restored:
         restored.execute("PRAGMA query_only=ON")
         rows = restored.execute(
             "SELECT a.ip_address, n.observed, s.scan_type "
