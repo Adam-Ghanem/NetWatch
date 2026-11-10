@@ -21,8 +21,7 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
     # Synthetic, explicitly authorized test evidence; no capture or scanning.
     with closing(sqlite3.connect(source)) as live:
         live.execute(
-            "INSERT INTO assets (ip_address, first_seen, last_seen, status) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO assets (ip_address, first_seen, last_seen, status) " "VALUES (?, ?, ?, ?)",
             ("192.0.2.10", "2026-01-01", "2026-01-01", "Online"),
         )
         cursor = live.execute(
