@@ -39,10 +39,8 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         live.commit()
         with closing(sqlite3.connect(snapshot)) as destination:
             live.backup(destination)
-            assert (
-                destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
-                == "delete"
-            )
+            journal_mode = destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+            assert journal_mode == "delete"
 
     original = snapshot.read_bytes()
     report = verify(
@@ -67,7 +65,5 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         assert restored.execute("PRAGMA foreign_key_check").fetchone() is None
 
     assert snapshot.read_bytes() == original
-    assert not any(
-        (tmp_path / f"standalone.sqlite3{suffix}").exists()
-        for suffix in ("-wal", "-shm", "-journal")
-    )
+    sidecars = [tmp_path / f"standalone.sqlite3{suffix}" for suffix in ("-wal", "-shm", "-journal")]
+    assert all(not sidecar.exists() for sidecar in sidecars)
