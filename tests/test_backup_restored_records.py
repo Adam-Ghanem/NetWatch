@@ -47,9 +47,11 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         expected_schema=11,
         expected_sha256=hashlib.sha256(original).hexdigest(),
     )
-    assert report["counts"]["assets"] == 1
-    assert report["counts"]["scan_runs"] == 1
-    assert report["counts"]["network_observations"] == 1
+    counts = report["counts"]
+    assert isinstance(counts, dict)
+    assert counts["assets"] == 1
+    assert counts["scan_runs"] == 1
+    assert counts["network_observations"] == 1
 
     # Independent read-only connection simulates the recovered evidence consumer.
     with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as restored:
