@@ -39,7 +39,10 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         live.commit()
         with closing(sqlite3.connect(snapshot)) as destination:
             live.backup(destination)
-            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+            assert (
+                destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+                == "delete"
+            )
 
     original = snapshot.read_bytes()
     report = verify(
