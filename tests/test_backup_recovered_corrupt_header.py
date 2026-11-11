@@ -33,7 +33,9 @@ def test_recovered_snapshot_rejects_corrupt_header_with_matching_digest(tmp_path
         live.commit()
         with closing(sqlite3.connect(snapshot)) as destination:
             live.backup(destination)
-            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+            assert (
+                destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+            )
 
     original = snapshot.read_bytes()
     assert verify(
