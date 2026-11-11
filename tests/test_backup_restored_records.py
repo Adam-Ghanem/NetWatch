@@ -53,6 +53,12 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
     assert counts["scan_runs"] == 1
     assert counts["network_observations"] == 1
 
+    # Simulate loss of the source data volume after the standalone backup is sealed.
+    # The recovered evidence must not depend on the original database or its WAL.
+    unavailable_source = tmp_path / "unavailable-source"
+    data_dir.rename(unavailable_source)
+    assert not source.exists()
+
     # Independent read-only connection simulates the recovered evidence consumer.
     with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as restored:
         restored.execute("PRAGMA query_only=ON")
