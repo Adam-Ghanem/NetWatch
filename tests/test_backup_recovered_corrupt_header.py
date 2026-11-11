@@ -37,9 +37,12 @@ def test_recovered_snapshot_rejects_corrupt_header_with_matching_digest(tmp_path
             assert journal_mode == "delete"
 
     original = snapshot.read_bytes()
-    assert verify(
-        snapshot, expected_schema=11, expected_sha256=hashlib.sha256(original).hexdigest()
-    )["read_only"]
+    report = verify(
+        snapshot,
+        expected_schema=11,
+        expected_sha256=hashlib.sha256(original).hexdigest(),
+    )
+    assert report["read_only"]
 
     data_dir.rename(tmp_path / "lost-source")
     assert not source.exists()
@@ -58,4 +61,5 @@ def test_recovered_snapshot_rejects_corrupt_header_with_matching_digest(tmp_path
 
     assert snapshot.read_bytes() == corrupted
     sidecars = ("-wal", "-shm", "-journal")
-    assert all(not (tmp_path / f"recovered.sqlite3{suffix}").exists() for suffix in sidecars)
+    for suffix in sidecars:
+        assert not (tmp_path / f"recovered.sqlite3{suffix}").exists()
