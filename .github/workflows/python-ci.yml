@@ -9,6 +9,8 @@ on:
       - main
       - 'test/backup-*'
       - 'feat/backup-*'
+      - 'security/backup-*'
+      - 'docs/backup-*'
 
 permissions:
   contents: read
