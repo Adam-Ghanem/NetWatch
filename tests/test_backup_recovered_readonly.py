@@ -26,8 +26,7 @@ def test_recovered_snapshot_rejects_consumer_writes_after_source_loss(tmp_path, 
 
     with closing(sqlite3.connect(source)) as live:
         live.execute(
-            "INSERT INTO assets (ip_address, first_seen, last_seen, status) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO assets (ip_address, first_seen, last_seen, status) VALUES (?, ?, ?, ?)",
             ("192.0.2.42", "2026-01-01", "2026-01-01", "Online"),
         )
         live.commit()
@@ -44,15 +43,12 @@ def test_recovered_snapshot_rejects_consumer_writes_after_source_loss(tmp_path, 
 
     with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as recovered:
         recovered.execute("PRAGMA query_only=ON")
-        assert recovered.execute(
-            "SELECT ip_address FROM assets WHERE ip_address = ?",
-            ("192.0.2.42",),
-        ).fetchone() == ("192.0.2.42",)
+        query = "SELECT ip_address FROM assets WHERE ip_address = ?"
+        row = recovered.execute(query, ("192.0.2.42",))
+        assert row.fetchone() == ("192.0.2.42",)
         with pytest.raises(sqlite3.OperationalError, match="readonly"):
             recovered.execute("DELETE FROM assets WHERE ip_address = ?", ("192.0.2.42",))
 
     assert snapshot.read_bytes() == sealed
-    assert all(
-        not (tmp_path / f"recovered.sqlite3{suffix}").exists()
-        for suffix in ("-wal", "-shm", "-journal")
-    )
+    sidecars = ("-wal", "-shm", "-journal")
+    assert all(not (tmp_path / f"recovered.sqlite3{suffix}").exists() for suffix in sidecars)
