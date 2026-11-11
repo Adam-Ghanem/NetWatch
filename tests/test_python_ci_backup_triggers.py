@@ -16,3 +16,5 @@ def test_python_ci_covers_stacked_backup_pr_targets():
     assert "      - main" in pull_request
     assert "      - 'test/backup-*'" in pull_request
     assert "      - 'feat/backup-*'" in pull_request
+    assert "      - 'security/backup-*'" in pull_request
+    assert "      - 'docs/backup-*'" in pull_request
