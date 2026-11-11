@@ -26,8 +26,7 @@ def test_recovered_corrupt_header_rejected(tmp_path, monkeypatch):
 
     with closing(sqlite3.connect(source)) as live:
         live.execute(
-            "INSERT INTO assets (ip_address, first_seen, last_seen, status) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO assets (ip_address, first_seen, last_seen, status) " "VALUES (?, ?, ?, ?)",
             ("192.0.2.60", "2026-01-01", "2026-01-01", "Online"),
         )
         live.commit()
