@@ -16,7 +16,7 @@ import inventory_store
 from scripts.verify_sqlite_backup import verify
 
 
-def test_recovered_snapshot_rejects_corrupt_header_with_matching_digest(tmp_path, monkeypatch):
+def test_recovered_corrupt_header_rejected(tmp_path, monkeypatch):
     data_dir = tmp_path / "source"
     source = data_dir / "netwatch.db"
     snapshot = tmp_path / "recovered.sqlite3"
