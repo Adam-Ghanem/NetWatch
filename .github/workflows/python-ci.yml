@@ -11,6 +11,7 @@ on:
       - 'feat/backup-*'
       - 'security/backup-*'
       - 'docs/backup-*'
+      - 'ci/python-stacked-*'
 
 permissions:
   contents: read
