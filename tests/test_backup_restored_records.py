@@ -6,6 +6,8 @@ import hashlib
 import sqlite3
 from contextlib import closing
 
+import pytest
+
 import inventory_store
 from scripts.verify_sqlite_backup import verify
 
@@ -78,3 +80,32 @@ def test_offline_snapshot_restores_linked_inventory_evidence(tmp_path, monkeypat
         tmp_path / "standalone.sqlite3-journal",
     )
     assert all(not sidecar.exists() for sidecar in sidecars)
+
+
+def test_source_loss_snapshot_rejects_orphaned_observation(tmp_path, monkeypatch):
+    """A snapshot with a missing scan parent must fail even if its digest matches."""
+    data_dir = tmp_path / "live"
+    source = data_dir / "netwatch.db"
+    snapshot = tmp_path / "orphaned.sqlite3"
+    monkeypatch.setattr(inventory_store, "DATA_DIR", data_dir)
+    monkeypatch.setattr(inventory_store, "DB_FILE", source)
+    inventory_store.init_db()
+
+    with closing(sqlite3.connect(source)) as live:
+        live.execute(
+            "INSERT INTO network_observations "
+            "(scan_run_id, ip_address, observed, status) VALUES (?, ?, ?, ?)",
+            (999999, "192.0.2.20", 1, "Online"),
+        )
+        live.commit()
+        with closing(sqlite3.connect(snapshot)) as destination:
+            live.backup(destination)
+            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+
+    data_dir.rename(tmp_path / "lost-source")
+    assert not source.exists()
+    sealed = snapshot.read_bytes()
+    trusted_digest = hashlib.sha256(sealed).hexdigest()
+    with pytest.raises(ValueError, match="foreign key violations"):
+        verify(snapshot, expected_schema=11, expected_sha256=trusted_digest)
+    assert snapshot.read_bytes() == sealed
