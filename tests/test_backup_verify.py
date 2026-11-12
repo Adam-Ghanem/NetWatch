@@ -302,3 +302,23 @@ def test_backup_verification_rejects_symlinked_parent_directory(tmp_path, nested
     with pytest.raises(ValueError, match="parent directories"):
         verify(candidate, expected_schema=10)
     assert candidate.read_bytes() == original
+
+
+def test_backup_verifier_disables_trusted_schema_before_integrity_check(tmp_path, monkeypatch):
+    path = tmp_path / "untrusted-schema.sqlite3"
+    _backup(path)
+    original_connect = sqlite3.connect
+    statements: list[str] = []
+
+    def traced_connect(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    monkeypatch.setattr(backup_verifier.sqlite3, "connect", traced_connect)
+    assert verify(path, expected_schema=10)["integrity"] == "ok"
+    normalized = [statement.strip().upper() for statement in statements]
+    assert "PRAGMA TRUSTED_SCHEMA = OFF" in normalized
+    assert normalized.index("PRAGMA TRUSTED_SCHEMA = OFF") < normalized.index(
+        "PRAGMA INTEGRITY_CHECK"
+    )

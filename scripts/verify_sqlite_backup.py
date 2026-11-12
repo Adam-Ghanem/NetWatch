@@ -86,6 +86,9 @@ def verify(
     # as_uri() percent-encodes filenames containing '?' and '#', unlike raw file: paths.
     uri = f"{path.resolve().as_uri()}?mode=ro"
     with closing(sqlite3.connect(uri, uri=True)) as connection:
+        # Never trust executable schema constructs in an externally supplied backup.
+        # Keep this before integrity checks or any schema-derived reads.
+        connection.execute("PRAGMA trusted_schema = OFF")
         connection.execute("PRAGMA query_only = ON")
         result = connection.execute("PRAGMA integrity_check").fetchone()
         integrity = str(result[0]) if result else ""
