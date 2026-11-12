@@ -322,3 +322,29 @@ def test_backup_verifier_disables_trusted_schema_before_integrity_check(tmp_path
     assert normalized.index("PRAGMA TRUSTED_SCHEMA = OFF") < normalized.index(
         "PRAGMA INTEGRITY_CHECK"
     )
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_rejects_sidecar_created_during_verification(tmp_path, monkeypatch, suffix):
+    """A sidecar appearing after the first check must fail closed."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    sidecar = tmp_path / f"backup.sqlite3{suffix}"
+    require_standalone = backup_verifier._require_standalone
+    calls = 0
+
+    def sidecar_after_sqlite_checks(candidate):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            sidecar.write_bytes(b"late sidecar")
+        require_standalone(candidate)
+
+    monkeypatch.setattr(backup_verifier, "_require_standalone", sidecar_after_sqlite_checks)
+    with pytest.raises(ValueError, match="sidecar files"):
+        verify(path, expected_schema=10)
+
+    assert calls == 2
+    assert sidecar.read_bytes() == b"late sidecar"
+    assert path.read_bytes() == original
