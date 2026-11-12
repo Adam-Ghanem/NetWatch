@@ -304,9 +304,7 @@ def test_backup_verification_rejects_symlinked_parent_directory(tmp_path, nested
     assert candidate.read_bytes() == original
 
 
-def test_backup_verifier_disables_trusted_schema_before_integrity_check(
-    tmp_path, monkeypatch
-):
+def test_backup_verifier_disables_trusted_schema_before_integrity_check(tmp_path, monkeypatch):
     path = tmp_path / "untrusted-schema.sqlite3"
     _backup(path)
     original_connect = sqlite3.connect
