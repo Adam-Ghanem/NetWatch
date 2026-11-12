@@ -308,7 +308,7 @@ def test_backup_verifier_disables_trusted_schema_before_integrity_check(tmp_path
     path = tmp_path / "untrusted-schema.sqlite3"
     _backup(path)
     original_connect = sqlite3.connect
-    statements = []
+    statements: list[str] = []
 
     def traced_connect(*args, **kwargs):
         connection = original_connect(*args, **kwargs)
