@@ -341,9 +341,7 @@ def test_backup_rejects_sidecar_created_during_verification(tmp_path, monkeypatc
             sidecar.write_bytes(b"late sidecar")
         require_standalone(candidate)
 
-    monkeypatch.setattr(
-        backup_verifier, "_require_standalone", sidecar_after_sqlite_checks
-    )
+    monkeypatch.setattr(backup_verifier, "_require_standalone", sidecar_after_sqlite_checks)
     with pytest.raises(ValueError, match="sidecar files"):
         verify(path, expected_schema=10)
 
