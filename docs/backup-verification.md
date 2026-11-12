@@ -6,7 +6,9 @@ can download a consistent snapshot. The verifier below works **offline** and
 
 ## What the verifier checks
 
-- SQLite page integrity (PRAGMA integrity_check)
+- SQLite page integrity (PRAGMA integrity_check), with SQLite `trusted_schema=OFF`
+  before reading untrusted backup schema metadata (defense in depth; this does
+  not sandbox SQLite or replace trusted backups)
 - A positive NetWatch schema version and an optional exact expected version
 - Presence of critical tables: assets, scan_runs, network_observations,
   audit_log, operation_alerts, and service_findings
