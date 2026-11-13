@@ -11,7 +11,13 @@ __pycache__
 .coverage.*
 coverage.xml
 htmlcov
+# Exclude environment-specific credentials from Docker build context.
+# Keep only the documented, non-secret example available to the image.
 .env
+.env*
+**/.env
+**/.env*
+!.env.example
 .streamlit/secrets.toml
 data/netwatch.db
 data/scan_history.csv
