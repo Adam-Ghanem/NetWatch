@@ -137,6 +137,15 @@ def verify(
         raise ValueError("Backup content changed during verification; use an offline snapshot.")
     # Hashing is another filesystem operation: reject sidecars introduced during it.
     _require_standalone(path)
+    # The final digest reads the path again. Detect an atomic replacement made
+    # during that read, even when the replacement has identical bytes and mtime.
+    final = path.stat()
+    if (after.st_dev, after.st_ino) != (final.st_dev, final.st_ino):
+        raise ValueError(
+            "Backup file identity changed during final digest; use an offline snapshot."
+        )
+    if (after.st_size, after.st_mtime_ns) != (final.st_size, final.st_mtime_ns):
+        raise ValueError("Backup changed during final digest; use an offline snapshot.")
 
     return {
         "path": str(path.resolve()),
