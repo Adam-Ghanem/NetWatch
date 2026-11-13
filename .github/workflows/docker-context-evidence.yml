@@ -38,4 +38,5 @@ jobs:
       - name: Exercise real Docker ignore matcher offline
         env:
           DOCKER_BUILDKIT: "1"
+          NETWATCH_REQUIRE_DOCKER_CONTEXT: "1"
         run: python -m pytest -q -rs tests/test_docker_context_integration.py
