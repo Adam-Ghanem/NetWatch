@@ -375,3 +375,36 @@ def test_backup_rejects_sidecar_created_during_final_digest(tmp_path, monkeypatc
     assert calls == 2
     assert sidecar.read_bytes() == b"late sidecar during final hash"
     assert path.read_bytes() == original
+
+
+def test_backup_rejects_atomic_replacement_during_final_digest(tmp_path, monkeypatch):
+    """Identical bytes and timestamps must not conceal a post-check replacement."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original_bytes = path.read_bytes()
+    original_stat = path.stat()
+    original_hash = backup_verifier._file_sha256
+    calls = 0
+
+    def hash_with_replacement(candidate):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            replacement = tmp_path / "replacement.sqlite3"
+            replacement.write_bytes(original_bytes)
+            os.utime(
+                replacement,
+                ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns),
+            )
+            os.replace(replacement, candidate)
+        return original_hash(candidate)
+
+    monkeypatch.setattr(backup_verifier, "_file_sha256", hash_with_replacement)
+    with pytest.raises(ValueError, match="identity changed during final digest"):
+        verify(path, expected_schema=10)
+
+    assert calls == 2
+    assert path.read_bytes() == original_bytes
+    assert path.stat().st_size == original_stat.st_size
+    assert path.stat().st_mtime_ns == original_stat.st_mtime_ns
+    assert path.stat().st_ino != original_stat.st_ino
