@@ -13,8 +13,15 @@ import pytest
 
 
 def test_synthetic_docker_context_excludes_environment_secrets(tmp_path):
+    require_docker = os.environ.get("NETWATCH_REQUIRE_DOCKER_CONTEXT") == "1"
+
+    def unavailable(reason):
+        if require_docker:
+            pytest.fail(reason)
+        pytest.skip(reason)
+
     if shutil.which("docker") is None:
-        pytest.skip("Docker CLI is unavailable")
+        unavailable("Docker CLI is unavailable")
 
     try:
         daemon = subprocess.run(
@@ -25,9 +32,9 @@ def test_synthetic_docker_context_excludes_environment_secrets(tmp_path):
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        pytest.skip("Docker daemon is unavailable")
+        unavailable("Docker daemon is unavailable")
     if daemon.returncode != 0:
-        pytest.skip("Docker daemon is unavailable")
+        unavailable("Docker daemon is unavailable")
 
     context = tmp_path / "context"
     context.mkdir()
