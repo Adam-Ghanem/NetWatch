@@ -3,12 +3,15 @@
 Docker's pattern matcher is not emulated here; these assertions pin the
 security-sensitive ignore rules and their ordering.
 """
+
 from pathlib import Path
 
 
 def test_docker_context_excludes_environment_variants():
     lines = Path(".dockerignore").read_text(encoding="utf-8").splitlines()
-    rules = [line.strip() for line in lines if line.strip() and not line.startswith("#")]
+    rules = [
+        line.strip() for line in lines if line.strip() and not line.startswith("#")
+    ]
     for rule in (".env", ".env*", "**/.env", "**/.env*"):
         assert rule in rules, f"Missing Docker build-context exclusion: {rule}"
 
