@@ -135,6 +135,8 @@ def verify(
         raise ValueError("Backup changed during verification; use an offline snapshot.")
     if not hmac.compare_digest(digest, _file_sha256(path)):
         raise ValueError("Backup content changed during verification; use an offline snapshot.")
+    # Hashing is another filesystem operation: reject sidecars introduced during it.
+    _require_standalone(path)
 
     return {
         "path": str(path.resolve()),
