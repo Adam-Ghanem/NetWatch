@@ -348,3 +348,30 @@ def test_backup_rejects_sidecar_created_during_verification(tmp_path, monkeypatc
     assert calls == 2
     assert sidecar.read_bytes() == b"late sidecar"
     assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_rejects_sidecar_created_during_final_digest(tmp_path, monkeypatch, suffix):
+    """The last digest read must not open a gap after the sidecar check."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    sidecar = tmp_path / f"backup.sqlite3{suffix}"
+    real_hash = backup_verifier._file_sha256
+    calls = 0
+
+    def hash_with_late_sidecar(candidate):
+        nonlocal calls
+        calls += 1
+        digest = real_hash(candidate)
+        if calls == 2:
+            sidecar.write_bytes(b"late sidecar during final hash")
+        return digest
+
+    monkeypatch.setattr(backup_verifier, "_file_sha256", hash_with_late_sidecar)
+    with pytest.raises(ValueError, match="sidecar files"):
+        verify(path, expected_schema=10)
+
+    assert calls == 2
+    assert sidecar.read_bytes() == b"late sidecar during final hash"
+    assert path.read_bytes() == original
