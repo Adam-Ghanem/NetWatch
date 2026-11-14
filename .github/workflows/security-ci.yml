@@ -55,6 +55,10 @@ jobs:
             echo "A secret-like OpenAI key pattern was found in tracked content."
             exit 1
           fi
+          if git grep -I -q -E 'sk-ant-[A-Za-z0-9_-]{20,}'; then
+            echo "A secret-like Anthropic key pattern was found in tracked content."
+            exit 1
+          fi
           grep -qxF '.env' .dockerignore
 
       - name: Scan Python for high-confidence, high-severity findings
