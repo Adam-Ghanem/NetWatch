@@ -41,8 +41,6 @@ def test_git_tracked_paths_are_checked_with_nul_delimiters(capsys):
 def test_safe_repository_passes():
     with patch(
         "scripts.check_tracked_env_files.subprocess.run",
-        return_value=subprocess.CompletedProcess(
-            [], 0, stdout=b".env.example\0README.md\0"
-        ),
+        return_value=subprocess.CompletedProcess([], 0, stdout=b".env.example\0README.md\0"),
     ):
         assert main() == 0
