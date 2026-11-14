@@ -1,7 +1,7 @@
 """Regression guard for Security CI checkout credential isolation."""
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/security-ci.yml"
