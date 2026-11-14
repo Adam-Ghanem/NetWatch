@@ -2,19 +2,29 @@
 
 from pathlib import Path
 
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_dependabot_tracks_python_and_actions_without_automatic_merges() -> None:
-    config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
-    assert config.startswith("version: 2\n")
-    assert config.count("package-ecosystem:") == 2
-    assert 'package-ecosystem: "pip"' in config
-    assert 'package-ecosystem: "github-actions"' in config
-    assert config.count('directory: "/"') == 2
-    assert config.count('interval: "weekly"') == 2
-    assert config.count("open-pull-requests-limit: 5") == 2
-    assert config.count('          - "minor"') == 2
-    assert config.count('          - "patch"') == 2
-    assert "auto-merge" not in config
+    config_path = ROOT / ".github" / "dependabot.yml"
+    config_text = config_path.read_text(encoding="utf-8")
+    config = yaml.safe_load(config_text)
+
+    assert config["version"] == 2
+    updates = config["updates"]
+    assert len(updates) == 2
+    assert {entry["package-ecosystem"] for entry in updates} == {
+        "pip",
+        "github-actions",
+    }
+    for entry in updates:
+        assert entry["directory"] == "/"
+        assert entry["schedule"]["interval"] == "weekly"
+        assert entry["open-pull-requests-limit"] == 5
+        groups = entry["groups"]
+        assert len(groups) == 1
+        group = next(iter(groups.values()))
+        assert group["update-types"] == ["minor", "patch"]
+    assert "auto-merge" not in config_text
