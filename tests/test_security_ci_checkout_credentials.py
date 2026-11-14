@@ -17,4 +17,4 @@ def test_security_ci_checkout_does_not_persist_git_credentials() -> None:
         r"          persist-credentials: false\s*$",
         workflow,
     )
-    assert match is not None, "Security CI checkout must disable persisted credentials"
+    assert match is not None
