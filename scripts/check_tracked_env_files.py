@@ -1,8 +1,8 @@
 """Reject tracked environment files that may contain deployment credentials."""
 
-from pathlib import PurePosixPath
 import subprocess
 import sys
+from pathlib import PurePosixPath
 
 
 def is_private_env_path(path: str) -> bool:
@@ -14,9 +14,7 @@ def is_private_env_path(path: str) -> bool:
 
 
 def main() -> int:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"], check=True, capture_output=True
-    )
+    result = subprocess.run(["git", "ls-files", "-z"], check=True, capture_output=True)
     paths = [
         p.decode("utf-8", errors="surrogateescape")
         for p in result.stdout.split(b"\0")
