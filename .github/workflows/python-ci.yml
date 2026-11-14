@@ -64,6 +64,8 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - name: Checkout for Codecov commit metadata
+        uses: actions/checkout@v6
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
