@@ -15,11 +15,10 @@ def is_private_env_path(path: str) -> bool:
 
 def main() -> int:
     result = subprocess.run(["git", "ls-files", "-z"], check=True, capture_output=True)
-    paths = [
-        p.decode("utf-8", errors="surrogateescape")
-        for p in result.stdout.split(b"\0")
-        if p
-    ]
+    paths = []
+    for raw_path in result.stdout.split(b"\0"):
+        if raw_path:
+            paths.append(raw_path.decode("utf-8", errors="surrogateescape"))
     offenders = [path for path in paths if is_private_env_path(path)]
     if offenders:
         print("Tracked private dotenv files are prohibited:", file=sys.stderr)
