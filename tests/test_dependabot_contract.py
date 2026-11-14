@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML stubs are not installed in CI.
 
 ROOT = Path(__file__).resolve().parents[1]
 
