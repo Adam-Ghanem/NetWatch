@@ -25,6 +25,9 @@ Use full `YYYY-MM-DDTHH:MM:SS` timestamps with `Z` or `+HH:MM`/`-HH:MM`
 offsets; optional fractional seconds are limited to six digits. Week dates,
 spaces or arbitrary date/time separators, unknown `-00:00` offsets, offset seconds, and extra trailing
 data are rejected rather than silently normalized.
+This rule applies independently to **all three** timestamp fields. A known
+UTC offset (`Z` or `+00:00`) is valid; `-00:00` means unknown offset and is
+never accepted as equivalent to UTC.
 
 The helper rejects missing timezone offsets, UTC normalization overflow at the
 minimum/maximum supported calendar dates, and impossible event ordering.
