@@ -21,7 +21,9 @@ Record the source of each timestamp alongside the JSON output:
 - **ready:** time authenticated readiness, inventory access, and audit
   integrity were **actually confirmed** after the isolated restore.
 
-The helper rejects missing timezone offsets and impossible event ordering.
+The helper rejects missing timezone offsets, UTC normalization overflow at the
+minimum/maximum supported calendar dates, and impossible event ordering.
+Invalid inputs return CLI exit code 2 with no JSON evidence output.
 Its observed RPO proxy is failure minus last durable evidence; observed RTO
 proxy is ready minus failure. These are *drill observations*, not guaranteed
 production RPO/RTO, a measured data-loss count, or proof of recovery.
