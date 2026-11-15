@@ -39,3 +39,15 @@ def test_rejects_inconsistent_evidence_order():
             "2026-11-15T09:03:00Z",
             "2026-11-15T09:02:00Z",
         )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "0001-01-01T00:00:00+01:00",
+        "9999-12-31T23:59:59-01:00",
+    ],
+)
+def test_rejects_utc_normalization_overflow(value):
+    with pytest.raises(ValueError, match="supported UTC range"):
+        parse_timestamp(value)
