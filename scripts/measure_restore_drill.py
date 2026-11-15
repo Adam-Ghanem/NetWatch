@@ -18,7 +18,10 @@ def parse_timestamp(value: str) -> datetime:
         raise ValueError("timestamp must be ISO-8601 with timezone") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("timestamp must include a timezone")
-    return parsed.astimezone(timezone.utc)
+    try:
+        return parsed.astimezone(timezone.utc)
+    except (OverflowError, ValueError) as exc:
+        raise ValueError("timestamp outside supported UTC range") from exc
 
 
 def measure(last_durable: str, failure: str, ready: str) -> dict[str, object]:
