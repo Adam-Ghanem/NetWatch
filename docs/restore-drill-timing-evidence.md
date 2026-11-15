@@ -21,7 +21,7 @@ Record the source of each timestamp alongside the JSON output:
 - **ready:** time authenticated readiness, inventory access, and audit
   integrity were **actually confirmed** after the isolated restore.
 
-Use full `YYYY-MM-DDTHH:MM:SS` timestamps with `Z` or `+HH:MM`/`-HH:MM` offsets; optional fractional seconds are limited to six digits. Week dates, spaces or arbitrary date/time separators, offset seconds, and extra trailing data are rejected rather than silently normalized.\n\nThe helper rejects missing timezone offsets, UTC normalization overflow at the
+Use full `YYYY-MM-DDTHH:MM:SS` timestamps with `Z` or `+HH:MM`/`-HH:MM`\noffsets; optional fractional seconds are limited to six digits. Week dates,\nspaces or arbitrary date/time separators, offset seconds, and extra trailing\ndata are rejected rather than silently normalized.\n\nThe helper rejects missing timezone offsets, UTC normalization overflow at the
 minimum/maximum supported calendar dates, and impossible event ordering.
 Invalid inputs return CLI exit code 2 with no JSON evidence output.
 Its observed RPO proxy is failure minus last durable evidence; observed RTO
