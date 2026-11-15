@@ -43,10 +43,7 @@ def test_rejects_inconsistent_evidence_order():
 
 @pytest.mark.parametrize(
     "value",
-    [
-        "0001-01-01T00:00:00+01:00",
-        "9999-12-31T23:59:59-01:00",
-    ],
+    ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"],
 )
 def test_rejects_utc_normalization_overflow(value):
     with pytest.raises(ValueError, match="supported UTC range"):
