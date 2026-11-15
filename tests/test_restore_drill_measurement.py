@@ -75,3 +75,8 @@ def test_accepts_fractional_seconds_and_explicit_offset():
     )
     assert result["observed_rpo_seconds"] == 1.0
     assert result["observed_rto_seconds"] == 2.5
+
+
+def test_rejects_unknown_local_offset_rfc3339():
+    with pytest.raises(ValueError, match="offset must be known"):
+        parse_timestamp("2026-11-15T09:00:00-00:00")
