@@ -51,3 +51,30 @@ def test_rejects_inconsistent_evidence_order():
 def test_rejects_utc_normalization_overflow(value):
     with pytest.raises(ValueError, match="supported UTC range"):
         parse_timestamp(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-11-15X09:00:00Z",
+        "2026-W46-7T09:00:00Z",
+        "2026-11-15 09:00:00+00:00",
+        "2026-11-15T09:00Z",
+        "2026-11-15T09:00:00+00:00:30",
+        "2026-11-15T09:00:00.1234567Z",
+        "2026-11-15T09:00:00Z" + " " * 10000,
+    ],
+)
+def test_rejects_ambiguous_or_unbounded_timestamp_formats(value):
+    with pytest.raises(ValueError, match="timestamp"):
+        parse_timestamp(value)
+
+
+def test_accepts_fractional_seconds_and_explicit_offset():
+    result = measure(
+        "2026-11-15T10:00:00.125+01:00",
+        "2026-11-15T09:00:01.125Z",
+        "2026-11-15T09:00:03.625+00:00",
+    )
+    assert result["observed_rpo_seconds"] == 1.0
+    assert result["observed_rto_seconds"] == 2.5
