@@ -63,3 +63,30 @@ def test_cli_rejects_invalid_evidence_without_json(
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "error:" in captured.err
+
+
+@pytest.mark.parametrize(
+    "last_durable",
+    ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"],
+)
+def test_cli_reports_utc_overflow_without_traceback(monkeypatch, capsys, last_durable):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "measure_restore_drill.py",
+            "--last-durable",
+            last_durable,
+            "--failure",
+            "2026-11-15T09:03:00Z",
+            "--ready",
+            "2026-11-15T09:05:00Z",
+        ],
+    )
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "supported UTC range" in captured.err
+    assert "Traceback" not in captured.err
