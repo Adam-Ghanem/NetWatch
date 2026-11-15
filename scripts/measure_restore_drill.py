@@ -7,11 +7,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime, timezone
+
+
+_TIMESTAMP_PATTERN = re.compile(
+    r"\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?(?:Z|[+-]\\d{2}:\\d{2})\\Z"
+)
 
 
 def parse_timestamp(value: str) -> datetime:
     """Require an explicitly timezone-aware ISO-8601 timestamp."""
+    # Restrict operator evidence to a single unambiguous RFC 3339-like form.
+    # datetime.fromisoformat alone also accepts week dates and arbitrary separators.
+    if not _TIMESTAMP_PATTERN.fullmatch(value):
+        raise ValueError("timestamp must be YYYY-MM-DDTHH:MM:SS[.ffffff] with timezone")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
