@@ -21,6 +21,9 @@ def parse_timestamp(value: str) -> datetime:
     # datetime.fromisoformat alone also accepts week dates and arbitrary separators.
     if not _TIMESTAMP_PATTERN.fullmatch(value):
         raise ValueError("timestamp must be YYYY-MM-DDTHH:MM:SS[.ffffff] with timezone")
+    # RFC 3339 -00:00 means an unknown local offset, not verified UTC.
+    if value.endswith("-00:00"):
+        raise ValueError("timestamp timezone offset must be known")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
