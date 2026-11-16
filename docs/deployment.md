@@ -190,7 +190,7 @@ docker compose down -v
 
 The `-v` option permanently deletes the saved NetWatch database and logs.
 
-Back up the named data volume before upgrades or operational use. The current migration preserves existing records, adds bounded normalized service findings, and advances the SQLite schema to version 9. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
+Back up the named data volume before upgrades or operational use. SQLite schema versions evolve with migrations; do not assume a fixed version from this deployment guide. Check the actual schema version in the source snapshot and the running release before setting `--expected-schema` for offline verification. A mismatch must be investigated rather than bypassed. Historical audit rows remain labeled as legacy; NetWatch does not silently grant new cryptographic trust to old rows. A pre-upgrade backup is still the required safe operating procedure.
 
 Admins can also use **Operations → Download database backup** to create a consistent point-in-time SQLite snapshot. The download does not include `.env` role keys. Store it in an approved encrypted location and test restoration on a separate staging copy.
 
