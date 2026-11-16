@@ -7,7 +7,10 @@ WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "pyth
 
 def test_python_ci_concurrency_is_scoped_to_pr_or_ref() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    group = (\n        "concurrency:\\n  group: python-ci-${{ github.workflow }}-"\n        "${{ github.event.pull_request.number || github.ref }}"\n    )\n    assert group in workflow
+    group = (
+        "concurrency:\\n  group: python-ci-${{ github.workflow }}-"
+        "${{ github.event.pull_request.number || github.ref }}"
+    )\n    assert group in workflow
     assert "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}" in workflow
 
 
