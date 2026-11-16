@@ -22,7 +22,5 @@ def test_restore_drill_does_not_claim_production_acceptance() -> None:
     assert "trusted digest" in document
     assert "measured" in document and "RTO/RPO" in document
     assert "not in public CI logs or pull requests" in document
-    production_warning = (
-        "Do not use this result alone to authorize a production release."
-    )
+    production_warning = "Do not use this result alone to authorize a production release."
     assert production_warning in document
