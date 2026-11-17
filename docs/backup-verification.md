@@ -74,3 +74,8 @@ The verifier also does **not** encrypt backups, upload/rotate them off-host,
 provide RTO/RPO guarantees, or establish multi-tenant/multi-replica readiness.
 Use approved encrypted backup storage and exercise a real recovery procedure
 before making production resilience claims.
+
+The regression suite also mutates actual snapshot bytes while restoring the original
+file size and modification time before the final hash. This tests detection of a
+concrete content change, not only a mocked digest mismatch. It is not a concurrency
+or immutable-snapshot guarantee.
