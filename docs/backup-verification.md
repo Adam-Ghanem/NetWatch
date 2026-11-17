@@ -14,7 +14,10 @@ can download a consistent snapshot. The verifier below works **offline** and
 - Row counts for those tables
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
-- Whether the file changed during verification (size and modification time)
+- Whether the file changed during verification (size, modification time, and a
+  second SHA-256 after SQLite reads). The second digest detects same-size
+  replacements even when modification time is restored; verification still
+  requires an offline, immutable snapshot and cannot eliminate all file races.
 
 A missing required table, broken reference, failed integrity check, unexpected
 version, or mismatched digest returns a nonzero process exit code.
