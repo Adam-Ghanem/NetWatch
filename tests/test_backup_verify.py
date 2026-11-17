@@ -113,3 +113,22 @@ def test_backup_verification_rejects_non_sqlite_data(tmp_path):
 
     with pytest.raises(sqlite3.DatabaseError):
         verify(path)
+
+
+def test_backup_verification_detects_content_change_without_metadata_change(
+    tmp_path, monkeypatch
+):
+    """A replaced same-size snapshot can retain size and mtime."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    calls = []
+
+    def changing_digest(_path):
+        calls.append(_path)
+        return original_hash if len(calls) == 1 else "f" * 64
+
+    monkeypatch.setattr("scripts.verify_sqlite_backup._file_sha256", changing_digest)
+    with pytest.raises(ValueError, match="content changed during verification"):
+        verify(path, expected_sha256=original_hash)
+    assert calls == [path, path]
