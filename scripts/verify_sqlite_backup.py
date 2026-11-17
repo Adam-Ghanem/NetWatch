@@ -96,6 +96,10 @@ def verify(
     after = path.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError("Backup changed during verification; use an offline snapshot.")
+    # Metadata alone cannot detect same-size replacements or restored timestamps.
+    # Rehash after SQLite reads so the reported digest describes verified bytes.
+    if not hmac.compare_digest(digest, _file_sha256(path)):
+        raise ValueError("Backup content changed during verification; use an offline snapshot.")
 
     return {
         "path": str(path.resolve()),
