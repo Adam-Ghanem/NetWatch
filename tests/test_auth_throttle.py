@@ -73,8 +73,14 @@ def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypat
     clock[0] = 1010.1
     assert limiter.retry_after("fresh-peer") is None
     assert "old-peer" not in limiter._failures
-    assert limiter.retry_after("overflow-a") == 5
-    assert limiter.counters()["peer_buckets"] == 0
+    # Overflow is shared only while all peer slots are occupied. Once a stale
+    # slot is reclaimed, an unrelated peer must not inherit that history.
+    assert limiter.retry_after("overflow-a") is None
+    assert len(limiter._overflow) == 2  # Still retained until its own expiry.
+    limiter.record_failure("new-peer")
+    assert "new-peer" in limiter._failures
+    assert limiter.retry_after("new-peer") is None
+    assert limiter.counters()["peer_buckets"] == 1
 
 
 def test_failed_attempt_history_does_not_contain_credentials():
