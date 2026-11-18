@@ -57,6 +57,28 @@ def test_stale_peer_slots_are_reclaimed_before_overflow(monkeypatch):
     assert not limiter._overflow
 
 
+
+
+def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=1)
+
+    limiter.record_failure("old-peer")
+    clock[0] = 1005.0
+    limiter.record_failure("overflow-a")
+    limiter.record_failure("overflow-b")
+    assert limiter.retry_after("fresh-peer") == 10
+
+    # The old peer has expired but overflow remains active. A fresh peer
+    # must not be blocked merely because no new failure triggered cleanup.
+    clock[0] = 1010.1
+    assert limiter.retry_after("fresh-peer") is None
+    assert "old-peer" not in limiter._failures
+    assert limiter.retry_after("overflow-a") == 5
+    assert limiter.counters()["peer_buckets"] == 0
+
+
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
