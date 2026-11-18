@@ -83,6 +83,26 @@ def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypat
     assert limiter.counters()["peer_buckets"] == 1
 
 
+
+def test_active_peer_capacity_keeps_overflow_throttled(monkeypatch):
+    clock = [2000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=1)
+
+    limiter.record_failure("active-peer")
+    limiter.record_failure("overflow-a")
+    limiter.record_failure("overflow-b")
+    assert limiter.retry_after("new-peer") == 10
+    assert limiter.retry_after("active-peer") is None
+
+    clock[0] = 2009.0
+    assert limiter.retry_after("new-peer") == 1
+    assert limiter.counters()["peer_buckets"] == 1
+
+    clock[0] = 2010.0
+    assert limiter.retry_after("new-peer") is None
+
+
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
