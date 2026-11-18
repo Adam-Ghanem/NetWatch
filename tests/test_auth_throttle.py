@@ -57,8 +57,6 @@ def test_stale_peer_slots_are_reclaimed_before_overflow(monkeypatch):
     assert not limiter._overflow
 
 
-
-
 def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypatch):
     clock = [1000.0]
     monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
