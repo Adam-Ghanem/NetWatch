@@ -169,3 +169,43 @@ def test_backup_verification_detects_real_byte_mutation_with_restored_metadata(
         verify(path, expected_sha256=original_hash)
     assert calls == 2
     assert path.read_bytes() != original
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_verification_rejects_sqlite_sidecars(tmp_path, suffix):
+    """Any adjacent sidecar means main-file-only hashing is insufficient."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    sidecar = path.with_name(path.name + suffix)
+    sidecar.write_bytes(b"untrusted sidecar")
+    with pytest.raises(ValueError, match="SQLite sidecar files"):
+        verify(path, expected_schema=10)
+
+
+def test_backup_verification_rejects_uncheckpointed_wal(tmp_path):
+    """Reject a real WAL with committed data absent from the main file."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        connection.execute("PRAGMA wal_autocheckpoint=0")
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+        connection.commit()
+        assert path.with_name(path.name + "-wal").exists()
+        with pytest.raises(ValueError, match="SQLite sidecar files"):
+            verify(path, expected_schema=10)
+    finally:
+        connection.close()
+
+
+def test_backup_verification_accepts_standalone_snapshot_after_wal_close(tmp_path):
+    """A clean standalone database remains valid after WAL checkpointing."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    with sqlite3.connect(path) as connection:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+    assert not path.with_name(path.name + "-wal").exists()
+    report = verify(path, expected_schema=10)
+    assert report["counts"]["assets"] == 2
