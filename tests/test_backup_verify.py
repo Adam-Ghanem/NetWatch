@@ -169,3 +169,62 @@ def test_backup_verification_detects_real_byte_mutation_with_restored_metadata(
         verify(path, expected_sha256=original_hash)
     assert calls == 2
     assert path.read_bytes() != original
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_verification_rejects_sqlite_sidecars(tmp_path, suffix):
+    """Any adjacent sidecar means main-file-only hashing is insufficient."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    sidecar = path.with_name(path.name + suffix)
+    sidecar.write_bytes(b"untrusted sidecar")
+    with pytest.raises(ValueError, match="SQLite sidecar files"):
+        verify(path, expected_schema=10)
+
+
+def test_backup_verification_rejects_uncheckpointed_wal(tmp_path):
+    """Reject a real WAL with committed data absent from the main file."""
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        connection.execute("PRAGMA wal_autocheckpoint=0")
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+        connection.commit()
+        assert path.with_name(path.name + "-wal").exists()
+        with pytest.raises(ValueError, match="SQLite sidecar files"):
+            verify(path, expected_schema=10)
+    finally:
+        connection.close()
+
+
+def test_backup_verification_accepts_standalone_snapshot_from_wal(tmp_path):
+    """SQLite backup API produces an independent, verifiable offline snapshot."""
+    source = tmp_path / "source.sqlite3"
+    snapshot = tmp_path / "backup.sqlite3"
+    _backup(source)
+    connection = sqlite3.connect(source)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+        connection.commit()
+        # Do not assume closing a WAL-mode database changes its journal mode.
+        # Copy through SQLite's backup API instead of copying live main-file bytes.
+        destination = sqlite3.connect(snapshot)
+        try:
+            connection.backup(destination)
+            # SQLite backup preserves the source WAL journal mode. Convert the
+            # independent snapshot to rollback-journal mode before verification;
+            # otherwise a read-only verifier may create un-hashed sidecars.
+            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+        finally:
+            destination.close()
+    finally:
+        connection.close()
+    assert not any(
+        snapshot.with_name(snapshot.name + suffix).exists()
+        for suffix in ("-wal", "-shm", "-journal")
+    )
+    report = verify(snapshot, expected_schema=10)
+    assert report["counts"]["assets"] == 2
