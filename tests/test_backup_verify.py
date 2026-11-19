@@ -203,9 +203,15 @@ def test_backup_verification_accepts_standalone_snapshot_after_wal_close(tmp_pat
     """A clean standalone database remains valid after WAL checkpointing."""
     path = tmp_path / "backup.sqlite3"
     _backup(path)
-    with sqlite3.connect(path) as connection:
+    # sqlite3.Connection context managers commit/rollback but do not close.
+    # Close explicitly so SQLite can checkpoint and remove the WAL sidecar.
+    connection = sqlite3.connect(path)
+    try:
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("INSERT INTO assets DEFAULT VALUES")
+        connection.commit()
+    finally:
+        connection.close()
     assert not path.with_name(path.name + "-wal").exists()
     report = verify(path, expected_schema=10)
     assert report["counts"]["assets"] == 2
