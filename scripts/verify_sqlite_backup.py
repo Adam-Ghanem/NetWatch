@@ -43,6 +43,16 @@ def _expected_digest(value: str | None) -> str | None:
     return normalized
 
 
+def _reject_sqlite_sidecars(path: Path) -> None:
+    """A standalone snapshot must not depend on unverified SQLite sidecar bytes."""
+    for suffix in ("-wal", "-shm", "-journal"):
+        if Path(f"{path}{suffix}").exists():
+            raise ValueError(
+                "Backup has SQLite sidecar files; checkpoint and copy an offline "
+                "standalone snapshot before verification."
+            )
+
+
 def verify(
     path: Path,
     expected_schema: int | None = None,
@@ -55,6 +65,7 @@ def verify(
         raise ValueError("Expected schema must be a positive integer.")
 
     expected_hash = _expected_digest(expected_sha256)
+    _reject_sqlite_sidecars(path)
     before = path.stat()
     digest = _file_sha256(path)
     if expected_hash is not None and not hmac.compare_digest(digest, expected_hash):
@@ -93,6 +104,7 @@ def verify(
             for table in TABLES
         }
 
+    _reject_sqlite_sidecars(path)
     after = path.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
         raise ValueError("Backup changed during verification; use an offline snapshot.")
