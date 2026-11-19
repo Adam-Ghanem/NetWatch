@@ -84,7 +84,6 @@ def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypat
     assert limiter.counters()["peer_buckets"] == 1
 
 
-
 def test_active_peer_capacity_keeps_overflow_throttled(monkeypatch):
     clock = [2000.0]
     monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
