@@ -199,19 +199,28 @@ def test_backup_verification_rejects_uncheckpointed_wal(tmp_path):
         connection.close()
 
 
-def test_backup_verification_accepts_standalone_snapshot_after_wal_close(tmp_path):
-    """A clean standalone database remains valid after WAL checkpointing."""
-    path = tmp_path / "backup.sqlite3"
-    _backup(path)
-    # sqlite3.Connection context managers commit/rollback but do not close.
-    # Close explicitly so SQLite can checkpoint and remove the WAL sidecar.
-    connection = sqlite3.connect(path)
+def test_backup_verification_accepts_standalone_snapshot_from_wal(tmp_path):
+    """SQLite backup API produces an independent, verifiable offline snapshot."""
+    source = tmp_path / "source.sqlite3"
+    snapshot = tmp_path / "backup.sqlite3"
+    _backup(source)
+    connection = sqlite3.connect(source)
     try:
-        connection.execute("PRAGMA journal_mode=WAL")
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
         connection.execute("INSERT INTO assets DEFAULT VALUES")
         connection.commit()
+        # Do not assume closing a WAL-mode database changes its journal mode.
+        # Copy through SQLite's backup API instead of copying live main-file bytes.
+        destination = sqlite3.connect(snapshot)
+        try:
+            connection.backup(destination)
+        finally:
+            destination.close()
     finally:
         connection.close()
-    assert not path.with_name(path.name + "-wal").exists()
-    report = verify(path, expected_schema=10)
+    assert not any(
+        snapshot.with_name(snapshot.name + suffix).exists()
+        for suffix in ("-wal", "-shm", "-journal")
+    )
+    report = verify(snapshot, expected_schema=10)
     assert report["counts"]["assets"] == 2
