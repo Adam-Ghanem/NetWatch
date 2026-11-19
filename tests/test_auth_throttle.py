@@ -76,7 +76,8 @@ def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypat
     # Overflow is shared only while all peer slots are occupied. Once a stale
     # slot is reclaimed, an unrelated peer must not inherit that history.
     assert limiter.retry_after("overflow-a") is None
-    assert len(limiter._overflow) == 2  # Still retained until its own expiry.
+    # Overflow entries remain until their own expiry.
+    assert len(limiter._overflow) == 2
     limiter.record_failure("new-peer")
     assert "new-peer" in limiter._failures
     assert limiter.retry_after("new-peer") is None
