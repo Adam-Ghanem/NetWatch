@@ -57,6 +57,52 @@ def test_stale_peer_slots_are_reclaimed_before_overflow(monkeypatch):
     assert not limiter._overflow
 
 
+def test_fresh_peer_does_not_inherit_overflow_after_stale_slot_expires(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=1)
+
+    limiter.record_failure("old-peer")
+    clock[0] = 1005.0
+    limiter.record_failure("overflow-a")
+    limiter.record_failure("overflow-b")
+    assert limiter.retry_after("fresh-peer") == 10
+
+    # The old peer has expired but overflow remains active. A fresh peer
+    # must not be blocked merely because no new failure triggered cleanup.
+    clock[0] = 1010.1
+    assert limiter.retry_after("fresh-peer") is None
+    assert "old-peer" not in limiter._failures
+    # Overflow is shared only while all peer slots are occupied. Once a stale
+    # slot is reclaimed, an unrelated peer must not inherit that history.
+    assert limiter.retry_after("overflow-a") is None
+    # Overflow entries remain until their own expiry.
+    assert len(limiter._overflow) == 2
+    limiter.record_failure("new-peer")
+    assert "new-peer" in limiter._failures
+    assert limiter.retry_after("new-peer") is None
+    assert limiter.counters()["peer_buckets"] == 1
+
+
+def test_active_peer_capacity_keeps_overflow_throttled(monkeypatch):
+    clock = [2000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=1)
+
+    limiter.record_failure("active-peer")
+    limiter.record_failure("overflow-a")
+    limiter.record_failure("overflow-b")
+    assert limiter.retry_after("new-peer") == 10
+    assert limiter.retry_after("active-peer") is None
+
+    clock[0] = 2009.0
+    assert limiter.retry_after("new-peer") == 1
+    assert limiter.counters()["peer_buckets"] == 1
+
+    clock[0] = 2010.0
+    assert limiter.retry_after("new-peer") is None
+
+
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
