@@ -214,6 +214,10 @@ def test_backup_verification_accepts_standalone_snapshot_from_wal(tmp_path):
         destination = sqlite3.connect(snapshot)
         try:
             connection.backup(destination)
+            # SQLite backup preserves the source WAL journal mode. Convert the
+            # independent snapshot to rollback-journal mode before verification;
+            # otherwise a read-only verifier may create un-hashed sidecars.
+            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
         finally:
             destination.close()
     finally:
