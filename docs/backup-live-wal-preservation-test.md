@@ -1,0 +1,5 @@
+# Offline WAL source preservation regression
+
+`test_backup_snapshot_verification_preserves_live_wal_source` creates a synthetic WAL-mode source with committed rows, copies it using SQLite's backup API into an independent snapshot, converts **only the destination** to `journal_mode=DELETE`, and verifies that snapshot with the read-only backup verifier. The regression asserts that the source remains in WAL mode, its committed row count is unchanged, its WAL bytes remain identical from **before the backup API call** through snapshot verification while the source connection is held open, and no snapshot sidecars remain after verification.
+
+This test is intentionally offline and synthetic: it does not exercise a running NetWatch service, concurrent writers, crash recovery, audit-chain authentication, staging restore, or RTO/RPO. Never change journal mode or remove sidecars on a live source to make a backup pass verification. The stacked backup PR chain must receive independent review before merge.
