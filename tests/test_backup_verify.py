@@ -243,9 +243,12 @@ def test_backup_snapshot_verification_preserves_live_wal_source(tmp_path):
         connection.commit()
         wal = source.with_name(source.name + "-wal")
         assert wal.exists()
-        with sqlite3.connect(snapshot) as destination:
+        destination = sqlite3.connect(snapshot)
+        try:
             connection.backup(destination)
             assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+        finally:
+            destination.close()
         source_wal_before = wal.read_bytes()
         report = verify(snapshot, expected_schema=10)
         assert report["counts"]["assets"] == 2
