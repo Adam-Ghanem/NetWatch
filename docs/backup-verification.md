@@ -62,6 +62,12 @@ failed. **Do not restore** if any check fails.
 See [the prior local restore drill](track-a-restore-drill.md) for a dated
 example. That older result is not proof of recovery on a production platform.
 
+
+The negative-path regression `tests/test_backup_rejected_snapshot_source.py` also
+checks that a rejected digest on a standalone snapshot leaves the still-open
+WAL-mode source, its committed rows and its WAL bytes unchanged. This is
+synthetic test evidence, not an application restore or production recovery drill.
+
 ## Security limits
 
 SHA-256 detects accidental transfer errors only when its expected digest comes
