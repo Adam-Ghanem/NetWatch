@@ -228,3 +228,33 @@ def test_backup_verification_accepts_standalone_snapshot_from_wal(tmp_path):
     )
     report = verify(snapshot, expected_schema=10)
     assert report["counts"]["assets"] == 2
+
+
+def test_backup_snapshot_verification_preserves_live_wal_source(tmp_path):
+    """An offline snapshot must not alter its live WAL-mode source."""
+    source = tmp_path / "live.sqlite3"
+    snapshot = tmp_path / "offline.sqlite3"
+    _backup(source)
+    connection = sqlite3.connect(source)
+    try:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+        connection.execute("PRAGMA wal_autocheckpoint=0")
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+        connection.commit()
+        wal = source.with_name(source.name + "-wal")
+        assert wal.exists()
+        with sqlite3.connect(snapshot) as destination:
+            connection.backup(destination)
+            assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+        source_wal_before = wal.read_bytes()
+        report = verify(snapshot, expected_schema=10)
+        assert report["counts"]["assets"] == 2
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert connection.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 2
+        assert wal.read_bytes() == source_wal_before
+        assert not any(
+            snapshot.with_name(snapshot.name + suffix).exists()
+            for suffix in ("-wal", "-shm", "-journal")
+        )
+    finally:
+        connection.close()
