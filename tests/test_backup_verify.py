@@ -243,13 +243,16 @@ def test_backup_snapshot_verification_preserves_live_wal_source(tmp_path):
         connection.commit()
         wal = source.with_name(source.name + "-wal")
         assert wal.exists()
+        # Capture WAL before backup(), not after: the backup operation itself
+        # must not checkpoint or rewrite the live source journal.
+        source_wal_before = wal.read_bytes()
         destination = sqlite3.connect(snapshot)
         try:
             connection.backup(destination)
             assert destination.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
         finally:
             destination.close()
-        source_wal_before = wal.read_bytes()
+        assert wal.read_bytes() == source_wal_before
         report = verify(snapshot, expected_schema=10)
         assert report["counts"]["assets"] == 2
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
