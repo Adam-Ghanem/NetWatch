@@ -116,6 +116,10 @@ def verify(
     # Rehash after SQLite reads so the reported digest describes verified bytes.
     if not hmac.compare_digest(digest, _file_sha256(path)):
         raise ValueError("Backup content changed during verification; use an offline snapshot.")
+    # The final hash opens by pathname. Recheck after that open/close so a
+    # late symlink replacement cannot be reported as a verified regular file.
+    if path.is_symlink():
+        raise ValueError("Backup became a symbolic link during verification.")
 
     return {
         "path": str(path.resolve()),
