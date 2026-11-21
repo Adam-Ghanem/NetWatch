@@ -264,3 +264,36 @@ def test_backup_snapshot_verification_preserves_live_wal_source(tmp_path):
         )
     finally:
         connection.close()
+
+
+def test_backup_verification_rejects_symlink_input(tmp_path):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    alias = tmp_path / "backup-alias.sqlite3"
+    try:
+        alias.symlink_to(path)
+    except (NotImplementedError, OSError):
+        pytest.skip("Symbolic links are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        verify(alias, expected_schema=10)
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("suffix", ["-wal", "-shm", "-journal"])
+def test_backup_verification_rejects_dangling_sidecar_symlink(tmp_path, suffix):
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    sidecar = tmp_path / f"backup.sqlite3{suffix}"
+    try:
+        sidecar.symlink_to(tmp_path / "nonexistent-sidecar")
+    except (NotImplementedError, OSError):
+        pytest.skip("Symbolic links are unavailable on this platform")
+
+    assert sidecar.is_symlink()
+    assert not sidecar.exists()
+    with pytest.raises(ValueError, match="SQLite sidecar files"):
+        verify(path, expected_schema=10)
+    assert path.read_bytes() == original

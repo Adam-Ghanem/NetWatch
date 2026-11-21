@@ -14,6 +14,9 @@ can download a consistent snapshot. The verifier below works **offline** and
 - Row counts for those tables
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
+- Rejection of a symbolic-link backup input and adjacent SQLite sidecars, including
+  dangling `-wal`, `-shm`, and `-journal` symbolic links. This reconciles the
+  existing #201 guard with the later WAL/source-preservation regression stack.
 - Whether the file changed during verification (size, modification time, and a
   second SHA-256 after SQLite reads). The second digest detects same-size
   replacements even when modification time is restored; verification still
@@ -78,6 +81,9 @@ that requires the application and the original signing key.
 
 The verifier also does **not** encrypt backups, upload/rotate them off-host,
 provide RTO/RPO guarantees, or establish multi-tenant/multi-replica readiness.
+These path checks are best-effort and do not make mutable filesystems
+race-free; use a protected, immutable offline snapshot.
+
 Use approved encrypted backup storage and exercise a real recovery procedure
 before making production resilience claims.
 
