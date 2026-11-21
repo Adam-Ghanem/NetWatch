@@ -323,7 +323,7 @@ def test_backup_verification_rejects_symlink_swap_after_sqlite_reads(tmp_path, m
         return real_reject(snapshot)
 
     monkeypatch.setattr(verify_sqlite_backup, "_reject_sqlite_sidecars", swap_after_reads)
-    with pytest.raises(ValueError, match="became a symbolic link"):
+    with pytest.raises(ValueError, match="Backup changed during verification"):
         verify(path, expected_schema=10)
     assert calls == 2
     assert replacement.read_bytes() == original
