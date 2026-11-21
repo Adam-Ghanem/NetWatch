@@ -327,3 +327,37 @@ def test_backup_verification_rejects_symlink_swap_after_sqlite_reads(tmp_path, m
         verify(path, expected_schema=10)
     assert calls == 2
     assert replacement.read_bytes() == original
+
+
+
+def test_backup_verification_rejects_symlink_swapped_during_final_hash(
+    tmp_path, monkeypatch
+):
+    """Final digest can match while pathname becomes a symlink during hashing."""
+    from scripts import verify_sqlite_backup
+
+    path = tmp_path / "backup.sqlite3"
+    replacement = tmp_path / "replacement.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    replacement.write_bytes(original)
+    real_hash = verify_sqlite_backup._file_sha256
+    calls = 0
+
+    def replace_during_final_hash(snapshot):
+        nonlocal calls
+        calls += 1
+        result = real_hash(snapshot)
+        if calls == 2:
+            snapshot.unlink()
+            try:
+                snapshot.symlink_to(replacement)
+            except (NotImplementedError, OSError):
+                pytest.skip("Symbolic links are unavailable on this platform")
+        return result
+
+    monkeypatch.setattr(verify_sqlite_backup, "_file_sha256", replace_during_final_hash)
+    with pytest.raises(ValueError, match="became a symbolic link"):
+        verify(path, expected_schema=10)
+    assert calls == 2
+    assert replacement.read_bytes() == original
