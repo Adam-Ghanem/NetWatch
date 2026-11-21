@@ -91,3 +91,11 @@ The regression suite also mutates actual snapshot bytes while restoring the orig
 file size and modification time before the final hash. This tests detection of a
 concrete content change, not only a mocked digest mismatch. It is not a concurrency
 or immutable-snapshot guarantee.
+
+## Symlink-swap regression coverage
+
+A synthetic regression replaces the offline snapshot path with a symbolic link
+between the SQLite reads and final verification. The verifier must fail closed,
+even when the replacement contains identical bytes. This is a deterministic
+test of the post-read path guard, **not** a guarantee against filesystem races:
+verify only protected, immutable offline snapshots.
