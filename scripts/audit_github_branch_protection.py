@@ -93,9 +93,7 @@ def _matching_rulesets(
         ref_name = (ruleset.get("conditions") or {}).get("ref_name") or {}
         include = ref_name.get("include") or []
         exclude = ref_name.get("exclude") or []
-        if any(
-            _matches_ref(pattern, ref, default_branch) for pattern in include
-        ) and not any(
+        if any(_matches_ref(pattern, ref, default_branch) for pattern in include) and not any(
             _matches_ref(pattern, ref, default_branch) for pattern in exclude
         ):
             matched.append(ruleset)
@@ -237,9 +235,7 @@ def main(argv: list[str] | None = None) -> int:
         token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         repository_info = _api_get(f"{API_ROOT}/repos/{repo}", token)
         default_branch = (
-            repository_info.get("default_branch")
-            if isinstance(repository_info, dict)
-            else None
+            repository_info.get("default_branch") if isinstance(repository_info, dict) else None
         )
         if not isinstance(default_branch, str) or not default_branch:
             raise RuntimeError(
@@ -259,9 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         report = {
             "repository": repo,
             "branch": args.branch,
-            **evaluate_policy(
-                branch_info, protection, rulesets, args.branch, default_branch
-            ),
+            **evaluate_policy(branch_info, protection, rulesets, args.branch, default_branch),
         }
         print(json.dumps(report, indent=2, sort_keys=True))
         if report["ok"] is True:

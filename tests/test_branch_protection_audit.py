@@ -203,9 +203,7 @@ def test_unknown_special_ruleset_ref_pattern_is_inconclusive():
         )
 
 
-def test_cli_resolves_repository_default_branch_before_ruleset_evaluation(
-    monkeypatch, capsys
-):
+def test_cli_resolves_repository_default_branch_before_ruleset_evaluation(monkeypatch, capsys):
     calls = []
 
     def fake_api_get(url, token, *, missing_ok=False):
