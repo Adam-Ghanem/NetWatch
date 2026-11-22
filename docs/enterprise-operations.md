@@ -66,3 +66,7 @@ Schema changes require a forward migration, a rollback or compatibility statemen
 [1]: https://www.nist.gov/publications/zero-trust-architecture "NIST Zero Trust Architecture"
 [2]: https://slsa.dev/ "SLSA Supply-chain Levels for Software Artifacts"
 [3]: https://sre.google/sre-book/service-level-objectives/ "Google SRE: Service Level Objectives"
+
+### Corrupt durable notification receipt handling
+
+Stored notification payloads are parsed before delivery. An invalid JSON receipt is treated as a failed delivery, is not sent to the configured provider, and remains subject to the existing bounded retry/dead-letter policy. The status endpoint exposes safe receipt metadata rather than the raw payload. The synthetic regression in `tests/test_notification_outbox.py` checks this fail-closed path; it does not exercise a real webhook or prove database corruption recovery.
