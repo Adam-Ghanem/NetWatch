@@ -158,3 +158,35 @@ def test_admin_status_has_no_raw_payloads_and_viewer_is_denied(monkeypatch, tmp_
     assert admin.json()["delivery"]["counts"]["pending"] == 1
     assert "private-token" not in admin.text
     assert "10.0.0.5" not in admin.text
+
+
+def test_delivery_batch_is_capped_even_when_caller_requests_more(monkeypatch, tmp_path):
+    """A caller cannot bypass the per-cycle delivery cap with a large limit."""
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        for alert_id in range(1, 26):
+            assert outbox.enqueue_notification_receipts(conn, _alert(alert_id=alert_id)) == 1
+
+    sent = []
+
+    def mock_delivery(kind, payload):
+        sent.append((kind, payload["event_id"]))
+        return notifications.ChannelNotificationResult("webhook", "delivered", 1)
+
+    monkeypatch.setattr(outbox, "deliver_stored_notification", mock_delivery)
+    first = outbox.process_notification_receipts_once(limit=10_000)
+    assert first["claimed"] == outbox.MAX_BATCH == 20
+    assert first["delivered"] == 20
+    assert len(sent) == 20
+    assert len({event_id for _, event_id in sent}) == 20
+    assert outbox.notification_delivery_status()["counts"] == {
+        "pending": 5,
+        "delivered": 20,
+        "dead": 0,
+    }
+
+    second = outbox.process_notification_receipts_once(limit=10_000)
+    assert second["claimed"] == second["delivered"] == 5
+    assert len(sent) == len({event_id for _, event_id in sent}) == 25
+    assert outbox.notification_delivery_status()["counts"]["pending"] == 0
