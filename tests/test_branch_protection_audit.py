@@ -128,6 +128,31 @@ def test_ruleset_for_another_branch_does_not_protect_main():
     assert result["matching_active_rulesets"] == 0
 
 
+def test_single_star_does_not_match_nested_branch_path_components():
+    result = audit.evaluate_policy(
+        {"protected": False},
+        None,
+        [_ruleset(branch_pattern="refs/heads/release/*")],
+        "release/v1/hotfix",
+    )
+
+    assert result["matching_active_rulesets"] == 0
+    assert result["ok"] is False
+
+
+@pytest.mark.parametrize("branch", ["release/stable", "release/v1/hotfix/stable"])
+def test_double_star_matches_zero_or_more_branch_path_components(branch):
+    result = audit.evaluate_policy(
+        {"protected": False},
+        None,
+        [_ruleset(branch_pattern="refs/heads/release/**/stable")],
+        branch,
+    )
+
+    assert result["matching_active_rulesets"] == 1
+    assert result["checks"]["branch_protection_or_matching_ruleset"] is True
+
+
 def test_unsupported_ruleset_ref_pattern_is_inconclusive():
     with pytest.raises(ValueError, match="audit is inconclusive"):
         audit.evaluate_policy(
