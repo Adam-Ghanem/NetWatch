@@ -7,8 +7,7 @@ from pathlib import Path
 
 WORKFLOW_DIR = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 ACTION_REFERENCE = re.compile(
-    r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
-    r"(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$"
+    r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$"
 )
 VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
@@ -40,9 +39,7 @@ def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
                     f"{location}: external actions must use a full 40-character commit SHA."
                 )
             if not version_comment or not VERSION_COMMENT.fullmatch(version_comment):
-                raise AssertionError(
-                    f"{location}: add a version comment such as '# v4'."
-                )
+                raise AssertionError(f"{location}: add a version comment such as '# v4'.")
             checked_actions.append(reference)
 
     if not checked_actions:
