@@ -18,7 +18,8 @@ command-line argument or included in output.
 The audit checks classic branch protection and active repository rulesets that
 match refs/heads/<branch>. Ref matching follows GitHub's `File::FNM_PATHNAME` behavior:
 `*` and `?` do not cross `/`, while a complete `**` path component matches zero or
-more branch path components. It evaluates active branch rulesets returned by GitHub. The helper supports
+more branch path components. It evaluates active branch rulesets returned by GitHub.
+The helper supports
 `~ALL` and resolves `~DEFAULT_BRANCH` using the repository's `default_branch`
 metadata; if that metadata is unavailable, the audit is inconclusive. Unknown
 special `~...` patterns remain inconclusive rather than being treated as matches.
