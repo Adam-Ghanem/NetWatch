@@ -158,3 +158,30 @@ def test_admin_status_has_no_raw_payloads_and_viewer_is_denied(monkeypatch, tmp_
     assert admin.json()["delivery"]["counts"]["pending"] == 1
     assert "private-token" not in admin.text
     assert "10.0.0.5" not in admin.text
+
+
+def test_malformed_stored_payload_fails_closed_without_delivery(monkeypatch, tmp_path):
+    """Corrupt offline receipts must never be sent or logged with their payload."""
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+        conn.execute(
+            "UPDATE notification_deliveries SET payload = ?",
+            ('{"unexpected":',),
+        )
+
+    calls = []
+    monkeypatch.setattr(
+        outbox,
+        "deliver_stored_notification",
+        lambda kind, payload: calls.append((kind, payload)),
+    )
+    result = outbox.process_notification_receipts_once()
+    assert result["claimed"] == 1
+    assert result["retry_pending"] == 1
+    assert calls == []
+    receipt = outbox.notification_delivery_status()["receipts"][0]
+    assert receipt["status"] == "pending"
+    assert receipt["attempts"] == 1
+    assert receipt["last_result"] == "failed"
