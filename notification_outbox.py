@@ -102,7 +102,7 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
     claimed: list[dict[str, Any]] = []
     with _connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
+        exhausted_cursor = conn.execute(
             """
             UPDATE notification_deliveries
             SET status = 'dead', claimed_at = '', claim_token = '',
@@ -112,6 +112,7 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
             """,
             (MAX_DELIVERY_ATTEMPTS, _iso(now - timedelta(seconds=CLAIM_STALE_SECONDS))),
         )
+        exhausted_count = max(0, int(exhausted_cursor.rowcount))
         rows = conn.execute(
             """
             SELECT * FROM notification_deliveries
@@ -136,7 +137,12 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
                 (_iso(now), token, row["id"]),
             )
             claimed.append(dict(row))
-    counters = {"claimed": len(claimed), "delivered": 0, "retry_pending": 0, "dead": 0}
+    counters = {
+        "claimed": len(claimed),
+        "delivered": 0,
+        "retry_pending": 0,
+        "dead": exhausted_count,
+    }
     for item in claimed:
         try:
             payload = json.loads(str(item["payload"]))
