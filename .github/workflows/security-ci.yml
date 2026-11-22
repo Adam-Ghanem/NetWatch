@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   test:
+    name: Security CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

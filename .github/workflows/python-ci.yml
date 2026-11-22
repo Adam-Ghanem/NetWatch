@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   test:
+    name: Python CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -33,7 +34,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --check .
+          black --check --diff .
           isort --check-only .
 
       - name: Lint and type-check
