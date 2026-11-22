@@ -34,6 +34,10 @@ cases meeting the minimum severity threshold write one SQLite receipt per
 channel inside the case transaction. SQLite data is plaintext unless the
 operator configures disk encryption. The background notification loop processes at most 20 receipts
 per cycle, applies bounded retries, and marks exhausted deliveries dead.
+A synthetic regression verifies that even a caller-supplied batch limit above
+20 cannot exceed this cap, and that the remaining receipts are processed in a
+later cycle. This is a per-cycle bound, not an outbound rate limit across
+multiple workers or a guarantee of exactly-once delivery.
 Only allowlisted notification payloads are retained, deidentified by default;
 raw targets are stored **only** when `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`.
 Admin `GET /api/notifications/status` shows receipt status and counters, not
