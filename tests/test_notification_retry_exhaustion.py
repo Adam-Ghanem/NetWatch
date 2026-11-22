@@ -32,7 +32,10 @@ def test_exhausted_pending_receipt_is_dead_without_delivery(monkeypatch, tmp_pat
         conn.execute(
             "UPDATE notification_deliveries SET attempts = ?, available_at = ?, "
             "claimed_at = '', claim_token = 'old-claim' WHERE alert_id = 901",
-            (outbox.MAX_DELIVERY_ATTEMPTS, outbox._iso(outbox._now() - timedelta(days=1))),
+            (
+                outbox.MAX_DELIVERY_ATTEMPTS,
+                outbox._iso(outbox._now() - timedelta(days=1)),
+            ),
         )
 
     def unexpected_delivery(*_args, **_kwargs):
@@ -40,7 +43,10 @@ def test_exhausted_pending_receipt_is_dead_without_delivery(monkeypatch, tmp_pat
 
     monkeypatch.setattr(outbox, "deliver_stored_notification", unexpected_delivery)
     assert outbox.process_notification_receipts_once() == {
-        "claimed": 0, "delivered": 0, "retry_pending": 0, "dead": 0
+        "claimed": 0,
+        "delivered": 0,
+        "retry_pending": 0,
+        "dead": 0,
     }
     receipt = outbox.notification_delivery_status()["receipts"][0]
     assert receipt["status"] == "dead"
@@ -69,7 +75,10 @@ def test_last_allowed_failed_attempt_becomes_dead(monkeypatch, tmp_path):
 
     monkeypatch.setattr(outbox, "deliver_stored_notification", failed_delivery)
     assert outbox.process_notification_receipts_once() == {
-        "claimed": 1, "delivered": 0, "retry_pending": 0, "dead": 1
+        "claimed": 1,
+        "delivered": 0,
+        "retry_pending": 0,
+        "dead": 1,
     }
     receipt = outbox.notification_delivery_status()["receipts"][0]
     assert receipt["status"] == "dead"
