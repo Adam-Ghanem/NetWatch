@@ -47,7 +47,7 @@ def test_exhausted_pending_receipt_is_dead_without_delivery(monkeypatch, tmp_pat
         "claimed": 0,
         "delivered": 0,
         "retry_pending": 0,
-        "dead": 0,
+        "dead": 1,
     }
     receipt = outbox.notification_delivery_status()["receipts"][0]
     assert receipt["status"] == "dead"
@@ -59,6 +59,13 @@ def test_exhausted_pending_receipt_is_dead_without_delivery(monkeypatch, tmp_pat
         ).fetchone()
     assert row["claimed_at"] == ""
     assert row["claim_token"] == ""
+    # The pre-claim sweep reports a terminal transition once, not on every cycle.
+    assert outbox.process_notification_receipts_once() == {
+        "claimed": 0,
+        "delivered": 0,
+        "retry_pending": 0,
+        "dead": 0,
+    }
 
 
 def test_last_allowed_failed_attempt_becomes_dead(monkeypatch, tmp_path):
