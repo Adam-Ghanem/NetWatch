@@ -49,6 +49,8 @@ def _api_get(url: str, token: str | None, *, missing_ok: bool = False) -> Any:
 
 
 def _matches_ref(pattern: str, ref: str) -> bool:
+    if pattern.startswith("~") and pattern != "~ALL":
+        raise ValueError("Unsupported GitHub ruleset ref pattern; audit is inconclusive.")
     return pattern == "~ALL" or fnmatch.fnmatchcase(ref, pattern)
 
 
@@ -93,6 +95,16 @@ def evaluate_policy(
 ) -> dict[str, Any]:
     """Evaluate classic protection and active rulesets without changing GitHub."""
     matching = _matching_rulesets(rulesets, branch)
+    if branch_info.get("protected") is True and protection is None and not matching:
+        return {
+            "ok": None,
+            "status": "inconclusive",
+            "reason": "Protected branch details may come from organization-level rulesets.",
+            "repository_branch_protected_flag": True,
+            "classic_protection_present": False,
+            "matching_active_rulesets": 0,
+            "checks": {},
+        }
     classic = protection or {}
 
     review_policies = []
@@ -207,7 +219,9 @@ def main(argv: list[str] | None = None) -> int:
             **evaluate_policy(branch_info, protection, rulesets, args.branch),
         }
         print(json.dumps(report, indent=2, sort_keys=True))
-        return 0 if report["ok"] else 1
+        if report["ok"] is True:
+            return 0
+        return 1 if report["ok"] is False else 2
     except PermissionError as exc:
         print(
             json.dumps(

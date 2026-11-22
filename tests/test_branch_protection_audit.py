@@ -84,6 +84,13 @@ def test_missing_security_status_check_fails_closed():
     assert result["checks"]["strict_python_and_security_checks"] is False
 
 
+def test_organization_level_protection_without_visible_details_is_inconclusive():
+    result = audit.evaluate_policy({"protected": True}, None, [], "main")
+
+    assert result["ok"] is None
+    assert result["status"] == "inconclusive"
+
+
 def test_no_protection_or_matching_ruleset_is_noncompliant():
     result = audit.evaluate_policy({"protected": False}, None, [], "main")
 
@@ -119,6 +126,16 @@ def test_ruleset_for_another_branch_does_not_protect_main():
 
     assert result["ok"] is False
     assert result["matching_active_rulesets"] == 0
+
+
+def test_unsupported_ruleset_ref_pattern_is_inconclusive():
+    with pytest.raises(ValueError, match="audit is inconclusive"):
+        audit.evaluate_policy(
+            {"protected": False},
+            None,
+            [_ruleset(branch_pattern="~DEFAULT_BRANCH")],
+            "main",
+        )
 
 
 def test_permission_denial_is_inconclusive_and_does_not_echo_response_body(monkeypatch):

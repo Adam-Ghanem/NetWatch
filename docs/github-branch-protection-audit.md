@@ -18,8 +18,9 @@ command-line argument or included in output.
 The audit checks classic branch protection and active repository rulesets that
 match refs/heads/<branch>. It evaluates repository-level rulesets; organization-level
 rulesets and nonstandard pattern syntax are outside this helper and must be reviewed
-separately. A permission error is reported as inconclusive (exit code 2), never as
-an unprotected branch. The ruleset reader intentionally fails closed if the first
+separately; the helper reports these cases as inconclusive rather than passing them.
+A permission error is reported as inconclusive (exit code 2), never as an
+unprotected branch. The ruleset reader intentionally fails closed if the first
 100-entry page may be truncated.
 
 ## Required policy
