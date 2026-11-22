@@ -80,9 +80,7 @@ def _rules_of_type(rulesets: list[dict[str, Any]], rule_type: str) -> list[dict[
 def _status_contexts(status: dict[str, Any]) -> set[str]:
     contexts = set(status.get("contexts") or [])
     contexts.update(
-        check.get("context")
-        for check in status.get("checks", [])
-        if check.get("context")
+        check.get("context") for check in status.get("checks", []) if check.get("context")
     )
     return contexts
 
@@ -155,9 +153,7 @@ def evaluate_policy(
 
     deletions = classic.get("allow_deletions") or {}
     deletion_ok = deletions.get("enabled") is False or any(
-        rule.get("type") == "deletion"
-        for ruleset in matching
-        for rule in ruleset.get("rules", [])
+        rule.get("type") == "deletion" for ruleset in matching for rule in ruleset.get("rules", [])
     )
 
     admins = classic.get("enforce_admins") or {}
@@ -205,7 +201,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         rulesets = _api_get(f"{API_ROOT}/repos/{repo}/rulesets?per_page=100", token)
         if not isinstance(rulesets, list) or len(rulesets) >= 100:
-            raise RuntimeError("Ruleset response is invalid or may be truncated; audit is inconclusive.")
+            raise RuntimeError(
+                "Ruleset response is invalid or may be truncated; audit is inconclusive."
+            )
         report = {
             "repository": repo,
             "branch": args.branch,
