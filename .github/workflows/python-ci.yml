@@ -33,7 +33,10 @@ jobs:
 
       - name: Check formatting and imports
         run: |
-          black --check .
+          black --check . || {
+            black --diff scripts/audit_github_branch_protection.py tests/test_branch_protection_audit.py
+            exit 1
+          }
           isort --check-only .
 
       - name: Lint and type-check
