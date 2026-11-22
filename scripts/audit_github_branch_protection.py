@@ -49,11 +49,15 @@ def _api_get(url: str, token: str | None, *, missing_ok: bool = False) -> Any:
         raise RuntimeError("Could not read a valid GitHub API response.") from None
 
 
-def _matches_ref(pattern: str, ref: str) -> bool:
-    if pattern.startswith("~") and pattern != "~ALL":
-        raise ValueError("Unsupported GitHub ruleset ref pattern; audit is inconclusive.")
+def _matches_ref(pattern: str, ref: str, default_branch: str | None = None) -> bool:
     if pattern == "~ALL":
         return True
+    if pattern == "~DEFAULT_BRANCH":
+        if not default_branch:
+            raise ValueError("GitHub default branch is unavailable; audit is inconclusive.")
+        return ref == f"refs/heads/{default_branch}"
+    if pattern.startswith("~"):
+        raise ValueError("Unsupported GitHub ruleset ref pattern; audit is inconclusive.")
 
     pattern_parts = pattern.split("/")
     ref_parts = ref.split("/")
@@ -78,7 +82,9 @@ def _matches_ref(pattern: str, ref: str) -> bool:
     return match(0, 0)
 
 
-def _matching_rulesets(rulesets: list[dict[str, Any]], branch: str) -> list[dict[str, Any]]:
+def _matching_rulesets(
+    rulesets: list[dict[str, Any]], branch: str, default_branch: str | None = None
+) -> list[dict[str, Any]]:
     ref = f"refs/heads/{branch}"
     matched = []
     for ruleset in rulesets:
@@ -87,8 +93,8 @@ def _matching_rulesets(rulesets: list[dict[str, Any]], branch: str) -> list[dict
         ref_name = (ruleset.get("conditions") or {}).get("ref_name") or {}
         include = ref_name.get("include") or []
         exclude = ref_name.get("exclude") or []
-        if any(_matches_ref(pattern, ref) for pattern in include) and not any(
-            _matches_ref(pattern, ref) for pattern in exclude
+        if any(_matches_ref(pattern, ref, default_branch) for pattern in include) and not any(
+            _matches_ref(pattern, ref, default_branch) for pattern in exclude
         ):
             matched.append(ruleset)
     return matched
@@ -116,9 +122,10 @@ def evaluate_policy(
     protection: dict[str, Any] | None,
     rulesets: list[dict[str, Any]],
     branch: str,
+    default_branch: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate classic protection and active rulesets without changing GitHub."""
-    matching = _matching_rulesets(rulesets, branch)
+    matching = _matching_rulesets(rulesets, branch, default_branch)
     if branch_info.get("protected") is True and protection is None and not matching:
         return {
             "ok": None,
@@ -226,6 +233,14 @@ def main(argv: list[str] | None = None) -> int:
         repo = _validate_repo(args.repo)
         branch_path = urllib.parse.quote(args.branch, safe="")
         token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        repository_info = _api_get(f"{API_ROOT}/repos/{repo}", token)
+        default_branch = (
+            repository_info.get("default_branch") if isinstance(repository_info, dict) else None
+        )
+        if not isinstance(default_branch, str) or not default_branch:
+            raise RuntimeError(
+                "GitHub did not return the repository default branch; audit is inconclusive."
+            )
         branch_info = _api_get(f"{API_ROOT}/repos/{repo}/branches/{branch_path}", token)
         protection = _api_get(
             f"{API_ROOT}/repos/{repo}/branches/{branch_path}/protection",
@@ -240,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
         report = {
             "repository": repo,
             "branch": args.branch,
-            **evaluate_policy(branch_info, protection, rulesets, args.branch),
+            **evaluate_policy(branch_info, protection, rulesets, args.branch, default_branch),
         }
         print(json.dumps(report, indent=2, sort_keys=True))
         if report["ok"] is True:

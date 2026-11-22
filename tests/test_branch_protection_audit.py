@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.client
+import json
 import urllib.error
 
 import pytest
@@ -153,14 +154,79 @@ def test_double_star_matches_zero_or_more_branch_path_components(branch):
     assert result["checks"]["branch_protection_or_matching_ruleset"] is True
 
 
-def test_unsupported_ruleset_ref_pattern_is_inconclusive():
-    with pytest.raises(ValueError, match="audit is inconclusive"):
+def test_default_branch_pattern_matches_only_the_repository_default_branch():
+    ruleset = _ruleset(branch_pattern="~DEFAULT_BRANCH")
+
+    default_result = audit.evaluate_policy(
+        {"protected": False}, None, [ruleset], "main", default_branch="main"
+    )
+    other_result = audit.evaluate_policy(
+        {"protected": False}, None, [ruleset], "release/v1", default_branch="main"
+    )
+
+    assert default_result["matching_active_rulesets"] == 1
+    assert default_result["ok"] is True
+    assert other_result["matching_active_rulesets"] == 0
+    assert other_result["ok"] is False
+
+
+def test_default_branch_pattern_requires_repository_metadata():
+    with pytest.raises(ValueError, match="default branch is unavailable"):
         audit.evaluate_policy(
             {"protected": False},
             None,
             [_ruleset(branch_pattern="~DEFAULT_BRANCH")],
             "main",
         )
+
+
+def test_default_branch_exclusion_overrides_all_branches_include():
+    ruleset = _ruleset(branch_pattern="~ALL")
+    ruleset["conditions"]["ref_name"]["exclude"] = ["~DEFAULT_BRANCH"]
+
+    result = audit.evaluate_policy(
+        {"protected": False}, None, [ruleset], "main", default_branch="main"
+    )
+
+    assert result["matching_active_rulesets"] == 0
+    assert result["ok"] is False
+
+
+def test_unknown_special_ruleset_ref_pattern_is_inconclusive():
+    with pytest.raises(ValueError, match="Unsupported GitHub ruleset ref pattern"):
+        audit.evaluate_policy(
+            {"protected": False},
+            None,
+            [_ruleset(branch_pattern="~UNSUPPORTED")],
+            "main",
+            default_branch="main",
+        )
+
+
+def test_cli_resolves_repository_default_branch_before_ruleset_evaluation(monkeypatch, capsys):
+    calls = []
+
+    def fake_api_get(url, token, *, missing_ok=False):
+        calls.append(url)
+        if url.endswith("/repos/owner/repo"):
+            return {"default_branch": "main"}
+        if url.endswith("/branches/main"):
+            return {"protected": False}
+        if url.endswith("/branches/main/protection"):
+            return None
+        if url.endswith("/rulesets?per_page=100"):
+            return [_ruleset(branch_pattern="~DEFAULT_BRANCH")]
+        raise AssertionError(f"Unexpected API URL: {url}")
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(audit, "_api_get", fake_api_get)
+
+    assert audit.main(["--repo", "owner/repo", "--branch", "main"]) == 0
+    report = json.loads(capsys.readouterr().out)
+
+    assert report["status"] == "compliant"
+    assert calls[0] == "https://api.github.com/repos/owner/repo"
 
 
 def test_permission_denial_is_inconclusive_and_does_not_echo_response_body(monkeypatch):
