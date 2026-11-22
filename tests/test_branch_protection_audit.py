@@ -83,9 +83,7 @@ def test_branch_flag_must_report_protected():
 def test_missing_security_status_check_fails_closed():
     protection = _classic_protection()
     protection["required_status_checks"]["contexts"] = ["Python CI"]
-    protection["required_status_checks"]["checks"] = [
-        {"context": "Python CI", "app_id": 15368}
-    ]
+    protection["required_status_checks"]["checks"] = [{"context": "Python CI", "app_id": 15368}]
 
     result = audit.evaluate_policy({"protected": True}, protection, [], "main")
 
