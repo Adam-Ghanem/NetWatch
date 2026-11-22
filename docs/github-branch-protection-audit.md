@@ -16,13 +16,16 @@ command-line argument or included in output.
     unset GH_TOKEN
 
 The audit checks classic branch protection and active repository rulesets that
-match refs/heads/<branch>. A permission error is reported as inconclusive
-(exit code 2), never as an unprotected branch. The ruleset reader intentionally
-fails closed if the first 100-entry page may be truncated.
+match refs/heads/<branch>. It evaluates repository-level rulesets; organization-level
+rulesets and nonstandard pattern syntax are outside this helper and must be reviewed
+separately. A permission error is reported as inconclusive (exit code 2), never as
+an unprotected branch. The ruleset reader intentionally fails closed if the first
+100-entry page may be truncated.
 
 ## Required policy
 
-- GitHub reports the branch as protected.
+- GitHub reports the branch as protected, or an active matching repository ruleset
+  is present.
 - At least one approving pull-request review, with stale approvals dismissed.
 - Strict required status checks containing **Python CI** and **Security CI**.
 - Required conversation/review-thread resolution.

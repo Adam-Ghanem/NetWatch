@@ -38,7 +38,7 @@ def _ruleset(*, bypass_actors=None, branch_pattern="refs/heads/main"):
                 "type": "pull_request",
                 "parameters": {
                     "required_approving_review_count": 1,
-                    "dismiss_stale_reviews": True,
+                    "dismiss_stale_reviews_on_push": True,
                     "required_review_thread_resolution": True,
                 },
             },
@@ -74,7 +74,7 @@ def test_branch_flag_must_report_protected():
     )
 
     assert result["ok"] is False
-    assert result["checks"]["branch_reported_protected"] is False
+    assert result["checks"]["branch_protection_or_matching_ruleset"] is False
 
 
 def test_missing_security_status_check_fails_closed():
@@ -97,11 +97,12 @@ def test_no_protection_or_matching_ruleset_is_noncompliant():
 
 def test_compliant_active_ruleset_can_enforce_main_policy():
     result = audit.evaluate_policy(
-        {"protected": True}, None, [_ruleset()], "main"
+        {"protected": False}, None, [_ruleset()], "main"
     )
 
     assert result["ok"] is True
     assert result["matching_active_rulesets"] == 1
+    assert result["checks"]["branch_protection_or_matching_ruleset"] is True
 
 
 def test_ruleset_bypass_actor_prevents_admin_enforcement():

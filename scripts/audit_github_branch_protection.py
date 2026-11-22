@@ -104,7 +104,10 @@ def evaluate_policy(
     review_policies.extend(_rules_of_type(matching, "pull_request"))
     reviews_ok = any(
         int(policy.get("required_approving_review_count") or 0) >= 1
-        and policy.get("dismiss_stale_reviews") is True
+        and (
+            policy.get("dismiss_stale_reviews") is True
+            or policy.get("dismiss_stale_reviews_on_push") is True
+        )
         for policy in review_policies
     )
 
@@ -128,10 +131,14 @@ def evaluate_policy(
         }
         for policy in _rules_of_type(matching, "required_status_checks")
     )
-    statuses_ok = any(
-        policy.get("strict") is True and REQUIRED_CHECKS.issubset(policy.get("contexts", set()))
-        for policy in status_policies
+    strict_contexts = set().union(
+        *(
+            policy.get("contexts", set())
+            for policy in status_policies
+            if policy.get("strict") is True
+        )
     )
+    statuses_ok = REQUIRED_CHECKS.issubset(strict_contexts)
 
     conversation = classic.get("required_conversation_resolution") or {}
     conversation_ok = conversation.get("enabled") is True or any(
@@ -154,12 +161,12 @@ def evaluate_policy(
     )
 
     admins = classic.get("enforce_admins") or {}
-    admin_ok = admins.get("enabled") is True or (
-        bool(matching) and all(not ruleset.get("bypass_actors") for ruleset in matching)
-    )
+    no_ruleset_bypass = all(not ruleset.get("bypass_actors") for ruleset in matching)
+    admin_ok = no_ruleset_bypass and (admins.get("enabled") is True or bool(matching))
 
     checks = {
-        "branch_reported_protected": branch_info.get("protected") is True,
+        "branch_protection_or_matching_ruleset": branch_info.get("protected") is True
+        or bool(matching),
         "pull_request_review_and_stale_dismissal": reviews_ok,
         "strict_python_and_security_checks": statuses_ok,
         "conversation_resolution": conversation_ok,
