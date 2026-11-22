@@ -8,10 +8,10 @@ import fnmatch
 import json
 import os
 import re
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any
 
 REQUIRED_CHECKS = {"Python CI", "Security CI"}
 API_ROOT = "https://api.github.com"
