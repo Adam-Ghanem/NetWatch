@@ -21,9 +21,10 @@ def _queued_receipt(monkeypatch, tmp_path):
     monkeypatch.setenv("NETWATCH_NOTIFY_MIN_SEVERITY", "High")
     notifications._reset_notification_state_for_tests()
     with inventory_store._connect() as conn:
-        assert outbox.enqueue_notification_receipts(
+        queued = outbox.enqueue_notification_receipts(
             conn, {"id": 901, "severity": "Critical", "status": "open"}
-        ) == 1
+        )
+        assert queued == 1
 
 
 def test_exhausted_pending_receipt_is_dead_without_delivery(monkeypatch, tmp_path):
