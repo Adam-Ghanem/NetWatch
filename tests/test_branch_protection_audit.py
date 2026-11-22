@@ -59,9 +59,7 @@ def _ruleset(*, bypass_actors=None, branch_pattern="refs/heads/main"):
 
 
 def test_compliant_classic_branch_protection_passes():
-    result = audit.evaluate_policy(
-        {"protected": True}, _classic_protection(), [], "main"
-    )
+    result = audit.evaluate_policy({"protected": True}, _classic_protection(), [], "main")
 
     assert result["ok"] is True
     assert result["status"] == "compliant"
@@ -69,9 +67,7 @@ def test_compliant_classic_branch_protection_passes():
 
 
 def test_branch_flag_must_report_protected():
-    result = audit.evaluate_policy(
-        {"protected": False}, _classic_protection(), [], "main"
-    )
+    result = audit.evaluate_policy({"protected": False}, _classic_protection(), [], "main")
 
     assert result["ok"] is False
     assert result["checks"]["branch_protection_or_matching_ruleset"] is False
@@ -96,9 +92,7 @@ def test_no_protection_or_matching_ruleset_is_noncompliant():
 
 
 def test_compliant_active_ruleset_can_enforce_main_policy():
-    result = audit.evaluate_policy(
-        {"protected": False}, None, [_ruleset()], "main"
-    )
+    result = audit.evaluate_policy({"protected": False}, None, [_ruleset()], "main")
 
     assert result["ok"] is True
     assert result["matching_active_rulesets"] == 1
@@ -116,7 +110,10 @@ def test_ruleset_bypass_actor_prevents_admin_enforcement():
 
 def test_ruleset_for_another_branch_does_not_protect_main():
     result = audit.evaluate_policy(
-        {"protected": False}, None, [_ruleset(branch_pattern="refs/heads/release/*")], "main"
+        {"protected": False},
+        None,
+        [_ruleset(branch_pattern="refs/heads/release/*")],
+        "main",
     )
 
     assert result["ok"] is False

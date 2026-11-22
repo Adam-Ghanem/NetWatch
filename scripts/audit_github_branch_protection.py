@@ -165,8 +165,9 @@ def evaluate_policy(
     admin_ok = no_ruleset_bypass and (admins.get("enabled") is True or bool(matching))
 
     checks = {
-        "branch_protection_or_matching_ruleset": branch_info.get("protected") is True
-        or bool(matching),
+        "branch_protection_or_matching_ruleset": (
+            branch_info.get("protected") is True or bool(matching)
+        ),
         "pull_request_review_and_stale_dismissal": reviews_ok,
         "strict_python_and_security_checks": statuses_ok,
         "conversation_resolution": conversation_ok,
