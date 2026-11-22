@@ -49,6 +49,36 @@ def _api_get(url: str, token: str | None, *, missing_ok: bool = False) -> Any:
         raise RuntimeError("Could not read a valid GitHub API response.") from None
 
 
+def _load_ruleset_details(
+    repo: str, summaries: list[dict[str, Any]], token: str | None
+) -> list[dict[str, Any]]:
+    """Load full ruleset conditions and rules from GitHub's detail endpoint."""
+    details = []
+    for summary in summaries:
+        ruleset_id = summary.get("id")
+        if not isinstance(ruleset_id, int) or isinstance(ruleset_id, bool) or ruleset_id <= 0:
+            raise RuntimeError("GitHub returned a ruleset without a valid ID; audit is inconclusive.")
+        try:
+            detail = _api_get(
+                f"{API_ROOT}/repos/{repo}/rulesets/{ruleset_id}?includes_parents=true",
+                token,
+            )
+        except PermissionError:
+            raise PermissionError(
+                "GitHub denied full ruleset details; verify Metadata: read and access to each "
+                "applicable ruleset. Audit is inconclusive."
+            ) from None
+        if not isinstance(detail, dict) or not {
+            "target",
+            "enforcement",
+            "conditions",
+            "rules",
+        }.issubset(detail):
+            raise RuntimeError("GitHub returned incomplete ruleset details; audit is inconclusive.")
+        details.append(detail)
+    return details
+
+
 def _matches_ref(pattern: str, ref: str, default_branch: str | None = None) -> bool:
     if pattern == "~ALL":
         return True
@@ -126,6 +156,22 @@ def evaluate_policy(
 ) -> dict[str, Any]:
     """Evaluate classic protection and active rulesets without changing GitHub."""
     matching = _matching_rulesets(rulesets, branch, default_branch)
+    if any(
+        "bypass_actors" not in ruleset or not isinstance(ruleset["bypass_actors"], list)
+        for ruleset in matching
+    ):
+        return {
+            "ok": None,
+            "status": "inconclusive",
+            "reason": (
+                "GitHub did not disclose bypass actors for every matching ruleset; "
+                "the audit cannot establish administrator enforcement."
+            ),
+            "repository_branch_protected_flag": branch_info.get("protected") is True,
+            "classic_protection_present": protection is not None,
+            "matching_active_rulesets": len(matching),
+            "checks": {},
+        }
     if branch_info.get("protected") is True and protection is None and not matching:
         return {
             "ok": None,
@@ -252,6 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(
                 "Ruleset response is invalid or may be truncated; audit is inconclusive."
             )
+        rulesets = _load_ruleset_details(repo, rulesets, token)
         report = {
             "repository": repo,
             "branch": args.branch,

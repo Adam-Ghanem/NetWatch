@@ -108,6 +108,17 @@ def test_compliant_active_ruleset_can_enforce_main_policy():
     assert result["checks"]["branch_protection_or_matching_ruleset"] is True
 
 
+def test_missing_ruleset_bypass_actor_visibility_is_inconclusive():
+    ruleset = _ruleset()
+    ruleset.pop("bypass_actors")
+
+    result = audit.evaluate_policy({"protected": False}, None, [ruleset], "main")
+
+    assert result["ok"] is None
+    assert result["status"] == "inconclusive"
+    assert "did not disclose bypass actors" in result["reason"]
+
+
 def test_ruleset_bypass_actor_prevents_admin_enforcement():
     ruleset = _ruleset(bypass_actors=[{"actor_type": "RepositoryRole", "bypass_mode": "always"}])
 
@@ -215,7 +226,9 @@ def test_cli_resolves_repository_default_branch_before_ruleset_evaluation(monkey
         if url.endswith("/branches/main/protection"):
             return None
         if url.endswith("/rulesets?per_page=100"):
-            return [_ruleset(branch_pattern="~DEFAULT_BRANCH")]
+            return [{"id": 42}]
+        if url.endswith("/rulesets/42?includes_parents=true"):
+            return _ruleset(branch_pattern="~DEFAULT_BRANCH")
         raise AssertionError(f"Unexpected API URL: {url}")
 
     monkeypatch.delenv("GH_TOKEN", raising=False)
@@ -227,6 +240,35 @@ def test_cli_resolves_repository_default_branch_before_ruleset_evaluation(monkey
 
     assert report["status"] == "compliant"
     assert calls[0] == "https://api.github.com/repos/owner/repo"
+    assert "https://api.github.com/repos/owner/repo/rulesets/42?includes_parents=true" in calls
+
+
+def test_cli_does_not_assume_hidden_ruleset_bypass_actors_are_empty(monkeypatch, capsys):
+    def fake_api_get(url, token, *, missing_ok=False):
+        if url.endswith("/repos/owner/repo"):
+            return {"default_branch": "main"}
+        if url.endswith("/branches/main"):
+            return {"protected": False}
+        if url.endswith("/branches/main/protection"):
+            return None
+        if url.endswith("/rulesets?per_page=100"):
+            return [{"id": 42}]
+        if url.endswith("/rulesets/42?includes_parents=true"):
+            detail = _ruleset(branch_pattern="~DEFAULT_BRANCH")
+            detail.pop("bypass_actors")
+            return detail
+        raise AssertionError(f"Unexpected API URL: {url}")
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.setattr(audit, "_api_get", fake_api_get)
+
+    assert audit.main(["--repo", "owner/repo", "--branch", "main"]) == 2
+    report = json.loads(capsys.readouterr().out)
+
+    assert report["ok"] is None
+    assert report["status"] == "inconclusive"
+    assert "bypass actors" in report["reason"]
 
 
 def test_permission_denial_is_inconclusive_and_does_not_echo_response_body(monkeypatch):
