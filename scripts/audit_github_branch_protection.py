@@ -7,11 +7,11 @@ import argparse
 import fnmatch
 import json
 import os
-from functools import lru_cache
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from functools import lru_cache
 from typing import Any
 
 REQUIRED_CHECKS = {"Python CI", "Security CI"}
