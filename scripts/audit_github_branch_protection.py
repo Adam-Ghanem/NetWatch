@@ -57,7 +57,9 @@ def _load_ruleset_details(
     for summary in summaries:
         ruleset_id = summary.get("id")
         if not isinstance(ruleset_id, int) or isinstance(ruleset_id, bool) or ruleset_id <= 0:
-            raise RuntimeError("GitHub returned a ruleset without a valid ID; audit is inconclusive.")
+            raise RuntimeError(
+                "GitHub returned a ruleset without a valid ID; audit is inconclusive."
+            )
         try:
             detail = _api_get(
                 f"{API_ROOT}/repos/{repo}/rulesets/{ruleset_id}?includes_parents=true",
