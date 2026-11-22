@@ -7,6 +7,7 @@ import argparse
 import fnmatch
 import json
 import os
+from functools import lru_cache
 import re
 import urllib.error
 import urllib.parse
@@ -51,7 +52,30 @@ def _api_get(url: str, token: str | None, *, missing_ok: bool = False) -> Any:
 def _matches_ref(pattern: str, ref: str) -> bool:
     if pattern.startswith("~") and pattern != "~ALL":
         raise ValueError("Unsupported GitHub ruleset ref pattern; audit is inconclusive.")
-    return pattern == "~ALL" or fnmatch.fnmatchcase(ref, pattern)
+    if pattern == "~ALL":
+        return True
+
+    pattern_parts = pattern.split("/")
+    ref_parts = ref.split("/")
+
+    @lru_cache(maxsize=None)
+    def match(pattern_index: int, ref_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return ref_index == len(ref_parts)
+
+        component = pattern_parts[pattern_index]
+        if component == "**":
+            return match(pattern_index + 1, ref_index) or (
+                ref_index < len(ref_parts) and match(pattern_index, ref_index + 1)
+            )
+
+        return (
+            ref_index < len(ref_parts)
+            and fnmatch.fnmatchcase(ref_parts[ref_index], component)
+            and match(pattern_index + 1, ref_index + 1)
+        )
+
+    return match(0, 0)
 
 
 def _matching_rulesets(rulesets: list[dict[str, Any]], branch: str) -> list[dict[str, Any]]:
