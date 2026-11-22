@@ -205,9 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         rulesets = _api_get(f"{API_ROOT}/repos/{repo}/rulesets?per_page=100", token)
         if not isinstance(rulesets, list) or len(rulesets) >= 100:
-            raise RuntimeError(
-                "Ruleset response is invalid or may be truncated; audit is inconclusive."
-            )
+            raise RuntimeError("Ruleset response is invalid or may be truncated; audit is inconclusive.")
         report = {
             "repository": repo,
             "branch": args.branch,
