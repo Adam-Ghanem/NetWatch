@@ -1,0 +1,21 @@
+name: Temporary formatting diagnostic
+
+on:
+  push:
+    branches:
+      - security/github-branch-protection-audit-20261122
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python -m pip install black==26.10.1
+      - name: Print exact Black formatting diff
+        run: black --diff scripts/audit_github_branch_protection.py tests/test_branch_protection_audit.py
