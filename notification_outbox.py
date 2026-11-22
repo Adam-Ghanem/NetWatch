@@ -137,7 +137,12 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
                 (_iso(now), token, row["id"]),
             )
             claimed.append(dict(row))
-    counters = {"claimed": len(claimed), "delivered": 0, "retry_pending": 0, "dead": exhausted_count}
+    counters = {
+        "claimed": len(claimed),
+        "delivered": 0,
+        "retry_pending": 0,
+        "dead": exhausted_count,
+    }
     for item in claimed:
         try:
             payload = json.loads(str(item["payload"]))
