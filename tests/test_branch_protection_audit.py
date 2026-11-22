@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import urllib.error
 
 import pytest
@@ -126,7 +127,7 @@ def test_permission_denial_is_inconclusive_and_does_not_echo_response_body(monke
             "https://api.github.com/private",
             403,
             "Forbidden",
-            hdrs=None,
+            hdrs=http.client.HTTPMessage(),
             fp=None,
         )
 

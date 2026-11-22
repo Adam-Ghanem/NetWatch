@@ -109,7 +109,7 @@ def evaluate_policy(
         for policy in review_policies
     )
 
-    status_policies = []
+    status_policies: list[dict[str, Any]] = []
     classic_status = classic.get("required_status_checks")
     if isinstance(classic_status, dict):
         status_policies.append(
@@ -129,13 +129,10 @@ def evaluate_policy(
         }
         for policy in _rules_of_type(matching, "required_status_checks")
     )
-    strict_contexts = set().union(
-        *(
-            policy.get("contexts", set())
-            for policy in status_policies
-            if policy.get("strict") is True
-        )
-    )
+    strict_contexts: set[str] = set()
+    for policy in status_policies:
+        if policy.get("strict") is True:
+            strict_contexts.update(policy.get("contexts", set()))
     statuses_ok = REQUIRED_CHECKS.issubset(strict_contexts)
 
     conversation = classic.get("required_conversation_resolution") or {}
