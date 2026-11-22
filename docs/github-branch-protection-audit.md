@@ -43,7 +43,7 @@ fails closed if the first 100-entry page may be truncated.
 - GitHub reports the branch as protected, or an active matching repository ruleset
   is present.
 - At least one approving pull-request review, with stale approvals dismissed.
-- Strict required status checks containing **Python CI** and **Security CI**.
+- Strict required status checks containing **Python CI** and **Security CI**, each bound to the GitHub Actions app (integration ID `15368`). Context-only or any-source checks are not accepted.
 - Required conversation/review-thread resolution.
 - Enforcement for administrators, with no ruleset bypass actor used to satisfy
   the policy.
@@ -53,6 +53,10 @@ Exit code 0 means all checks passed; 1 means the policy is noncompliant;
 2 means the audit could not establish the policy. The JSON output lists each
 check separately. This is an audit helper, not a branch-settings writer; apply
 settings in GitHub repository settings and rerun the audit afterward.
+
+## Status-check identity — 2026-11-22
+
+GitHub's check-runs API reported both existing workflow jobs with the generic name `test`, both from the GitHub Actions app (`15368`). Requiring only that shared context cannot distinguish the Python and Security workflows. Both workflows now assign distinct job display names (`Python CI` and `Security CI`). The audit also requires each classic `checks[].app_id` or ruleset `required_status_checks[].integration_id` to equal `15368`; a context with no source binding, or one bound to another app, does not satisfy the policy. The GitHub Actions app ID was verified from this repository's check-run metadata. GitHub documents that a required status check can be pinned to a specific GitHub App, while ruleset checks expose the optional `integration_id` source binding.
 
 ## Review evidence — 2026-11-22
 

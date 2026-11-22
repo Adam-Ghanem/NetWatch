@@ -15,6 +15,7 @@ from functools import lru_cache
 from typing import Any
 
 REQUIRED_CHECKS = {"Python CI", "Security CI"}
+GITHUB_ACTIONS_APP_ID = 15368
 API_ROOT = "https://api.github.com"
 
 
@@ -141,12 +142,32 @@ def _rules_of_type(rulesets: list[dict[str, Any]], rule_type: str) -> list[dict[
     ]
 
 
-def _status_contexts(status: dict[str, Any]) -> set[str]:
-    contexts = set(status.get("contexts") or [])
-    contexts.update(
-        check.get("context") for check in status.get("checks", []) if check.get("context")
-    )
-    return contexts
+def _classic_status_contexts(status: dict[str, Any]) -> set[str]:
+    checks = status.get("checks")
+    if not isinstance(checks, list):
+        return set()
+    return {
+        check["context"]
+        for check in checks
+        if isinstance(check, dict)
+        and check.get("app_id") == GITHUB_ACTIONS_APP_ID
+        and isinstance(check.get("context"), str)
+        and check["context"]
+    }
+
+
+def _ruleset_status_contexts(policy: dict[str, Any]) -> set[str]:
+    checks = policy.get("required_status_checks")
+    if not isinstance(checks, list):
+        return set()
+    return {
+        check["context"]
+        for check in checks
+        if isinstance(check, dict)
+        and check.get("integration_id") == GITHUB_ACTIONS_APP_ID
+        and isinstance(check.get("context"), str)
+        and check["context"]
+    }
 
 
 def evaluate_policy(
@@ -206,17 +227,13 @@ def evaluate_policy(
         status_policies.append(
             {
                 "strict": classic_status.get("strict"),
-                "contexts": _status_contexts(classic_status),
+                "contexts": _classic_status_contexts(classic_status),
             }
         )
     status_policies.extend(
         {
             "strict": policy.get("strict_required_status_checks_policy"),
-            "contexts": {
-                check.get("context")
-                for check in policy.get("required_status_checks", [])
-                if check.get("context")
-            },
+            "contexts": _ruleset_status_contexts(policy),
         }
         for policy in _rules_of_type(matching, "required_status_checks")
     )
@@ -253,7 +270,7 @@ def evaluate_policy(
             branch_info.get("protected") is True or bool(matching)
         ),
         "pull_request_review_and_stale_dismissal": reviews_ok,
-        "strict_python_and_security_checks": statuses_ok,
+        "strict_python_and_security_checks_from_github_actions": statuses_ok,
         "conversation_resolution": conversation_ok,
         "admins_enforced_without_bypass": admin_ok,
         "force_push_disabled": force_push_ok,

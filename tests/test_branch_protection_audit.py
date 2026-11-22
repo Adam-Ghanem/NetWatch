@@ -3,6 +3,7 @@ from __future__ import annotations
 import http.client
 import json
 import urllib.error
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +19,10 @@ def _classic_protection():
         "required_status_checks": {
             "strict": True,
             "contexts": ["Python CI", "Security CI"],
+            "checks": [
+                {"context": "Python CI", "app_id": 15368},
+                {"context": "Security CI", "app_id": 15368},
+            ],
         },
         "required_conversation_resolution": {"enabled": True},
         "enforce_admins": {"enabled": True},
@@ -49,8 +54,8 @@ def _ruleset(*, bypass_actors=None, branch_pattern="refs/heads/main"):
                 "parameters": {
                     "strict_required_status_checks_policy": True,
                     "required_status_checks": [
-                        {"context": "Python CI"},
-                        {"context": "Security CI"},
+                        {"context": "Python CI", "integration_id": 15368},
+                        {"context": "Security CI", "integration_id": 15368},
                     ],
                 },
             },
@@ -78,11 +83,59 @@ def test_branch_flag_must_report_protected():
 def test_missing_security_status_check_fails_closed():
     protection = _classic_protection()
     protection["required_status_checks"]["contexts"] = ["Python CI"]
+    protection["required_status_checks"]["checks"] = [
+        {"context": "Python CI", "app_id": 15368}
+    ]
 
     result = audit.evaluate_policy({"protected": True}, protection, [], "main")
 
     assert result["ok"] is False
-    assert result["checks"]["strict_python_and_security_checks"] is False
+    assert result["checks"]["strict_python_and_security_checks_from_github_actions"] is False
+
+
+def test_classic_status_contexts_without_app_binding_are_not_trusted():
+    protection = _classic_protection()
+    protection["required_status_checks"].pop("checks")
+
+    result = audit.evaluate_policy({"protected": True}, protection, [], "main")
+
+    assert result["ok"] is False
+    assert result["checks"]["strict_python_and_security_checks_from_github_actions"] is False
+
+
+def test_classic_status_checks_must_be_bound_to_github_actions():
+    protection = _classic_protection()
+    protection["required_status_checks"]["checks"][1]["app_id"] = 4242
+
+    result = audit.evaluate_policy({"protected": True}, protection, [], "main")
+
+    assert result["ok"] is False
+    assert result["checks"]["strict_python_and_security_checks_from_github_actions"] is False
+
+
+@pytest.mark.parametrize("integration_id", [None, 4242])
+def test_ruleset_status_checks_must_be_bound_to_github_actions(integration_id):
+    ruleset = _ruleset()
+    check = ruleset["rules"][1]["parameters"]["required_status_checks"][1]
+    if integration_id is None:
+        check.pop("integration_id")
+    else:
+        check["integration_id"] = integration_id
+
+    result = audit.evaluate_policy({"protected": False}, None, [ruleset], "main")
+
+    assert result["ok"] is False
+    assert result["checks"]["strict_python_and_security_checks_from_github_actions"] is False
+
+
+def test_ci_workflow_job_names_are_unique_and_match_audit_policy():
+    root = Path(__file__).resolve().parents[1]
+    python_workflow = (root / ".github/workflows/python-ci.yml").read_text(encoding="utf-8")
+    security_workflow = (root / ".github/workflows/security-ci.yml").read_text(encoding="utf-8")
+
+    assert "jobs:\n  test:\n    name: Python CI\n" in python_workflow
+    assert "jobs:\n  test:\n    name: Security CI\n" in security_workflow
+    assert audit.REQUIRED_CHECKS == {"Python CI", "Security CI"}
 
 
 def test_organization_level_protection_without_visible_details_is_inconclusive():

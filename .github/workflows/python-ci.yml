@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   test:
+    name: Python CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
