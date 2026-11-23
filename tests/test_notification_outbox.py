@@ -70,16 +70,12 @@ def test_delivery_recovers_after_restart_and_records_receipt(monkeypatch, tmp_pa
     assert sent[0][1]["event_id"] == status["receipts"][0]["event_id"]
 
 
-def test_successful_delivery_scrubs_payload_but_preserves_receipt_metadata(
-    monkeypatch, tmp_path
-):
+def test_successful_delivery_scrubs_payload_but_preserves_receipt_metadata(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
     with inventory_store._connect() as conn:
         outbox.enqueue_notification_receipts(conn, _alert())
-        before = conn.execute(
-            "SELECT event_id, payload FROM notification_deliveries"
-        ).fetchone()
+        before = conn.execute("SELECT event_id, payload FROM notification_deliveries").fetchone()
 
     delivered = []
 
@@ -90,12 +86,10 @@ def test_successful_delivery_scrubs_payload_but_preserves_receipt_metadata(
     monkeypatch.setattr(outbox, "deliver_stored_notification", mock_delivery)
     result = outbox.process_notification_receipts_once()
     with inventory_store._connect() as conn:
-        after = conn.execute(
-            """
+        after = conn.execute("""
             SELECT event_id, payload, status, attempts, delivered_at, last_result
             FROM notification_deliveries
-            """
-        ).fetchone()
+            """).fetchone()
 
     assert result["delivered"] == 1
     assert delivered[0][1]["event_id"] == before["event_id"]
