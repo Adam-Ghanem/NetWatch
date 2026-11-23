@@ -1269,7 +1269,9 @@ def database_backup_snapshot() -> tuple[Path, _BackupSnapshotTemporaryDirectory]
     lock_path = inventory_store.DB_FILE.resolve().parent / ".netwatch-backup-download.lock"
     file_lock = _BackupDownloadFileLock(lock_path)
     if not file_lock.acquire():
-        raise BackupDownloadBusyError("Another process is preparing or streaming a database backup.")
+        raise BackupDownloadBusyError(
+            "Another process is preparing or streaming a database backup."
+        )
 
     temporary: tempfile.TemporaryDirectory[str] | None = None
     try:
