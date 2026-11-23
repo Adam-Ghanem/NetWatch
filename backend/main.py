@@ -132,6 +132,7 @@ from notifications import (
     send_alert_notification,
 )
 from operations_store import (
+    BackupDownloadBusyError,
     MaintenanceWindowActiveError,
     alert_counts,
     claim_due_scan_policies,
@@ -2077,6 +2078,13 @@ def database_backup(
 
     try:
         snapshot_path, temporary = database_backup_snapshot()
+    except BackupDownloadBusyError as exc:
+        _backup_download_slots.release()
+        raise HTTPException(
+            status_code=503,
+            detail="A database backup is already being prepared or downloaded by another worker. Retry later.",
+            headers={"Retry-After": "30"},
+        ) from exc
     except BaseException:
         _backup_download_slots.release()
         raise
