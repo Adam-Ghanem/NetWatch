@@ -40,6 +40,9 @@ DeliveryStatus = Literal[
 
 NOTIFICATION_SCHEMA_VERSION = "netwatch-alert/v1"
 NOTIFICATION_TIMEOUT_SECONDS = 5
+_DNS_RESOLUTION_TIMEOUT_SECONDS = NOTIFICATION_TIMEOUT_SECONDS
+_DNS_RESOLVER_WORKERS = 2
+_DNS_RESOLVER_QUEUE_SIZE = 2
 NOTIFICATION_MAX_RETRIES = 3
 NOTIFICATION_RESPONSE_MAX_BYTES = 64 * 1024
 NOTIFICATION_CIRCUIT_FAILURE_THRESHOLD = 5
@@ -416,9 +419,81 @@ class _PinnedHTTPResponse:
             self._connection.close()
 
 
+class _BoundedDNSResolver:
+    """Resolve webhook hosts with a fixed worker pool and bounded pending queue."""
+
+    def __init__(
+        self,
+        *,
+        workers: int = _DNS_RESOLVER_WORKERS,
+        queue_size: int = _DNS_RESOLVER_QUEUE_SIZE,
+        timeout: float = _DNS_RESOLUTION_TIMEOUT_SECONDS,
+    ) -> None:
+        if workers < 1 or queue_size < 1 or timeout <= 0:
+            raise ValueError("DNS resolver limits must be positive.")
+        self._worker_count = workers
+        self._timeout = timeout
+        self._jobs: queue.Queue[tuple[str, int, threading.Event, dict[str, Any]]] = (
+            queue.Queue(maxsize=queue_size)
+        )
+        self._start_lock = threading.Lock()
+        self._started = False
+
+    def _worker(self) -> None:
+        while True:
+            host, port, completed, result = self._jobs.get()
+            try:
+                try:
+                    result["records"] = socket.getaddrinfo(
+                        host, port, type=socket.SOCK_STREAM
+                    )
+                except Exception as exc:
+                    result["error"] = (
+                        exc if isinstance(exc, OSError) else OSError("DNS resolution failed.")
+                    )
+            finally:
+                completed.set()
+                self._jobs.task_done()
+
+    def _ensure_workers(self) -> None:
+        with self._start_lock:
+            if self._started:
+                return
+            self._started = True
+            for index in range(self._worker_count):
+                worker = threading.Thread(
+                    target=self._worker,
+                    name=f"netwatch-webhook-dns-{index + 1}",
+                    daemon=True,
+                )
+                worker.start()
+
+    def resolve(self, host: str, port: int) -> list[tuple[Any, ...]]:
+        """Return resolver records or fail closed within the configured deadline."""
+        self._ensure_workers()
+        completed = threading.Event()
+        result: dict[str, Any] = {}
+        try:
+            self._jobs.put_nowait((host, port, completed, result))
+        except queue.Full as exc:
+            raise TimeoutError("DNS resolver queue is full.") from exc
+        if not completed.wait(self._timeout):
+            raise TimeoutError("DNS resolution timed out.")
+        error = result.get("error")
+        if error is not None:
+            raise error
+        records = result.get("records")
+        if not isinstance(records, list):
+            raise OSError("DNS resolution returned no usable records.")
+        return records
+
+
+_DNS_RESOLVER = _BoundedDNSResolver()
+
+
 def _public_https_addresses(host: str, port: int) -> list[str]:
     """Resolve once and reject the whole hostname if any answer is non-public."""
-    records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    records = _DNS_RESOLVER.resolve(host, port)
     addresses: list[str] = []
     for family, _, _, _, sockaddr in records:
         if family not in {socket.AF_INET, socket.AF_INET6}:
