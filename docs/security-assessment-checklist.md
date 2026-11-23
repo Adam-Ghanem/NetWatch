@@ -24,7 +24,7 @@ This checklist is a staging/manual assessment plan. It is not a claim that an in
 
 | Test | Expected result | Evidence |
 |---|---|---|
-| Webhook/event sink URL using HTTP, credentials, fragments, query strings, redirects, loopback, link-local, or private destinations | Rejected or disabled; no credential forwarding | Notification logs and controlled mock server |
+| Webhook/event sink URL using HTTP, credentials, fragments, query strings, redirects, loopback, link-local, private/reserved destinations, mixed public/private DNS answers, or DNS rebinding | Rejected or disabled before connection; every resolved address must be globally routable and the selected IP is pinned while TLS verifies the original hostname | Synthetic resolver/transport regression tests and controlled staging endpoint |
 | Event sink timeout, oversized response, repeated failure, and retry exhaustion | Bounded retry, circuit break, safe error, no request-thread starvation | Metrics and audit record |
 | OIDC JWKS or provider redirect behavior | Redirects refused where required; no bearer leakage | Controlled staging endpoint |
 
