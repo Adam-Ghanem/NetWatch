@@ -9,6 +9,7 @@ import pytest
 
 import auto_intelligence
 import backend.main as api
+import intelligence_store
 import inventory_store
 
 
@@ -304,3 +305,84 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     assert api._run_auto_intelligence_once() == "failed"
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
     assert api._run_auto_intelligence_once() == "interval"
+
+
+
+def test_superseded_auto_analysis_claim_cannot_persist_completed_brief(isolated_db):
+    start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+    digest = _digest("superseded-completed")
+    old_claim = "a" * 32
+    current_claim = "b" * 32
+    assert auto_intelligence.claim_auto_analysis(
+        digest, interval_seconds=3600, claim_id=old_claim, now=start
+    ) == "claimed"
+    assert auto_intelligence.claim_auto_analysis(
+        digest,
+        interval_seconds=3600,
+        claim_id=current_claim,
+        now=start + timedelta(seconds=181),
+    ) == "claimed"
+
+    with pytest.raises(intelligence_store.StaleAutoAnalysisClaim):
+        intelligence_store.save_intelligence_brief(
+            snapshot_hash=digest,
+            model="synthetic-model",
+            actor_role="operator",
+            response={"executive_summary": "stale result"},
+            auto_claim_id=old_claim,
+            now=start + timedelta(seconds=182),
+        )
+    assert intelligence_store.cached_intelligence_brief(
+        digest, now=start + timedelta(seconds=183)
+    ) is None
+
+    intelligence_store.save_intelligence_brief(
+        snapshot_hash=digest,
+        model="synthetic-model",
+        actor_role="operator",
+        response={"executive_summary": "current result"},
+        auto_claim_id=current_claim,
+        now=start + timedelta(seconds=184),
+    )
+    cached = intelligence_store.cached_intelligence_brief(
+        digest, now=start + timedelta(seconds=185)
+    )
+    assert cached is not None
+    assert cached["response"]["executive_summary"] == "current result"
+
+
+def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db):
+    start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+    digest = _digest("superseded-failure")
+    old_claim = "c" * 32
+    current_claim = "d" * 32
+    assert auto_intelligence.claim_auto_analysis(
+        digest, interval_seconds=3600, claim_id=old_claim, now=start
+    ) == "claimed"
+    assert auto_intelligence.claim_auto_analysis(
+        digest,
+        interval_seconds=3600,
+        claim_id=current_claim,
+        now=start + timedelta(seconds=181),
+    ) == "claimed"
+
+    with pytest.raises(intelligence_store.StaleAutoAnalysisClaim):
+        intelligence_store.record_intelligence_failure(
+            snapshot_hash=digest,
+            model="synthetic-model",
+            actor_role="operator",
+            error_code="stale_failure",
+            auto_claim_id=old_claim,
+            now=start + timedelta(seconds=182),
+        )
+    assert intelligence_store.intelligence_metrics()["failed"] == 0
+
+    intelligence_store.record_intelligence_failure(
+        snapshot_hash=digest,
+        model="synthetic-model",
+        actor_role="operator",
+        error_code="current_failure",
+        auto_claim_id=current_claim,
+        now=start + timedelta(seconds=183),
+    )
+    assert intelligence_store.intelligence_metrics()["failed"] == 1
