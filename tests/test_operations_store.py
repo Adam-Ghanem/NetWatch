@@ -132,22 +132,25 @@ def test_alert_retention_is_bounded(monkeypatch, tmp_path):
     assert len(operations_store.recent_alerts(limit=20)) == 2
 
 
-def test_database_backup_is_a_readable_consistent_snapshot(monkeypatch, tmp_path):
+def test_database_backup_snapshot_is_a_readable_consistent_temporary_file(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     inventory_store.upsert_hosts([{"IP Address": "192.168.1.90", "Status": "Online"}])
 
-    content = operations_store.database_backup_bytes()
-    backup_path = tmp_path / "downloaded-backup.sqlite3"
-    backup_path.write_bytes(content)
+    backup_path, temporary = operations_store.database_backup_snapshot()
+    try:
+        assert backup_path.is_file()
+        with sqlite3.connect(backup_path) as conn:
+            asset = conn.execute(
+                "SELECT ip_address FROM assets WHERE ip_address = '192.168.1.90'"
+            ).fetchone()
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
 
-    with sqlite3.connect(backup_path) as conn:
-        asset = conn.execute(
-            "SELECT ip_address FROM assets WHERE ip_address = '192.168.1.90'"
-        ).fetchone()
-        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        assert asset == ("192.168.1.90",)
+        assert version == 11
+    finally:
+        temporary.cleanup()
 
-    assert asset == ("192.168.1.90",)
-    assert version == 11
+    assert not backup_path.exists()
 
 
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):

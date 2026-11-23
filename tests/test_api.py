@@ -818,7 +818,25 @@ def test_manual_policy_run_creates_alert_and_operator_can_acknowledge(monkeypatc
     assert viewer_update.status_code == 403
 
 
-def test_database_backup_is_admin_only_and_downloadable(monkeypatch, tmp_path):
+def test_database_backup_is_admin_only_streamed_and_cleaned_up(monkeypatch, tmp_path):
+    snapshot_paths: list[Path] = []
+    create_snapshot = api.database_backup_snapshot
+
+    def tracked_snapshot():
+        path, temporary = create_snapshot()
+        snapshot_paths.append(path)
+        return path, temporary
+
+    monkeypatch.setattr(api, "database_backup_snapshot", tracked_snapshot)
+    original_read_bytes = Path.read_bytes
+
+    def reject_snapshot_materialization(path: Path) -> bytes:
+        if path.name == "netwatch.sqlite3":
+            raise AssertionError("Backup response must stream the temporary file.")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", reject_snapshot_materialization)
+
     with _client(monkeypatch, tmp_path) as client:
         inventory_store.upsert_hosts([{"IP Address": "192.168.1.200"}])
         backup = client.get("/api/backups/database", headers=API_HEADERS)
@@ -837,8 +855,12 @@ def test_database_backup_is_admin_only_and_downloadable(monkeypatch, tmp_path):
     assert backup.status_code == 200
     assert backup.headers["content-type"] == "application/vnd.sqlite3"
     assert "netwatch-backup-" in backup.headers["content-disposition"]
+    assert backup.headers["cache-control"] == "no-store"
+    assert int(backup.headers["content-length"]) == len(backup.content)
     assert saved == ("192.168.1.200",)
     assert viewer_backup.status_code == 403
+    assert len(snapshot_paths) == 1
+    assert not snapshot_paths[0].exists()
 
 
 def test_due_scheduler_cycle_runs_claimed_policy_with_system_audit(monkeypatch, tmp_path):

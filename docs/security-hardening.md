@@ -66,7 +66,7 @@ Asset/company context, approved policies, maintenance windows, operational cases
 
 The authenticated metrics endpoint exports only fixed numeric counters. It does not use target, IP, hostname, owner, or free-text labels. It includes outbox pending/dead-letter and job active/failed gauges without payloads. Intelligence metrics are counts only and contain no model prompts, responses, safety identifiers, user identifiers, or targets.
 
-Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. Snapshots are sensitive and must be stored in an approved encrypted location. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database.
+Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. The temporary snapshot is streamed in 64 KiB chunks rather than materialized as one in-memory `bytes` object, and its temporary directory is cleaned after the response completes. The response is marked `Cache-Control: no-store`. Snapshots are sensitive and the temporary filesystem must be access-controlled; cleanup is not a secure-erasure guarantee. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database. See `docs/backup-download-streaming.md` for the response lifecycle and limits.
 
 ## Remaining production requirements
 

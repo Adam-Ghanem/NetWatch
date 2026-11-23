@@ -18,7 +18,8 @@ import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from starlette.background import BackgroundTask
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -138,7 +139,7 @@ from operations_store import (
     create_alerts_for_changes,
     create_maintenance_window,
     create_scan_policy,
-    database_backup_bytes,
+    database_backup_snapshot,
     enterprise_queue_metrics,
     maintenance_windows,
     notify_overdue_alert_transitions,
@@ -2043,24 +2044,31 @@ def test_notifications(
 
 
 @app.get("/api/backups/database")
-def database_backup(context: AuthContext = Depends(require_audited_admin_access)) -> Response:
-    content = database_backup_bytes()
-    record_audit_event(
-        context.role,
-        "database_backup",
-        "netwatch.db",
-        "completed",
-        "Consistent SQLite snapshot generated for authorized download.",
-        **context.audit_fields,
-    )
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return Response(
-        content=content,
-        media_type="application/vnd.sqlite3",
-        headers={
-            "Content-Disposition": (f'attachment; filename="netwatch-backup-{timestamp}.sqlite3"')
-        },
-    )
+def database_backup(
+    context: AuthContext = Depends(require_audited_admin_access),
+) -> FileResponse:
+    snapshot_path, temporary = database_backup_snapshot()
+    try:
+        record_audit_event(
+            context.role,
+            "database_backup",
+            "netwatch.db",
+            "completed",
+            "Consistent SQLite snapshot generated for authorized streaming download.",
+            **context.audit_fields,
+        )
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return FileResponse(
+            path=snapshot_path,
+            media_type="application/vnd.sqlite3",
+            filename=f"netwatch-backup-{timestamp}.sqlite3",
+            headers={"Cache-Control": "no-store"},
+            background=BackgroundTask(temporary.cleanup),
+            chunk_size=64 * 1024,
+        )
+    except BaseException:
+        temporary.cleanup()
+        raise
 
 
 @app.get("/api/history", dependencies=[Depends(require_api_access)])

@@ -1151,20 +1151,28 @@ def operations_metrics() -> dict[str, int]:
     }
 
 
-def database_backup_bytes() -> bytes:
+def database_backup_snapshot() -> tuple[Path, tempfile.TemporaryDirectory[str]]:
+    """Create a consistent SQLite snapshot for a caller-managed streamed response.
+
+    The caller owns the returned temporary directory and must clean it up after
+    the response has finished sending the snapshot.
+    """
     _, connect = _database_modules()
-    with tempfile.TemporaryDirectory(prefix="netwatch-backup-") as temp_dir:
-        backup_path = Path(temp_dir) / "netwatch.sqlite3"
+    temporary = tempfile.TemporaryDirectory(prefix="netwatch-backup-")
+    backup_path = Path(temporary.name) / "netwatch.sqlite3"
+    try:
         source = connect()
-        destination = sqlite3.connect(backup_path)
         try:
-            source.backup(destination)
+            destination = sqlite3.connect(backup_path)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
         finally:
-            destination.close()
             source.close()
-        if not backup_path.exists():
-            raise RuntimeError("SQLite backup did not produce a database file.")
-        content = backup_path.read_bytes()
-    if not content:
-        raise RuntimeError("SQLite backup is empty.")
-    return content
+        if not backup_path.is_file() or backup_path.stat().st_size <= 0:
+            raise RuntimeError("SQLite backup did not produce a non-empty database file.")
+        return backup_path, temporary
+    except BaseException:
+        temporary.cleanup()
+        raise
