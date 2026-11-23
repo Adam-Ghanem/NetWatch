@@ -493,3 +493,38 @@ def test_enterprise_event_sink_rejects_private_dns_answers(monkeypatch):
 
     with pytest.raises(enterprise_adapters.EnterpriseAdapterUnavailable):
         sink.publish({"kind": "synthetic-test"})
+
+
+def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
+    records = [_dns_record("93.184.216.34"), _dns_record("1.1.1.1")]
+    monkeypatch.setattr(
+        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
+    )
+    attempts = []
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout):
+            self.address = address
+
+        def connect(self):
+            attempts.append(("connect", self.address))
+
+        def request(self, method, selector, *, body, headers):
+            attempts.append(("request", self.address))
+            raise OSError("delivery outcome is unknown")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(OSError, match="delivery outcome is unknown"):
+        notifications._open_without_redirects(request, timeout=5)
+
+    assert attempts == [
+        ("connect", "93.184.216.34"),
+        ("request", "93.184.216.34"),
+    ]
