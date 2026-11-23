@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -93,10 +95,22 @@ def render_capture_result(
 
 
 def _read_capture(path: Path) -> bytes:
-    size = path.stat().st_size
-    if size > MAX_PCAP_BYTES:
-        raise ValueError(f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.")
-    return path.read_bytes()
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("Capture input must be a regular file.")
+        if metadata.st_size > MAX_PCAP_BYTES:
+            raise ValueError(f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.")
+        with os.fdopen(descriptor, "rb") as capture:
+            descriptor = -1
+            data = capture.read(MAX_PCAP_BYTES + 1)
+        if len(data) > MAX_PCAP_BYTES:
+            raise ValueError(f"Capture input exceeds the {MAX_PCAP_BYTES}-byte safety limit.")
+        return data
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
 
 
 def build_parser() -> argparse.ArgumentParser:
