@@ -1437,8 +1437,7 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         with closing(sqlite3.connect(snapshot)) as destination_connection:
             source_connection.backup(destination_connection)
             assert (
-                destination_connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
-                == "delete"
+                destination_connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
             )
 
     # Make the original data directory unavailable before the application starts.
