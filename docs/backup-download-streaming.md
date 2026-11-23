@@ -23,8 +23,9 @@ snapshot with SQLite's online backup API. It no longer calls
   regular, single-link file; hard-linked aliases are rejected before acquiring
   the OS lock so the lock cannot operate on the SQLite database or another
   aliased file. Symlink paths are rejected on platforms that expose
-  `O_NOFOLLOW`. Keep the database directory writable only by the NetWatch
-  service account. Do not remove the lock file while NetWatch processes are
+  `O_NOFOLLOW`. A POSIX regression verifies that a symlink lock path fails
+  before the target file's content or permissions can change. Keep the database
+  directory writable only by the NetWatch service account. Do not remove the lock file while NetWatch processes are
   running; the operating system releases the advisory lock when a process
   closes its descriptor or exits.
 - A dedicated `FileResponse` subclass removes the temporary directory in a
