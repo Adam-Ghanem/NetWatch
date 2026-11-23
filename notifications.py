@@ -450,6 +450,12 @@ def open_public_https_without_redirects(
             parsed.hostname, port, address, timeout=timeout
         )
         try:
+            connection.connect()
+        except (http.client.HTTPException, OSError) as exc:
+            connection.close()
+            last_error = exc
+            continue
+        try:
             connection.request(
                 request.get_method(),
                 request.selector,
@@ -457,10 +463,9 @@ def open_public_https_without_redirects(
                 headers=dict(request.header_items()),
             )
             response = connection.getresponse()
-        except (http.client.HTTPException, OSError) as exc:
+        except (http.client.HTTPException, OSError):
             connection.close()
-            last_error = exc
-            continue
+            raise
         return _PinnedHTTPResponse(connection, response)
     if last_error is not None:
         raise last_error
