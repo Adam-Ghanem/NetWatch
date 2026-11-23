@@ -19,9 +19,14 @@ snapshot with SQLite's online backup API. It no longer calls
   creating a snapshot. The lock remains held through response cleanup and is
   released if snapshot creation fails or the process exits.
 - The coordination file is persistent, contains no credentials or backup data,
-  and is created with owner-only permissions on POSIX systems. Do not remove it
-  while NetWatch processes are running; the operating system releases the
-  advisory lock when a process closes its descriptor or exits.
+  and is created with owner-only permissions on POSIX systems. It must be a
+  regular, single-link file; hard-linked aliases are rejected before acquiring
+  the OS lock so the lock cannot operate on the SQLite database or another
+  aliased file. Symlink paths are rejected on platforms that expose
+  `O_NOFOLLOW`. Keep the database directory writable only by the NetWatch
+  service account. Do not remove the lock file while NetWatch processes are
+  running; the operating system releases the advisory lock when a process
+  closes its descriptor or exits.
 - A dedicated `FileResponse` subclass removes the temporary directory in a
   `finally` block around the ASGI response call. Cleanup therefore also runs
   when sending raises (for example, a client disconnect), the response is
