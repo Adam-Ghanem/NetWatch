@@ -224,9 +224,7 @@ def save_intelligence_brief(
             # Hold SQLite's write reservation across the ownership check and insert.
             # A reclaimed claim cannot race this result into the cache.
             conn.execute("BEGIN IMMEDIATE")
-            _require_current_auto_analysis_claim(
-                conn, digest=digest, claim_id=auto_claim_id
-            )
+            _require_current_auto_analysis_claim(conn, digest=digest, claim_id=auto_claim_id)
         conn.execute(
             """
             INSERT INTO intelligence_events (
@@ -264,9 +262,7 @@ def record_intelligence_failure(
         if auto_claim_id is not None:
             # Serialize the claim check with the failure-event insert as well.
             conn.execute("BEGIN IMMEDIATE")
-            _require_current_auto_analysis_claim(
-                conn, digest=digest, claim_id=auto_claim_id
-            )
+            _require_current_auto_analysis_claim(conn, digest=digest, claim_id=auto_claim_id)
         conn.execute(
             """
             INSERT INTO intelligence_events (
