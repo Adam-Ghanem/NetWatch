@@ -213,6 +213,26 @@ def test_backup_lock_rejects_hard_link_alias_without_changing_target_permissions
     assert target_path.stat().st_mode & 0o777 == original_mode
 
 
+@pytest.mark.skipif(
+    os.name == "nt" or not getattr(os, "O_NOFOLLOW", 0),
+    reason="This regression requires POSIX O_NOFOLLOW support",
+)
+def test_backup_lock_rejects_symlink_without_changing_target_permissions(tmp_path):
+    target_path = tmp_path / "unrelated-sensitive-file"
+    target_path.write_text("do not mutate", encoding="utf-8")
+    target_path.chmod(0o640)
+    lock_path = tmp_path / ".netwatch-backup-download.lock"
+    lock_path.symlink_to(target_path)
+    original_mode = target_path.stat().st_mode & 0o777
+
+    lock = operations_store._BackupDownloadFileLock(lock_path)
+    with pytest.raises(OSError):
+        lock.acquire()
+
+    assert target_path.read_text(encoding="utf-8") == "do not mutate"
+    assert target_path.stat().st_mode & 0o777 == original_mode
+
+
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     first_run = inventory_store.add_scan_run("network", "192.168.2.0/24", "first")
