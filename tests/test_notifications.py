@@ -379,9 +379,7 @@ def test_notification_url_validation_rejects_non_public_ip_literals(candidate):
 
 def test_public_https_transport_rejects_mixed_public_and_private_dns_answers(monkeypatch):
     records = [_dns_record("93.184.216.34"), _dns_record("10.0.0.8")]
-    monkeypatch.setattr(
-        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
-    )
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
     monkeypatch.setattr(
         notifications.socket,
         "create_connection",
@@ -397,9 +395,7 @@ def test_public_https_transport_rejects_mixed_public_and_private_dns_answers(mon
 
 def test_public_https_transport_pins_resolved_ip_and_keeps_original_host(monkeypatch):
     records = [_dns_record("93.184.216.34")]
-    monkeypatch.setattr(
-        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
-    )
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
     connections = []
 
     class FakeResponse:
@@ -497,9 +493,7 @@ def test_enterprise_event_sink_rejects_private_dns_answers(monkeypatch):
 
 def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
     records = [_dns_record("93.184.216.34"), _dns_record("1.1.1.1")]
-    monkeypatch.setattr(
-        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
-    )
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
     attempts = []
 
     class FakeConnection:
