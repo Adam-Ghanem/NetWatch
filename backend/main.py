@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Callable, Iterator, Literal
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from starlette.background import BackgroundTask
+from starlette.types import Receive, Scope, Send
 
 from advisory_engine import advice_to_markdown, build_advice
 from ai_advisor import (
@@ -2043,6 +2043,25 @@ def test_notifications(
     return result.as_public_dict()
 
 
+class _TemporaryFileResponse(FileResponse):
+    """Clean up a private snapshot even when response sending is interrupted."""
+
+    def __init__(
+        self,
+        *args: Any,
+        cleanup: Callable[[], None],
+        **kwargs: Any,
+    ) -> None:
+        self._cleanup = cleanup
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._cleanup()
+
+
 @app.get("/api/backups/database")
 def database_backup(
     context: AuthContext = Depends(require_audited_admin_access),
@@ -2058,12 +2077,12 @@ def database_backup(
             **context.audit_fields,
         )
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        return FileResponse(
+        return _TemporaryFileResponse(
             path=snapshot_path,
             media_type="application/vnd.sqlite3",
             filename=f"netwatch-backup-{timestamp}.sqlite3",
             headers={"Cache-Control": "no-store"},
-            background=BackgroundTask(temporary.cleanup),
+            cleanup=temporary.cleanup,
         )
     except BaseException:
         temporary.cleanup()
