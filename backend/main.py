@@ -2213,7 +2213,12 @@ def _run_auto_intelligence_once() -> str:
         return "audit_unavailable"
     snapshot = _intelligence_snapshot()
     digest = _intelligence_digest(snapshot)
-    claim = claim_auto_analysis(digest, interval_seconds=AI_AUTO_INTERVAL_SECONDS)
+    claim_id = secrets.token_hex(16)
+    claim = claim_auto_analysis(
+        digest,
+        interval_seconds=AI_AUTO_INTERVAL_SECONDS,
+        claim_id=claim_id,
+    )
     if claim != "claimed":
         return claim
     try:
@@ -2228,10 +2233,11 @@ def _run_auto_intelligence_once() -> str:
             snapshot=snapshot,
         )
     except Exception:
-        finish_auto_analysis(digest, success=False)
+        finish_auto_analysis(digest, claim_id=claim_id, success=False)
         LOGGER.warning("Automatic AI analysis failed safely; local monitoring continues.")
         return "failed"
-    finish_auto_analysis(digest, success=True)
+    if not finish_auto_analysis(digest, claim_id=claim_id, success=True):
+        return "superseded"
     return "completed"
 
 
