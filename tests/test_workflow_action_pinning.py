@@ -11,9 +11,7 @@ ACTION_REFERENCE = re.compile(
 )
 VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
-SETUP_NODE_V6 = (
-    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
-)
+SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
