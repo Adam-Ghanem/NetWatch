@@ -27,18 +27,24 @@ def test_auto_analysis_claim_persists_across_calls_and_skips_unchanged(isolated_
     start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
     first, second = _digest("first"), _digest("second")
     first_claim_id = "a" * 32
-    assert auto_intelligence.claim_auto_analysis(
-        first,
-        interval_seconds=3600,
-        claim_id=first_claim_id,
-        now=start,
-    ) == "claimed"
-    assert auto_intelligence.claim_auto_analysis(
-        second,
-        interval_seconds=3600,
-        claim_id="b" * 32,
-        now=start + timedelta(minutes=10),
-    ) == "in_progress"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            first,
+            interval_seconds=3600,
+            claim_id=first_claim_id,
+            now=start,
+        )
+        == "claimed"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            second,
+            interval_seconds=3600,
+            claim_id="b" * 32,
+            now=start + timedelta(minutes=10),
+        )
+        == "in_progress"
+    )
     assert auto_intelligence.finish_auto_analysis(
         first,
         claim_id=first_claim_id,
@@ -46,30 +52,39 @@ def test_auto_analysis_claim_persists_across_calls_and_skips_unchanged(isolated_
         now=start + timedelta(minutes=1),
     )
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
-    assert auto_intelligence.claim_auto_analysis(
-        first,
-        interval_seconds=3600,
-        claim_id="c" * 32,
-        now=start + timedelta(days=1),
-    ) == "unchanged"
-    assert auto_intelligence.claim_auto_analysis(
-        second,
-        interval_seconds=3600,
-        claim_id="d" * 32,
-        now=start + timedelta(hours=1, seconds=1),
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            first,
+            interval_seconds=3600,
+            claim_id="c" * 32,
+            now=start + timedelta(days=1),
+        )
+        == "unchanged"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            second,
+            interval_seconds=3600,
+            claim_id="d" * 32,
+            now=start + timedelta(hours=1, seconds=1),
+        )
+        == "claimed"
+    )
 
 
 def test_auto_analysis_failure_throttled_and_later_retryable(isolated_db):
     start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
     digest = _digest("failure")
     claim_id = "e" * 32
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id=claim_id,
-        now=start,
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id=claim_id,
+            now=start,
+        )
+        == "claimed"
+    )
     assert auto_intelligence.finish_auto_analysis(
         digest,
         claim_id=claim_id,
@@ -77,18 +92,24 @@ def test_auto_analysis_failure_throttled_and_later_retryable(isolated_db):
         now=start,
     )
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "failed"
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id="f" * 32,
-        now=start + timedelta(minutes=20),
-    ) == "interval"
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id="1" * 32,
-        now=start + timedelta(hours=1),
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id="f" * 32,
+            now=start + timedelta(minutes=20),
+        )
+        == "interval"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id="1" * 32,
+            now=start + timedelta(hours=1),
+        )
+        == "claimed"
+    )
 
 
 def test_auto_analysis_rejects_invalid_digest_and_claim_id(isolated_db):
@@ -124,10 +145,7 @@ def test_auto_analysis_single_winner_across_simultaneous_claims(isolated_db):
         with lock:
             results.append(result)
 
-    threads = [
-        threading.Thread(target=worker, args=(index + 1,))
-        for index in range(4)
-    ]
+    threads = [threading.Thread(target=worker, args=(index + 1,)) for index in range(4)]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -161,24 +179,30 @@ def test_auto_analysis_reclaims_expired_legacy_claim_and_fences_stale_finisher(i
             (start.isoformat(timespec="seconds"), digest),
         )
 
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id=first_claim_id,
-        now=start + timedelta(seconds=60),
-    ) == "in_progress"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id=first_claim_id,
+            now=start + timedelta(seconds=60),
+        )
+        == "in_progress"
+    )
     with inventory_store._connect() as conn:
         columns = {
             row["name"]
             for row in conn.execute("PRAGMA table_info(intelligence_auto_state)").fetchall()
         }
     assert "pending_claim_id" in columns
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id=second_claim_id,
-        now=start + timedelta(seconds=181),
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id=second_claim_id,
+            now=start + timedelta(seconds=181),
+        )
+        == "claimed"
+    )
     assert not auto_intelligence.finish_auto_analysis(
         digest,
         claim_id=first_claim_id,
