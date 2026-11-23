@@ -258,14 +258,17 @@ def test_auto_cycle_uses_evidence_only_and_no_repeat_call(monkeypatch, isolated_
     monkeypatch.setattr(api, "_intelligence_snapshot", lambda: safe_snapshot)
     requests = []
 
-    def provider(*, refresh, context, snapshot):
-        requests.append((refresh, context.actor_id, snapshot))
+    def provider(*, refresh, context, snapshot, auto_claim_id):
+        requests.append((refresh, context.actor_id, snapshot, auto_claim_id))
         return {"cached": False}
 
     monkeypatch.setattr(api, "_produce_intelligence_brief", provider)
     assert api._run_auto_intelligence_once() == "completed"
     assert api._run_auto_intelligence_once() == "unchanged"
-    assert requests == [(False, "netwatch:automatic-analysis", safe_snapshot)]
+    assert len(requests) == 1
+    assert requests[0][:3] == (False, "netwatch:automatic-analysis", safe_snapshot)
+    assert len(requests[0][3]) == 32
+    assert all(character in "0123456789abcdef" for character in requests[0][3])
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
 
 
