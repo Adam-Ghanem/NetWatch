@@ -24,8 +24,28 @@ VIEWER_KEY = "notification-viewer-key-with-at-least-32-characters"
 AUDIT_KEY = "notification-audit-key-with-at-least-32-characters"
 
 
+class _FakeResponseSocket:
+    def settimeout(self, timeout: float) -> None:
+        self.timeout = timeout
+
+
+class _FakeResponseRaw:
+    def __init__(self, sock: _FakeResponseSocket) -> None:
+        self._sock = sock
+
+
+class _FakeResponseFile:
+    def __init__(self, sock: _FakeResponseSocket) -> None:
+        self.raw = _FakeResponseRaw(sock)
+
+
 class _FakeResponse:
     status = 204
+
+    def __init__(self) -> None:
+        self._socket = _FakeResponseSocket()
+        self.fp = _FakeResponseFile(self._socket)
+        self._read = False
 
     def __enter__(self):
         return self
@@ -36,8 +56,47 @@ class _FakeResponse:
     def getcode(self) -> int:
         return self.status
 
-    def read(self, _: int) -> bytes:
-        return b"ok"
+    def read1(self, limit: int) -> bytes:
+        if self._read:
+            return b""
+        self._read = True
+        return b"ok"[:limit]
+
+    def read(self, limit: int) -> bytes:
+        return self.read1(limit)
+
+
+def test_bounded_https_response_enforces_one_monotonic_deadline(monkeypatch):
+    now = [0.0]
+    socket_timeouts: list[float] = []
+
+    class SlowSocket:
+        def settimeout(self, timeout: float) -> None:
+            socket_timeouts.append(timeout)
+
+    class SlowRaw:
+        _sock = SlowSocket()
+
+    class SlowFile:
+        raw = SlowRaw()
+
+    class SlowResponse:
+        fp = SlowFile()
+
+        def read1(self, limit: int) -> bytes:
+            now[0] += 2.0
+            return b"x" * min(4, limit)
+
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+
+    with pytest.raises(TimeoutError, match="total body-read deadline"):
+        notifications.read_bounded_response(
+            SlowResponse(),
+            max_bytes=10,
+            timeout=5,
+        )
+
+    assert socket_timeouts == [5.0, 3.0, 1.0]
 
 
 def _configure_webhook(monkeypatch) -> None:
