@@ -13,12 +13,8 @@ VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
 SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
 CODECOV_ACTION_V6 = "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6"
-UPLOAD_ARTIFACT_V7 = (
-    "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7"
-)
-DOWNLOAD_ARTIFACT_V8 = (
-    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8"
-)
+UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7"
+DOWNLOAD_ARTIFACT_V8 = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8"
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
