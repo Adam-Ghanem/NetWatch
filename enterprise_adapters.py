@@ -14,8 +14,11 @@ from dataclasses import dataclass
 from typing import Any, Iterator
 
 from notifications import (
+    NOTIFICATION_RESPONSE_MAX_BYTES,
+    NOTIFICATION_TIMEOUT_SECONDS,
     NotificationConfigurationError,
     open_public_https_without_redirects,
+    read_bounded_response,
     validate_notification_url,
 )
 
@@ -138,17 +141,23 @@ class HttpsEventSink:
             method="POST",
         )
         try:
-            with open_public_https_without_redirects(request, timeout=5) as response:
+            with open_public_https_without_redirects(
+                request, timeout=NOTIFICATION_TIMEOUT_SECONDS
+            ) as response:
                 if not 200 <= int(response.status) < 300:
                     raise EnterpriseAdapterUnavailable("Event sink returned a non-success status.")
-                content = response.read(64 * 1024 + 1)
+                content = read_bounded_response(
+                    response,
+                    max_bytes=NOTIFICATION_RESPONSE_MAX_BYTES,
+                    timeout=NOTIFICATION_TIMEOUT_SECONDS,
+                )
         except NotificationConfigurationError:
             raise EnterpriseAdapterUnavailable(
                 "Event sink destination is not publicly routable."
             ) from None
         except OSError:
             raise EnterpriseAdapterUnavailable("Event sink transport is unavailable.") from None
-        if len(content) > 64 * 1024:
+        if len(content) > NOTIFICATION_RESPONSE_MAX_BYTES:
             raise EnterpriseAdapterUnavailable("Event sink response exceeds the size limit.")
 
 
