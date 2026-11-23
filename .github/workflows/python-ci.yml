@@ -34,7 +34,7 @@ jobs:
       - name: Check formatting and imports
         run: |
           black --check .
-          isort --check-only .
+          isort --check-only --diff .
 
       - name: Lint and type-check
         run: |
