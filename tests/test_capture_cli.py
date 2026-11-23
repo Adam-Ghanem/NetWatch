@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -247,3 +248,50 @@ def test_csv_render_reuses_formula_safe_flow_export() -> None:
 def test_render_rejects_unknown_output_format() -> None:
     with pytest.raises(ValueError, match="Output format"):
         capture_cli.render_capture_result({}, output_format="xml")
+
+
+
+def test_read_capture_accepts_bounded_regular_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(capture_cli, "MAX_PCAP_BYTES", 8)
+    path = tmp_path / "small.pcap"
+    path.write_bytes(b"pcap")
+
+    assert capture_cli._read_capture(path) == b"pcap"
+
+
+def test_read_capture_rejects_file_over_limit_before_read(tmp_path, monkeypatch):
+    monkeypatch.setattr(capture_cli, "MAX_PCAP_BYTES", 8)
+    path = tmp_path / "large.pcap"
+    path.write_bytes(b"x" * 9)
+
+    with pytest.raises(ValueError, match="safety limit"):
+        capture_cli._read_capture(path)
+
+
+def test_read_capture_rechecks_actual_bytes_after_stale_size_metadata(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(capture_cli, "MAX_PCAP_BYTES", 8)
+    path = tmp_path / "grew.pcap"
+    path.write_bytes(b"x" * 9)
+    real_fstat = os.fstat
+
+    def stale_fstat(descriptor):
+        metadata = list(real_fstat(descriptor))
+        metadata[6] = 4
+        return os.stat_result(metadata)
+
+    monkeypatch.setattr(capture_cli.os, "fstat", stale_fstat)
+
+    with pytest.raises(ValueError, match="safety limit"):
+        capture_cli._read_capture(path)
+
+
+def test_read_capture_rejects_non_regular_input_without_blocking(tmp_path):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO creation is unavailable on this platform")
+    path = tmp_path / "capture.pipe"
+    os.mkfifo(path)
+
+    with pytest.raises(ValueError, match="regular file"):
+        capture_cli._read_capture(path)
