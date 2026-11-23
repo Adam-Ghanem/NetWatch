@@ -2082,7 +2082,10 @@ def database_backup(
         _backup_download_slots.release()
         raise HTTPException(
             status_code=503,
-            detail="A database backup is already being prepared or downloaded by another worker. Retry later.",
+            detail=(
+                "A database backup is already being prepared or downloaded by another worker. "
+                "Retry later."
+            ),
             headers={"Retry-After": "30"},
         ) from exc
     except BaseException:
