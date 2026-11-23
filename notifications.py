@@ -10,6 +10,7 @@ import logging
 import os
 import queue
 import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -369,16 +370,16 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     """Connect to a vetted IP while retaining hostname-based TLS verification."""
 
     def __init__(self, host: str, port: int, address: str, *, timeout: int) -> None:
-        super().__init__(host, port=port, timeout=timeout)
+        self._tls_context = ssl.create_default_context()
+        super().__init__(host, port=port, timeout=timeout, context=self._tls_context)
         self._resolved_address = address
 
     def connect(self) -> None:
         sock = socket.create_connection(
             (self._resolved_address, self.port),
             self.timeout,
-            self.source_address,
         )
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        self.sock = self._tls_context.wrap_socket(sock, server_hostname=self.host)
 
 
 class _PinnedHTTPResponse:
