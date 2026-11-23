@@ -12,7 +12,7 @@ ACTION_REFERENCE = re.compile(
 VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
 SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
-CODECOV_ACTION_V6 = "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6"
+CODECOV_ACTION_V7_1_1 = "codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1"
 UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7"
 DOWNLOAD_ARTIFACT_V8 = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8"
 
@@ -58,7 +58,7 @@ def test_security_ci_uses_node24_action_without_implicit_package_cache() -> None
     assert "package-manager-cache: false" in workflow
 
 
-def test_python_ci_uses_reviewed_codecov_v6_with_isolated_oidc() -> None:
+def test_python_ci_uses_reviewed_codecov_v7_with_isolated_oidc_and_cleanup() -> None:
     workflow = (WORKFLOW_DIR / "python-ci.yml").read_text(encoding="utf-8")
     assert "\n  coverage:\n" in workflow
     test_job, coverage_job = workflow.split("\n  coverage:\n", maxsplit=1)
@@ -75,6 +75,8 @@ def test_python_ci_uses_reviewed_codecov_v6_with_isolated_oidc() -> None:
 
     assert f"uses: {DOWNLOAD_ARTIFACT_V8}" in coverage_job
     assert "name: python-coverage" in coverage_job
-    assert f"uses: {CODECOV_ACTION_V6}" in coverage_job
+    assert f"uses: {CODECOV_ACTION_V7_1_1}" in coverage_job
     assert "use_oidc: true" in coverage_job
+    assert "cleanup: true" in coverage_job
+    assert "disable_telem: true" in coverage_job
     assert "fail_ci_if_error: false" in coverage_job
