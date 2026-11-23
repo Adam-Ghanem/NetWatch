@@ -433,7 +433,7 @@ class _BoundedDNSResolver:
             raise ValueError("DNS resolver limits must be positive.")
         self._worker_count = workers
         self._timeout = timeout
-        self._jobs: queue.Queue[tuple[str, int, threading.Event, dict[str, Any]]] = (
+        self._jobs: queue.Queue[tuple[str, int, threading.Event, threading.Event, dict[str, Any]]] = (
             queue.Queue(maxsize=queue_size)
         )
         self._start_lock = threading.Lock()
@@ -441,16 +441,17 @@ class _BoundedDNSResolver:
 
     def _worker(self) -> None:
         while True:
-            host, port, completed, result = self._jobs.get()
+            host, port, completed, cancelled, result = self._jobs.get()
             try:
-                try:
-                    result["records"] = socket.getaddrinfo(
-                        host, port, type=socket.SOCK_STREAM
-                    )
-                except Exception as exc:
-                    result["error"] = (
-                        exc if isinstance(exc, OSError) else OSError("DNS resolution failed.")
-                    )
+                if not cancelled.is_set():
+                    try:
+                        result["records"] = socket.getaddrinfo(
+                            host, port, type=socket.SOCK_STREAM
+                        )
+                    except Exception as exc:
+                        result["error"] = (
+                            exc if isinstance(exc, OSError) else OSError("DNS resolution failed.")
+                        )
             finally:
                 completed.set()
                 self._jobs.task_done()
@@ -472,12 +473,14 @@ class _BoundedDNSResolver:
         """Return resolver records or fail closed within the configured deadline."""
         self._ensure_workers()
         completed = threading.Event()
+        cancelled = threading.Event()
         result: dict[str, Any] = {}
         try:
-            self._jobs.put_nowait((host, port, completed, result))
+            self._jobs.put_nowait((host, port, completed, cancelled, result))
         except queue.Full as exc:
             raise TimeoutError("DNS resolver queue is full.") from exc
         if not completed.wait(self._timeout):
+            cancelled.set()
             raise TimeoutError("DNS resolution timed out.")
         error = result.get("error")
         if error is not None:
