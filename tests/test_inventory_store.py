@@ -706,7 +706,9 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
     )
     assert inventory_store.recent_service_findings() == []
 
-def test_audit_readiness_cache_rechecks_external_database_mutations(monkeypatch, tmp_path):
+def test_audit_readiness_cache_rechecks_external_database_mutations(
+    monkeypatch, tmp_path
+):
     _use_temporary_database(monkeypatch, tmp_path)
     monkeypatch.setenv(
         "NETWATCH_AUDIT_HMAC_KEY",
@@ -719,7 +721,10 @@ def test_audit_readiness_cache_rechecks_external_database_mutations(monkeypatch,
     # Populate the positive cache, then simulate an out-of-process DB writer.
     assert inventory_store.audit_integrity_is_ready() is True
     with sqlite3.connect(inventory_store.DB_FILE) as conn:
-        conn.execute("UPDATE audit_log SET details = ? WHERE id = 1", ("External tampering.",))
+        conn.execute(
+            "UPDATE audit_log SET details = ? WHERE id = 1",
+            ("External tampering.",),
+        )
 
     # The DB/WAL file signature must invalidate the cached positive result.
     assert inventory_store.audit_integrity_is_ready() is False
