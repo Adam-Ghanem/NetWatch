@@ -416,6 +416,9 @@ def test_public_https_transport_pins_resolved_ip_and_keeps_original_host(monkeyp
             self.closed = False
             connections.append(self)
 
+        def connect(self):
+            self.connected = True
+
         def request(self, method, selector, *, body, headers):
             self.request_data = (method, selector, body, headers)
 
