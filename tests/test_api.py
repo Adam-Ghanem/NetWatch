@@ -1400,8 +1400,7 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
 
     with closing(inventory_store._connect()) as live:
         live.execute(
-            "INSERT INTO assets (ip_address, first_seen, last_seen, status) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO assets (ip_address, first_seen, last_seen, status) " "VALUES (?, ?, ?, ?)",
             ("192.0.2.10", "2026-11-23T20:00:00Z", "2026-11-23T20:00:00Z", "Online"),
         )
         cursor = live.execute(
