@@ -12,16 +12,17 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Callable, Iterator, Literal
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.types import Receive, Scope, Send
 
 from advisory_engine import advice_to_markdown, build_advice
 from ai_advisor import (
@@ -131,6 +132,7 @@ from notifications import (
     send_alert_notification,
 )
 from operations_store import (
+    BackupDownloadBusyError,
     MaintenanceWindowActiveError,
     alert_counts,
     claim_due_scan_policies,
@@ -138,7 +140,7 @@ from operations_store import (
     create_alerts_for_changes,
     create_maintenance_window,
     create_scan_policy,
-    database_backup_bytes,
+    database_backup_snapshot,
     enterprise_queue_metrics,
     maintenance_windows,
     notify_overdue_alert_transitions,
@@ -328,6 +330,8 @@ _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
 _capture_slots = threading.BoundedSemaphore(MAX_CONCURRENT_CAPTURES)
+_MAX_CONCURRENT_BACKUP_DOWNLOADS = 1
+_backup_download_slots = threading.BoundedSemaphore(_MAX_CONCURRENT_BACKUP_DOWNLOADS)
 _intelligence_rate_lock = threading.Lock()
 _intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
 _intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
@@ -2042,25 +2046,86 @@ def test_notifications(
     return result.as_public_dict()
 
 
+class _TemporaryFileResponse(FileResponse):
+    """Clean up a private snapshot even when response sending is interrupted."""
+
+    def __init__(
+        self,
+        *args: Any,
+        cleanup: Callable[[], None],
+        **kwargs: Any,
+    ) -> None:
+        self._cleanup = cleanup
+        super().__init__(*args, **kwargs)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._cleanup()
+
+
 @app.get("/api/backups/database")
-def database_backup(context: AuthContext = Depends(require_audited_admin_access)) -> Response:
-    content = database_backup_bytes()
-    record_audit_event(
-        context.role,
-        "database_backup",
-        "netwatch.db",
-        "completed",
-        "Consistent SQLite snapshot generated for authorized download.",
-        **context.audit_fields,
-    )
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return Response(
-        content=content,
-        media_type="application/vnd.sqlite3",
-        headers={
-            "Content-Disposition": (f'attachment; filename="netwatch-backup-{timestamp}.sqlite3"')
-        },
-    )
+def database_backup(
+    context: AuthContext = Depends(require_audited_admin_access),
+) -> FileResponse:
+    if not _backup_download_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="A database backup is already being prepared or downloaded. Retry later.",
+            headers={"Retry-After": "30"},
+        )
+
+    try:
+        snapshot_path, temporary = database_backup_snapshot()
+    except BackupDownloadBusyError as exc:
+        _backup_download_slots.release()
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "A database backup is already being prepared or downloaded by another worker. "
+                "Retry later."
+            ),
+            headers={"Retry-After": "30"},
+        ) from exc
+    except BaseException:
+        _backup_download_slots.release()
+        raise
+
+    cleanup_lock = threading.Lock()
+    cleanup_complete = False
+
+    def cleanup_snapshot() -> None:
+        nonlocal cleanup_complete
+        with cleanup_lock:
+            if cleanup_complete:
+                return
+            cleanup_complete = True
+        try:
+            temporary.cleanup()
+        finally:
+            _backup_download_slots.release()
+
+    try:
+        record_audit_event(
+            context.role,
+            "database_backup",
+            "netwatch.db",
+            "completed",
+            "Consistent SQLite snapshot generated for authorized streaming download.",
+            **context.audit_fields,
+        )
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return _TemporaryFileResponse(
+            path=snapshot_path,
+            media_type="application/vnd.sqlite3",
+            filename=f"netwatch-backup-{timestamp}.sqlite3",
+            headers={"Cache-Control": "no-store"},
+            cleanup=cleanup_snapshot,
+        )
+    except BaseException:
+        cleanup_snapshot()
+        raise
 
 
 @app.get("/api/history", dependencies=[Depends(require_api_access)])

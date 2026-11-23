@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import errno
 import logging
+import os
 import sqlite3
+import stat
 import tempfile
 import threading
 from dataclasses import dataclass
@@ -52,6 +55,118 @@ class MaintenanceWindowActiveError(RuntimeError):
     def __init__(self, window_name: str):
         self.window_name = window_name
         super().__init__(f"Policy is paused by maintenance window '{window_name}'.")
+
+
+class BackupDownloadBusyError(RuntimeError):
+    """Raised when another process owns the shared database-backup lock."""
+
+
+class _BackupDownloadFileLock:
+    """Cross-process advisory lock stored beside the shared SQLite database."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._fd: int | None = None
+        self._guard = threading.Lock()
+
+    def acquire(self) -> bool:
+        with self._guard:
+            if self._fd is not None:
+                raise RuntimeError("Backup lock is already held by this instance.")
+            flags = os.O_CREAT | os.O_RDWR
+            flags |= getattr(os, "O_CLOEXEC", 0)
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+            flags |= getattr(os, "O_BINARY", 0)
+            fd = os.open(self.path, flags, 0o600)
+            try:
+                lock_stat = os.fstat(fd)
+                if not stat.S_ISREG(lock_stat.st_mode):
+                    raise OSError(errno.EINVAL, "Backup lock must be a regular file.")
+                if lock_stat.st_nlink != 1:
+                    raise OSError(errno.EINVAL, "Backup lock must not be hard-linked.")
+                if os.name == "nt":
+                    if os.fstat(fd).st_size == 0:
+                        os.write(fd, b"0")
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    import msvcrt
+
+                    try:
+                        locking = getattr(msvcrt, "locking")
+                        nonblocking_lock = getattr(msvcrt, "LK_NBLCK")
+                        locking(fd, nonblocking_lock, 1)
+                    except OSError as exc:
+                        if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                            os.close(fd)
+                            return False
+                        raise
+                else:
+                    os.fchmod(fd, 0o600)
+                    import fcntl
+
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except OSError as exc:
+                        if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                            os.close(fd)
+                            return False
+                        raise
+            except BaseException:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                raise
+            self._fd = fd
+            return True
+
+    def release(self) -> None:
+        with self._guard:
+            fd = self._fd
+            self._fd = None
+            if fd is None:
+                return
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    locking = getattr(msvcrt, "locking")
+                    unlock = getattr(msvcrt, "LK_UNLCK")
+                    locking(fd, unlock, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+
+
+class _BackupSnapshotTemporaryDirectory:
+    """Tie temporary snapshot cleanup to release of its cross-process lock."""
+
+    def __init__(
+        self,
+        temporary: tempfile.TemporaryDirectory[str],
+        file_lock: _BackupDownloadFileLock,
+    ) -> None:
+        self._temporary = temporary
+        self._file_lock = file_lock
+        self._cleanup_guard = threading.Lock()
+        self._cleaned = False
+
+    @property
+    def name(self) -> str:
+        return self._temporary.name
+
+    def cleanup(self) -> None:
+        with self._cleanup_guard:
+            if self._cleaned:
+                return
+            self._cleaned = True
+        try:
+            self._temporary.cleanup()
+        finally:
+            self._file_lock.release()
 
 
 def _utc_now() -> str:
@@ -1151,20 +1266,40 @@ def operations_metrics() -> dict[str, int]:
     }
 
 
-def database_backup_bytes() -> bytes:
-    _, connect = _database_modules()
-    with tempfile.TemporaryDirectory(prefix="netwatch-backup-") as temp_dir:
-        backup_path = Path(temp_dir) / "netwatch.sqlite3"
+def database_backup_snapshot() -> tuple[Path, _BackupSnapshotTemporaryDirectory]:
+    """Create a consistent SQLite snapshot under a shared cross-process lock.
+
+    The returned cleanup handle owns both the private temporary directory and
+    the advisory lock. Call cleanup only after the streamed response finishes.
+    """
+    inventory_store, connect = _database_modules()
+    lock_path = inventory_store.DB_FILE.resolve().parent / ".netwatch-backup-download.lock"
+    file_lock = _BackupDownloadFileLock(lock_path)
+    if not file_lock.acquire():
+        raise BackupDownloadBusyError(
+            "Another process is preparing or streaming a database backup."
+        )
+
+    temporary: tempfile.TemporaryDirectory[str] | None = None
+    try:
+        temporary = tempfile.TemporaryDirectory(prefix="netwatch-backup-")
+        backup_path = Path(temporary.name) / "netwatch.sqlite3"
         source = connect()
-        destination = sqlite3.connect(backup_path)
         try:
-            source.backup(destination)
+            destination = sqlite3.connect(backup_path)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
         finally:
-            destination.close()
             source.close()
-        if not backup_path.exists():
-            raise RuntimeError("SQLite backup did not produce a database file.")
-        content = backup_path.read_bytes()
-    if not content:
-        raise RuntimeError("SQLite backup is empty.")
-    return content
+        if not backup_path.is_file() or backup_path.stat().st_size <= 0:
+            raise RuntimeError("SQLite backup did not produce a non-empty database file.")
+        return backup_path, _BackupSnapshotTemporaryDirectory(temporary, file_lock)
+    except BaseException:
+        try:
+            if temporary is not None:
+                temporary.cleanup()
+        finally:
+            file_lock.release()
+        raise

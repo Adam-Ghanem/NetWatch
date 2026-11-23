@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -132,22 +135,102 @@ def test_alert_retention_is_bounded(monkeypatch, tmp_path):
     assert len(operations_store.recent_alerts(limit=20)) == 2
 
 
-def test_database_backup_is_a_readable_consistent_snapshot(monkeypatch, tmp_path):
+def test_database_backup_snapshot_is_a_readable_consistent_temporary_file(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     inventory_store.upsert_hosts([{"IP Address": "192.168.1.90", "Status": "Online"}])
 
-    content = operations_store.database_backup_bytes()
-    backup_path = tmp_path / "downloaded-backup.sqlite3"
-    backup_path.write_bytes(content)
+    backup_path, temporary = operations_store.database_backup_snapshot()
+    try:
+        assert backup_path.is_file()
+        with sqlite3.connect(backup_path) as conn:
+            asset = conn.execute(
+                "SELECT ip_address FROM assets WHERE ip_address = '192.168.1.90'"
+            ).fetchone()
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
 
-    with sqlite3.connect(backup_path) as conn:
-        asset = conn.execute(
-            "SELECT ip_address FROM assets WHERE ip_address = '192.168.1.90'"
-        ).fetchone()
-        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        assert asset == ("192.168.1.90",)
+        assert version == 11
+    finally:
+        temporary.cleanup()
 
-    assert asset == ("192.168.1.90",)
-    assert version == 11
+    assert not backup_path.exists()
+
+
+def test_backup_snapshot_lock_coordinates_other_processes(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    backup_path, temporary = operations_store.database_backup_snapshot()
+    lock_path = inventory_store.DB_FILE.resolve().parent / ".netwatch-backup-download.lock"
+    program = (
+        "import sys; from pathlib import Path; "
+        "from operations_store import _BackupDownloadFileLock; "
+        "lock = _BackupDownloadFileLock(Path(sys.argv[1])); "
+        "acquired = lock.acquire(); "
+        "print('acquired' if acquired else 'busy'); "
+        "lock.release() if acquired else None"
+    )
+
+    try:
+        assert backup_path.is_file()
+        blocked = subprocess.run(
+            [sys.executable, "-c", program, str(lock_path)],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=10,
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        assert blocked.stdout.strip() == "busy"
+    finally:
+        temporary.cleanup()
+
+    released = subprocess.run(
+        [sys.executable, "-c", program, str(lock_path)],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=10,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert released.stdout.strip() == "acquired"
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX permission bits are required for this regression"
+)
+def test_backup_lock_rejects_hard_link_alias_without_changing_target_permissions(tmp_path):
+    target_path = tmp_path / "unrelated-sensitive-file"
+    target_path.write_text("do not mutate", encoding="utf-8")
+    target_path.chmod(0o640)
+    lock_path = tmp_path / ".netwatch-backup-download.lock"
+    lock_path.hardlink_to(target_path)
+    original_mode = target_path.stat().st_mode & 0o777
+
+    lock = operations_store._BackupDownloadFileLock(lock_path)
+    with pytest.raises(OSError, match="must not be hard-linked"):
+        lock.acquire()
+
+    assert target_path.read_text(encoding="utf-8") == "do not mutate"
+    assert target_path.stat().st_mode & 0o777 == original_mode
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or not getattr(os, "O_NOFOLLOW", 0),
+    reason="This regression requires POSIX O_NOFOLLOW support",
+)
+def test_backup_lock_rejects_symlink_without_changing_target_permissions(tmp_path):
+    target_path = tmp_path / "unrelated-sensitive-file"
+    target_path.write_text("do not mutate", encoding="utf-8")
+    target_path.chmod(0o640)
+    lock_path = tmp_path / ".netwatch-backup-download.lock"
+    lock_path.symlink_to(target_path)
+    original_mode = target_path.stat().st_mode & 0o777
+
+    lock = operations_store._BackupDownloadFileLock(lock_path)
+    with pytest.raises(OSError):
+        lock.acquire()
+
+    assert target_path.read_text(encoding="utf-8") == "do not mutate"
+    assert target_path.stat().st_mode & 0o777 == original_mode
 
 
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):
