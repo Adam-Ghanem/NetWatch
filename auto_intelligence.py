@@ -65,8 +65,8 @@ def claim_auto_analysis(
     interval = max(3600, min(int(interval_seconds), 86400))
     moment = _now(now)
     with _database() as conn:
-        _create_schema(conn)
         conn.execute("BEGIN IMMEDIATE")
+        _create_schema(conn)
         row = conn.execute(
             """
             SELECT last_attempt_at, last_success_digest, pending_digest
@@ -130,6 +130,7 @@ def finish_auto_analysis(
     if not _CLAIM_ID.fullmatch(claim_id):
         raise ValueError("Invalid AI analysis claim ID.")
     with _database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         cursor = conn.execute(
             """
@@ -157,6 +158,7 @@ def finish_auto_analysis(
 def auto_analysis_status() -> dict[str, str]:
     """Return only operational state, never private evidence hashes or claim tokens."""
     with _database() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         row = conn.execute(
             "SELECT last_attempt_at, last_success_at, last_outcome "
