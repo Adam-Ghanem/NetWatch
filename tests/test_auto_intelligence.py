@@ -310,21 +310,26 @@ def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     assert api._run_auto_intelligence_once() == "interval"
 
 
-
 def test_superseded_auto_analysis_claim_cannot_persist_completed_brief(isolated_db):
     start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
     digest = _digest("superseded-completed")
     old_claim = "a" * 32
     current_claim = "b" * 32
-    assert auto_intelligence.claim_auto_analysis(
-        digest, interval_seconds=3600, claim_id=old_claim, now=start
-    ) == "claimed"
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id=current_claim,
-        now=start + timedelta(seconds=181),
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest, interval_seconds=3600, claim_id=old_claim, now=start
+        )
+        == "claimed"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id=current_claim,
+            now=start + timedelta(seconds=181),
+        )
+        == "claimed"
+    )
 
     with pytest.raises(intelligence_store.StaleAutoAnalysisClaim):
         intelligence_store.save_intelligence_brief(
@@ -335,9 +340,10 @@ def test_superseded_auto_analysis_claim_cannot_persist_completed_brief(isolated_
             auto_claim_id=old_claim,
             now=start + timedelta(seconds=182),
         )
-    assert intelligence_store.cached_intelligence_brief(
-        digest, now=start + timedelta(seconds=183)
-    ) is None
+    assert (
+        intelligence_store.cached_intelligence_brief(digest, now=start + timedelta(seconds=183))
+        is None
+    )
 
     intelligence_store.save_intelligence_brief(
         snapshot_hash=digest,
@@ -359,15 +365,21 @@ def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db
     digest = _digest("superseded-failure")
     old_claim = "c" * 32
     current_claim = "d" * 32
-    assert auto_intelligence.claim_auto_analysis(
-        digest, interval_seconds=3600, claim_id=old_claim, now=start
-    ) == "claimed"
-    assert auto_intelligence.claim_auto_analysis(
-        digest,
-        interval_seconds=3600,
-        claim_id=current_claim,
-        now=start + timedelta(seconds=181),
-    ) == "claimed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest, interval_seconds=3600, claim_id=old_claim, now=start
+        )
+        == "claimed"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            digest,
+            interval_seconds=3600,
+            claim_id=current_claim,
+            now=start + timedelta(seconds=181),
+        )
+        == "claimed"
+    )
 
     with pytest.raises(intelligence_store.StaleAutoAnalysisClaim):
         intelligence_store.record_intelligence_failure(
