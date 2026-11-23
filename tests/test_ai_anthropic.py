@@ -170,7 +170,6 @@ def test_claude_redirect_is_rejected_without_following_location():
     assert caught.value.code == "provider_redirect_blocked"
 
 
-
 def test_claude_total_response_timeout_fails_closed(monkeypatch):
     class FakeResponse:
         def __enter__(self):
