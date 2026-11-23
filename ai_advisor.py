@@ -5,6 +5,7 @@ import hmac
 import json
 import re
 import socket
+import time
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -389,6 +390,62 @@ def _open_without_redirects(request: urllib.request.Request, timeout: int) -> An
     return opener.open(request, timeout=timeout)  # nosec B310
 
 
+def _response_socket(response: Any) -> Any | None:
+    """Find urllib's underlying socket without depending on one wrapper depth."""
+    pending = [response]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        candidate = getattr(current, "_sock", None)
+        if callable(getattr(candidate, "settimeout", None)):
+            return candidate
+        for attribute in ("fp", "raw"):
+            nested = getattr(current, attribute, None)
+            if nested is not None:
+                pending.append(nested)
+    return None
+
+
+def _read_bounded_response(
+    response: Any,
+    *,
+    deadline: float,
+    require_socket: bool = False,
+) -> bytes:
+    """Read a provider body in small chunks under one monotonic deadline."""
+    response_socket = _response_socket(response)
+    reader = getattr(response, "read1", None)
+    if not callable(reader):
+        if require_socket:
+            raise TimeoutError("Provider response lacks bounded incremental reads.")
+        reader = response.read
+    if require_socket and response_socket is None:
+        raise TimeoutError("Provider response socket cannot enforce a total deadline.")
+
+    chunks: list[bytes] = []
+    total = 0
+    while total <= 1_000_000:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Provider response exceeded its total deadline.")
+        if response_socket is not None:
+            try:
+                response_socket.settimeout(remaining)
+            except OSError as exc:
+                raise TimeoutError("Provider response socket is unavailable.") from exc
+        chunk = reader(min(64 * 1024, 1_000_001 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Provider response exceeded its total deadline.")
+    return b"".join(chunks)
+
+
 def request_intelligence_brief(
     snapshot: dict[str, Any],
     *,
@@ -418,11 +475,15 @@ def request_intelligence_brief(
         method="POST",
     )
     transport = opener or _open_without_redirects
+    timeout = max(5, min(int(timeout_seconds), 60))
+    deadline = time.monotonic() + timeout
     try:
-        with transport(
-            request, timeout=max(5, min(int(timeout_seconds), 60))
-        ) as response:  # nosec B310
-            raw = response.read(1_000_001)
+        with transport(request, timeout=timeout) as response:  # nosec B310
+            raw = _read_bounded_response(
+                response,
+                deadline=deadline,
+                require_socket=opener is None,
+            )
     except urllib.error.HTTPError as exc:
         raise _http_error(exc) from exc
     except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
