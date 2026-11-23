@@ -160,14 +160,12 @@ def test_backup_snapshot_lock_coordinates_other_processes(monkeypatch, tmp_path)
     backup_path, temporary = operations_store.database_backup_snapshot()
     lock_path = inventory_store.DB_FILE.resolve().parent / ".netwatch-backup-download.lock"
     program = (
-        "import sys\\n"
-        "from pathlib import Path\\n"
-        "from operations_store import _BackupDownloadFileLock\\n"
-        "lock = _BackupDownloadFileLock(Path(sys.argv[1]))\\n"
-        "acquired = lock.acquire()\\n"
-        "print('acquired' if acquired else 'busy')\\n"
-        "if acquired:\\n"
-        "    lock.release()\\n"
+        "import sys; from pathlib import Path; "
+        "from operations_store import _BackupDownloadFileLock; "
+        "lock = _BackupDownloadFileLock(Path(sys.argv[1])); "
+        "acquired = lock.acquire(); "
+        "print('acquired' if acquired else 'busy'); "
+        "lock.release() if acquired else None"
     )
 
     try:
