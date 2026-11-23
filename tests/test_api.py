@@ -6,10 +6,9 @@ import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
-
-from typing import Any
 from fastapi.testclient import TestClient
 
 import backend.main as api
