@@ -984,6 +984,30 @@ def test_database_backup_limits_concurrent_downloads_until_response_cleanup(monk
     slots.release()
 
 
+def test_database_backup_returns_503_when_another_worker_holds_file_lock(monkeypatch):
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(api, "_backup_download_slots", slots)
+
+    def busy_snapshot():
+        raise operations_store.BackupDownloadBusyError("synthetic cross-process lock contention")
+
+    monkeypatch.setattr(api, "database_backup_snapshot", busy_snapshot)
+    context = api.AuthContext(
+        role="admin",
+        actor_id="test-admin",
+        auth_method="test",
+        request_id="backup-cross-process-busy-test",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        api.database_backup(context=context)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.headers == {"Retry-After": "30"}
+    assert slots.acquire(blocking=False)
+    slots.release()
+
+
 def test_database_backup_releases_concurrency_slot_when_snapshot_creation_fails(
     monkeypatch,
 ):
