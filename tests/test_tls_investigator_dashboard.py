@@ -48,7 +48,9 @@ def test_tls_investigator_dashboard_is_csp_safe_and_uses_text_only_rendering() -
     assert "textContent" in javascript
     assert "certificate bodies" in html
     assert "subject/issuer strings" in html
-    assert "sessionStorage.getItem('netwatchApiKey')" in javascript
+    assert "readSessionSecret('netwatchApiKey')" in javascript
+    assert "sessionStorageAvailable" in javascript
+    assert "key remains in memory only until this page reloads" in javascript
 
 
 def test_tls_investigator_dashboard_persists_shareable_scope_without_secrets() -> None:
