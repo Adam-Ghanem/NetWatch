@@ -360,6 +360,69 @@ def _dns_record(address: str):
     return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)
 
 
+def test_public_https_transport_fails_closed_on_dns_timeout(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.02)
+    monkeypatch.setattr(notifications, "_DNS_RESOLVER", resolver)
+
+    def blocked_lookup(*args, **kwargs):
+        entered.set()
+        release.wait(timeout=1)
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", blocked_lookup)
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("TCP must not start after a DNS timeout."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    try:
+        with pytest.raises(TimeoutError, match="DNS resolution timed out"):
+            notifications._open_without_redirects(request, timeout=5)
+        assert entered.wait(timeout=1)
+    finally:
+        release.set()
+
+
+def test_bounded_dns_resolver_rejects_queue_overflow_when_workers_stall(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.05)
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: (entered.set(), release.wait(timeout=1), [_dns_record("93.184.216.34")])[-1],
+    )
+    first_errors: list[Exception] = []
+
+    def first_lookup():
+        try:
+            resolver.resolve("first.example.test", 443)
+        except Exception as exc:
+            first_errors.append(exc)
+
+    first = threading.Thread(target=first_lookup)
+    first.start()
+    try:
+        assert entered.wait(timeout=1)
+        with pytest.raises(TimeoutError, match="DNS resolution timed out"):
+            resolver.resolve("queued.example.test", 443)
+        with pytest.raises(TimeoutError, match="DNS resolver queue is full"):
+            resolver.resolve("overflow.example.test", 443)
+    finally:
+        release.set()
+        first.join(timeout=1)
+
+    assert not first.is_alive()
+    assert len(first_errors) == 1
+    assert isinstance(first_errors[0], TimeoutError)
+
+
 @pytest.mark.parametrize(
     "candidate",
     [
