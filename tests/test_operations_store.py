@@ -194,7 +194,9 @@ def test_backup_snapshot_lock_coordinates_other_processes(monkeypatch, tmp_path)
     assert released.stdout.strip() == "acquired"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are required for this regression")
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX permission bits are required for this regression"
+)
 def test_backup_lock_rejects_hard_link_alias_without_changing_target_permissions(tmp_path):
     target_path = tmp_path / "unrelated-sensitive-file"
     target_path.write_text("do not mutate", encoding="utf-8")
