@@ -88,7 +88,9 @@ class _BackupDownloadFileLock:
                     import msvcrt
 
                     try:
-                        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                        locking = getattr(msvcrt, "locking")
+                        nonblocking_lock = getattr(msvcrt, "LK_NBLCK")
+                        locking(fd, nonblocking_lock, 1)
                     except OSError as exc:
                         if exc.errno in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
                             os.close(fd)
@@ -125,7 +127,9 @@ class _BackupDownloadFileLock:
                     import msvcrt
 
                     os.lseek(fd, 0, os.SEEK_SET)
-                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                    locking = getattr(msvcrt, "locking")
+                    unlock = getattr(msvcrt, "LK_UNLCK")
+                    locking(fd, unlock, 1)
                 else:
                     import fcntl
 
