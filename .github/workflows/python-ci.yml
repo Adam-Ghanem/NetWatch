@@ -36,10 +36,6 @@ jobs:
           black --check .
           isort --check-only .
 
-      - name: Show formatter diff after a formatting failure
-        if: failure()
-        run: black --diff auto_intelligence.py tests/test_auto_intelligence.py
-
       - name: Lint and type-check
         run: |
           flake8 .
