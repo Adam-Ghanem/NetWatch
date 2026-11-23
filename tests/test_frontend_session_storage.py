@@ -12,8 +12,10 @@ def _source(path: Path) -> str:
 
 def _assert_storage_access_is_guarded(source: str) -> None:
     assert source.count("window.sessionStorage.getItem") == 1
-    assert source.count("window.sessionStorage.setItem") == 1
-    assert source.count("window.sessionStorage.removeItem") == 2
+    assert source.count("const storage = window.sessionStorage") == 1
+    assert source.count("storage.setItem") == 1
+    assert source.count("storage.removeItem") == 1
+    assert source.count("window.sessionStorage.removeItem") == 1
     assert "function readSessionSecret" in source
     assert "function writeSessionSecret" in source
     assert "try {" in source
