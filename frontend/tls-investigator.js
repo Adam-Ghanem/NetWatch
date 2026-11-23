@@ -1,7 +1,33 @@
 const keyInput = document.querySelector('#api-key');
 const statusNode = document.querySelector('#status');
-const savedKey = sessionStorage.getItem('netwatchApiKey') || '';
-keyInput.value = savedKey;
+
+function readSessionSecret(name) {
+  try {
+    return { value: window.sessionStorage.getItem(name) || '', available: true };
+  } catch (_) {
+    return { value: '', available: false };
+  }
+}
+
+function writeSessionSecret(name, value) {
+  try {
+    const storage = window.sessionStorage;
+    if (value) storage.setItem(name, value);
+    else storage.removeItem(name);
+    return true;
+  } catch (_) {
+    try {
+      window.sessionStorage.removeItem(name);
+    } catch (_) {
+      // Keep the key only in the input for this page; never use persistent storage.
+    }
+    return false;
+  }
+}
+
+const savedKeyState = readSessionSecret('netwatchApiKey');
+let sessionStorageAvailable = savedKeyState.available;
+keyInput.value = savedKeyState.value;
 
 function setStatus(message, kind = '') {
   statusNode.textContent = message;
@@ -278,7 +304,10 @@ async function loadEvidence() {
   const invalidScope = validateInvestigatorScope();
   if (invalidScope) return setStatus(invalidScope, 'error');
   syncScopeToUrl();
-  setStatus('Loading bounded retained TLS evidence…');
+  const storageNotice = sessionStorageAvailable
+    ? ''
+    : ' Browser session storage is unavailable; the key remains in memory only until this page reloads.';
+  setStatus(`Loading bounded retained TLS evidence…${storageNotice}`);
   try {
     const response = await fetch(investigatorUrl(), {
       headers: { 'X-NetWatch-Key': key, Accept: 'application/json' },
@@ -291,7 +320,10 @@ async function loadEvidence() {
     }
     const payload = await response.json();
     renderSnapshot(payload);
-    setStatus(`Loaded ${Number(payload.change_count || 0)} retained TLS change record(s).`, 'success');
+    const storageNotice = sessionStorageAvailable
+      ? ''
+      : ' The key is only in memory and will be lost on reload.';
+    setStatus(`Loaded ${Number(payload.change_count || 0)} retained TLS change record(s).${storageNotice}`, 'success');
   } catch (error) {
     setStatus(error.message || 'TLS investigator request failed.', 'error');
   }
@@ -299,8 +331,7 @@ async function loadEvidence() {
 
 document.querySelector('#save-key').addEventListener('click', () => {
   const key = String(keyInput.value || '').trim();
-  if (key) sessionStorage.setItem('netwatchApiKey', key);
-  else sessionStorage.removeItem('netwatchApiKey');
+  sessionStorageAvailable = writeSessionSecret('netwatchApiKey', key);
   loadEvidence();
 });
 document.querySelector('#apply').addEventListener('click', loadEvidence);
