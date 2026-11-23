@@ -52,6 +52,10 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
 - No provider has network scan, shell or remediation tools.
 - The app enforces rate/concurrency/time limits, daily AI budgets and
   provider/model-specific caching. Configure spend/rate caps at the provider.
+- Provider response bodies are read in 64 KiB chunks under one monotonic
+  deadline; the socket timeout is reduced to the remaining budget for each
+  chunk. This prevents a slow trickle response from holding an analysis worker
+  beyond its bounded response window. Responses remain capped at 1 MB.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
@@ -79,9 +83,14 @@ the supported single-instance/compatibility deployment modes; it never
 activates the unvalidated shared-service or multi-replica architecture.
 The first cycle runs when the application starts, then at each interval.
 A durable SQLite claim prevents duplicate requests within the configured
-interval, including after restart. **Unchanged evidence previously analyzed
-successfully is skipped**; failures are eligible for retry only after the
-interval. This prevents sending periodic duplicate provider requests just
+interval, including after restart. In-progress claims also carry a three-minute
+lease and a random per-attempt fencing token: concurrent workers wait while a
+claim is live, an abandoned claim can be reclaimed after the lease, and a late
+worker cannot clear or complete a newer claim. Cache and failure-event
+writes also verify the fencing token inside the same SQLite write transaction,
+so a superseded worker cannot persist a stale brief or failure record. **Unchanged evidence previously
+analyzed successfully is skipped**; failures are eligible for retry only after
+the interval. This prevents sending periodic duplicate provider requests just
 to generate activity.
 
 Every actual provider request still passes the existing key separation,

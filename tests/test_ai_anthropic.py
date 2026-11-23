@@ -6,6 +6,7 @@ from email.message import Message
 
 import pytest
 
+import ai_anthropic
 from ai_advisor import AIProviderError
 from ai_anthropic import (
     ANTHROPIC_MESSAGES_URL,
@@ -167,3 +168,28 @@ def test_claude_redirect_is_rejected_without_following_location():
             opener=reject,
         )
     assert caught.value.code == "provider_redirect_blocked"
+
+
+def test_claude_total_response_timeout_fails_closed(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def expire(*_, **__):
+        raise TimeoutError("Provider response exceeded its total deadline.")
+
+    monkeypatch.setattr(ai_anthropic, "_read_bounded_response", expire)
+
+    with pytest.raises(AIProviderError) as caught:
+        request_anthropic_intelligence_brief(
+            {"assets": {"total": 1}},
+            api_key="test-anthropic-provider-key-long-enough",
+            safety_id="nw_opaque_123",
+            model="claude-test-model",
+            opener=lambda *_args, **_kwargs: FakeResponse(),
+        )
+
+    assert caught.value.code == "provider_unavailable"

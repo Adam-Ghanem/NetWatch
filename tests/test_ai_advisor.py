@@ -6,6 +6,7 @@ import json
 import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 
 import pytest
 
@@ -363,3 +364,55 @@ def test_structured_provider_strings_are_individually_bounded():
 
     with pytest.raises(AIProviderError, match="invalid structured brief"):
         parse_openai_response({"output_text": json.dumps(payload)})
+
+
+def test_provider_response_body_uses_total_monotonic_deadline(monkeypatch):
+    clock = [100.0]
+    socket_timeouts = []
+
+    class FakeSocket:
+        def settimeout(self, value):
+            socket_timeouts.append(value)
+
+    class SlowResponse:
+        def __init__(self):
+            self.fp = SimpleNamespace(raw=SimpleNamespace(_sock=FakeSocket()))
+
+        def read1(self, _):
+            clock[0] += 2.0
+            return b"x"
+
+    monkeypatch.setattr(ai_advisor.time, "monotonic", lambda: clock[0])
+
+    with pytest.raises(TimeoutError, match="total deadline"):
+        ai_advisor._read_bounded_response(
+            SlowResponse(),
+            deadline=105.0,
+            require_socket=True,
+        )
+
+    assert socket_timeouts == [5.0, 3.0, 1.0]
+
+
+def test_openai_total_response_timeout_fails_closed(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def expire(*_, **__):
+        raise TimeoutError("Provider response exceeded its total deadline.")
+
+    monkeypatch.setattr(ai_advisor, "_read_bounded_response", expire)
+
+    with pytest.raises(AIProviderError) as caught:
+        request_intelligence_brief(
+            _snapshot(),
+            api_key="test-openai-project-key-with-enough-characters",
+            safety_id="nw_test_identifier",
+            opener=lambda *_args, **_kwargs: FakeResponse(),
+        )
+
+    assert caught.value.code == "provider_unavailable"

@@ -10,6 +10,11 @@ from typing import Any
 from config import AI_CACHE_TTL_SECONDS, MAX_INTELLIGENCE_EVENTS, MAX_SERVICE_FINDINGS
 
 _SNAPSHOT_HASH = re.compile(r"^[a-f0-9]{64}$")
+_AUTO_CLAIM_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+class StaleAutoAnalysisClaim(RuntimeError):
+    """Raised when an automatic-analysis worker no longer owns its claim."""
 
 
 def _utc_now(moment: datetime | None = None) -> str:
@@ -26,6 +31,23 @@ def _validated_hash(value: str) -> str:
     if not _SNAPSHOT_HASH.fullmatch(candidate):
         raise ValueError("Snapshot hash must be a lowercase SHA-256 digest.")
     return candidate
+
+
+def _require_current_auto_analysis_claim(
+    conn: sqlite3.Connection, *, digest: str, claim_id: str
+) -> None:
+    candidate = str(claim_id).strip()
+    if not _AUTO_CLAIM_ID.fullmatch(candidate):
+        raise ValueError("Invalid AI analysis claim ID.")
+    row = conn.execute(
+        """
+        SELECT 1 FROM intelligence_auto_state
+        WHERE id = 1 AND pending_digest = ? AND pending_claim_id = ?
+        """,
+        (digest, candidate),
+    ).fetchone()
+    if row is None:
+        raise StaleAutoAnalysisClaim("Automatic analysis claim was superseded.")
 
 
 def _database_modules() -> tuple[Any, Any]:
@@ -185,6 +207,7 @@ def save_intelligence_brief(
     provider_request_id: str = "",
     input_tokens: int = 0,
     output_tokens: int = 0,
+    auto_claim_id: str | None = None,
     ttl_seconds: int = AI_CACHE_TTL_SECONDS,
     now: datetime | None = None,
 ) -> None:
@@ -197,6 +220,11 @@ def save_intelligence_brief(
         raise ValueError("Intelligence brief exceeds the storage limit.")
     _, connect = _database_modules()
     with connect() as conn:
+        if auto_claim_id is not None:
+            # Hold SQLite's write reservation across the ownership check and insert.
+            # A reclaimed claim cannot race this result into the cache.
+            conn.execute("BEGIN IMMEDIATE")
+            _require_current_auto_analysis_claim(conn, digest=digest, claim_id=auto_claim_id)
         conn.execute(
             """
             INSERT INTO intelligence_events (
@@ -225,11 +253,16 @@ def record_intelligence_failure(
     model: str,
     actor_role: str,
     error_code: str,
+    auto_claim_id: str | None = None,
     now: datetime | None = None,
 ) -> None:
     digest = _validated_hash(snapshot_hash)
     _, connect = _database_modules()
     with connect() as conn:
+        if auto_claim_id is not None:
+            # Serialize the claim check with the failure-event insert as well.
+            conn.execute("BEGIN IMMEDIATE")
+            _require_current_auto_analysis_claim(conn, digest=digest, claim_id=auto_claim_id)
         conn.execute(
             """
             INSERT INTO intelligence_events (

@@ -92,6 +92,7 @@ from flow_observability import (
 )
 from host_profiler import profile_host
 from intelligence_store import (
+    StaleAutoAnalysisClaim,
     cached_intelligence_brief,
     daily_provider_request_count,
     intelligence_metrics,
@@ -2213,7 +2214,12 @@ def _run_auto_intelligence_once() -> str:
         return "audit_unavailable"
     snapshot = _intelligence_snapshot()
     digest = _intelligence_digest(snapshot)
-    claim = claim_auto_analysis(digest, interval_seconds=AI_AUTO_INTERVAL_SECONDS)
+    claim_id = secrets.token_hex(16)
+    claim = claim_auto_analysis(
+        digest,
+        interval_seconds=AI_AUTO_INTERVAL_SECONDS,
+        claim_id=claim_id,
+    )
     if claim != "claimed":
         return claim
     try:
@@ -2226,12 +2232,16 @@ def _run_auto_intelligence_once() -> str:
                 request_id="",
             ),
             snapshot=snapshot,
+            auto_claim_id=claim_id,
         )
+    except StaleAutoAnalysisClaim:
+        return "superseded"
     except Exception:
-        finish_auto_analysis(digest, success=False)
+        finish_auto_analysis(digest, claim_id=claim_id, success=False)
         LOGGER.warning("Automatic AI analysis failed safely; local monitoring continues.")
         return "failed"
-    finish_auto_analysis(digest, success=True)
+    if not finish_auto_analysis(digest, claim_id=claim_id, success=True):
+        return "superseded"
     return "completed"
 
 
@@ -2295,7 +2305,11 @@ def _intelligence_digest(snapshot: dict[str, Any]) -> str:
 
 
 def _produce_intelligence_brief(
-    *, refresh: bool, context: AuthContext, snapshot: dict[str, Any] | None = None
+    *,
+    refresh: bool,
+    context: AuthContext,
+    snapshot: dict[str, Any] | None = None,
+    auto_claim_id: str | None = None,
 ) -> dict[str, Any]:
     if snapshot is None:
         snapshot = _intelligence_snapshot()
@@ -2372,6 +2386,7 @@ def _produce_intelligence_brief(
             provider_request_id=result.provider_request_id,
             input_tokens=result.input_tokens,
             output_tokens=result.output_tokens,
+            auto_claim_id=auto_claim_id,
         )
         record_audit_event(
             context.role,
@@ -2391,6 +2406,8 @@ def _produce_intelligence_brief(
             expires_at=expires_at,
             cached=False,
         )
+    except StaleAutoAnalysisClaim:
+        raise
     except HTTPException:
         raise
     except AIProviderError as exc:
@@ -2399,6 +2416,7 @@ def _produce_intelligence_brief(
             model=AI_MODEL,
             actor_role=context.role,
             error_code=exc.code,
+            auto_claim_id=auto_claim_id,
         )
         record_audit_event(
             context.role,
@@ -2415,6 +2433,7 @@ def _produce_intelligence_brief(
             model=AI_MODEL,
             actor_role=context.role,
             error_code="internal_error",
+            auto_claim_id=auto_claim_id,
         )
         record_audit_event(
             context.role,
