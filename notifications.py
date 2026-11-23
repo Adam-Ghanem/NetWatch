@@ -137,13 +137,26 @@ _worker_lock = threading.Lock()
 _workers_started = False
 
 
+_RESERVED_IPV6_DESTINATION_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("::/96"),
+)
+
+
 def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if isinstance(address, ipaddress.IPv6Address):
         if address.ipv4_mapped is not None:
             address = address.ipv4_mapped
-        elif address.sixtofour is not None or address.teredo is not None:
+        elif (
+            address.is_reserved
+            or any(address in network for network in _RESERVED_IPV6_DESTINATION_NETWORKS)
+            or address.sixtofour is not None
+            or address.teredo is not None
+        ):
+            # Do not trust is_global alone for IPv6 translation/compatibility ranges.
             return False
-    return address.is_global
+    return address.is_global and not address.is_reserved
 
 
 def validate_notification_url(value: str, *, field_name: str = "Notification URL") -> str:
