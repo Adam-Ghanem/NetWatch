@@ -79,9 +79,12 @@ the supported single-instance/compatibility deployment modes; it never
 activates the unvalidated shared-service or multi-replica architecture.
 The first cycle runs when the application starts, then at each interval.
 A durable SQLite claim prevents duplicate requests within the configured
-interval, including after restart. **Unchanged evidence previously analyzed
-successfully is skipped**; failures are eligible for retry only after the
-interval. This prevents sending periodic duplicate provider requests just
+interval, including after restart. In-progress claims also carry a three-minute
+lease and a random per-attempt fencing token: concurrent workers wait while a
+claim is live, an abandoned claim can be reclaimed after the lease, and a late
+worker cannot clear or complete a newer claim. **Unchanged evidence previously
+analyzed successfully is skipped**; failures are eligible for retry only after
+the interval. This prevents sending periodic duplicate provider requests just
 to generate activity.
 
 Every actual provider request still passes the existing key separation,
