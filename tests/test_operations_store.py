@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -151,6 +153,46 @@ def test_database_backup_snapshot_is_a_readable_consistent_temporary_file(monkey
         temporary.cleanup()
 
     assert not backup_path.exists()
+
+
+def test_backup_snapshot_lock_coordinates_other_processes(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    backup_path, temporary = operations_store.database_backup_snapshot()
+    lock_path = inventory_store.DB_FILE.resolve().parent / ".netwatch-backup-download.lock"
+    program = (
+        "import sys\\n"
+        "from pathlib import Path\\n"
+        "from operations_store import _BackupDownloadFileLock\\n"
+        "lock = _BackupDownloadFileLock(Path(sys.argv[1]))\\n"
+        "acquired = lock.acquire()\\n"
+        "print('acquired' if acquired else 'busy')\\n"
+        "if acquired:\\n"
+        "    lock.release()\\n"
+    )
+
+    try:
+        assert backup_path.is_file()
+        blocked = subprocess.run(
+            [sys.executable, "-c", program, str(lock_path)],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=10,
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        assert blocked.stdout.strip() == "busy"
+    finally:
+        temporary.cleanup()
+
+    released = subprocess.run(
+        [sys.executable, "-c", program, str(lock_path)],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=10,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert released.stdout.strip() == "acquired"
 
 
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):
