@@ -433,9 +433,9 @@ class _BoundedDNSResolver:
             raise ValueError("DNS resolver limits must be positive.")
         self._worker_count = workers
         self._timeout = timeout
-        self._jobs: queue.Queue[tuple[str, int, threading.Event, threading.Event, dict[str, Any]]] = (
-            queue.Queue(maxsize=queue_size)
-        )
+        self._jobs: queue.Queue[
+            tuple[str, int, threading.Event, threading.Event, dict[str, Any]]
+        ] = queue.Queue(maxsize=queue_size)
         self._start_lock = threading.Lock()
         self._started = False
 
@@ -445,9 +445,7 @@ class _BoundedDNSResolver:
             try:
                 if not cancelled.is_set():
                     try:
-                        result["records"] = socket.getaddrinfo(
-                            host, port, type=socket.SOCK_STREAM
-                        )
+                        result["records"] = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
                     except Exception as exc:
                         result["error"] = (
                             exc if isinstance(exc, OSError) else OSError("DNS resolution failed.")
