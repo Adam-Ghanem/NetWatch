@@ -449,6 +449,8 @@ def _read_bounded_response(
         total += len(chunk)
         if time.monotonic() >= deadline:
             raise TimeoutError("Provider response exceeded its total deadline.")
+    if time.monotonic() >= deadline:
+        raise TimeoutError("Provider response exceeded its total deadline.")
     return b"".join(chunks)
 
 
