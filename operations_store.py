@@ -79,8 +79,11 @@ class _BackupDownloadFileLock:
             flags |= getattr(os, "O_BINARY", 0)
             fd = os.open(self.path, flags, 0o600)
             try:
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                lock_stat = os.fstat(fd)
+                if not stat.S_ISREG(lock_stat.st_mode):
                     raise OSError(errno.EINVAL, "Backup lock must be a regular file.")
+                if lock_stat.st_nlink != 1:
+                    raise OSError(errno.EINVAL, "Backup lock must not be hard-linked.")
                 if os.name == "nt":
                     if os.fstat(fd).st_size == 0:
                         os.write(fd, b"0")
