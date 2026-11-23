@@ -921,9 +921,7 @@ def test_database_backup_cleans_temporary_snapshot_when_response_is_interrupted(
         assert sent[0]["status"] == 400
 
 
-def test_database_backup_limits_concurrent_downloads_until_response_cleanup(
-    monkeypatch, tmp_path
-):
+def test_database_backup_limits_concurrent_downloads_until_response_cleanup(monkeypatch, tmp_path):
     slots = threading.BoundedSemaphore(1)
     monkeypatch.setattr(api, "_backup_download_slots", slots)
     temporary = tempfile.TemporaryDirectory(dir=tmp_path)
