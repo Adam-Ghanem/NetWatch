@@ -366,7 +366,6 @@ def test_structured_provider_strings_are_individually_bounded():
         parse_openai_response({"output_text": json.dumps(payload)})
 
 
-
 def test_provider_response_body_uses_total_monotonic_deadline(monkeypatch):
     clock = [100.0]
     socket_timeouts = []
