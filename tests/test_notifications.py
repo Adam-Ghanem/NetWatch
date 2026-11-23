@@ -370,6 +370,9 @@ def _dns_record(address: str):
         "https://[fc00::1]/netwatch",
         "https://[::ffff:127.0.0.1]/netwatch",
         "https://[2002:7f00:1::]/netwatch",
+        "https://[64:ff9b::a00:1]/netwatch",
+        "https://[64:ff9b:1::a00:1]/netwatch",
+        "https://[::a00:1]/netwatch",
     ],
 )
 def test_notification_url_validation_rejects_non_public_ip_literals(candidate):
@@ -384,6 +387,33 @@ def test_public_https_transport_rejects_mixed_public_and_private_dns_answers(mon
         notifications.socket,
         "create_connection",
         lambda *args, **kwargs: pytest.fail("A non-public DNS answer must block connection."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications._open_without_redirects(request, timeout=5)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "64:ff9b::a00:1",
+        "64:ff9b:1::a00:1",
+        "::a00:1",
+    ],
+)
+def test_public_https_transport_rejects_ipv6_translation_dns_answers(monkeypatch, address):
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record(address)],
+    )
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("IPv6 translation destinations must not connect."),
     )
     request = urllib.request.Request(
         "https://hooks.example.test/netwatch", data=b"{}", method="POST"
