@@ -424,7 +424,10 @@ def _read_bounded_response(
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("Provider response exceeded its total deadline.")
-        return response.read(1_000_001)
+        raw = response.read(1_000_001)
+        if time.monotonic() >= deadline:
+            raise TimeoutError("Provider response exceeded its total deadline.")
+        return raw
     if require_socket and response_socket is None:
         raise TimeoutError("Provider response socket cannot enforce a total deadline.")
 
