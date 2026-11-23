@@ -86,7 +86,9 @@ A durable SQLite claim prevents duplicate requests within the configured
 interval, including after restart. In-progress claims also carry a three-minute
 lease and a random per-attempt fencing token: concurrent workers wait while a
 claim is live, an abandoned claim can be reclaimed after the lease, and a late
-worker cannot clear or complete a newer claim. **Unchanged evidence previously
+worker cannot clear or complete a newer claim. Cache and failure-event
+writes also verify the fencing token inside the same SQLite write transaction,
+so a superseded worker cannot persist a stale brief or failure record. **Unchanged evidence previously
 analyzed successfully is skipped**; failures are eligible for retry only after
 the interval. This prevents sending periodic duplicate provider requests just
 to generate activity.
