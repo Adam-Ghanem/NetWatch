@@ -70,6 +70,43 @@ def test_delivery_recovers_after_restart_and_records_receipt(monkeypatch, tmp_pa
     assert sent[0][1]["event_id"] == status["receipts"][0]["event_id"]
 
 
+def test_successful_delivery_scrubs_payload_but_preserves_receipt_metadata(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+        before = conn.execute(
+            "SELECT event_id, payload FROM notification_deliveries"
+        ).fetchone()
+
+    delivered = []
+
+    def mock_delivery(kind, payload):
+        delivered.append((kind, payload))
+        return notifications.ChannelNotificationResult(kind, "delivered", 1)
+
+    monkeypatch.setattr(outbox, "deliver_stored_notification", mock_delivery)
+    result = outbox.process_notification_receipts_once()
+    with inventory_store._connect() as conn:
+        after = conn.execute(
+            """
+            SELECT event_id, payload, status, attempts, delivered_at, last_result
+            FROM notification_deliveries
+            """
+        ).fetchone()
+
+    assert result["delivered"] == 1
+    assert delivered[0][1]["event_id"] == before["event_id"]
+    assert after["event_id"] == before["event_id"]
+    assert after["payload"] == "{}"
+    assert after["status"] == "delivered"
+    assert after["attempts"] == 1
+    assert after["delivered_at"]
+    assert after["last_result"] == "delivered"
+
+
 def test_transient_failure_is_delayed_and_does_not_hammer(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
@@ -83,6 +120,9 @@ def test_transient_failure_is_delayed_and_does_not_hammer(monkeypatch, tmp_path)
     assert outbox.process_notification_receipts_once()["retry_pending"] == 1
     assert outbox.process_notification_receipts_once()["claimed"] == 0
     assert outbox.notification_delivery_status()["receipts"][0]["last_result"] == "failed"
+    with inventory_store._connect() as conn:
+        row = conn.execute("SELECT event_id, payload FROM notification_deliveries").fetchone()
+    assert json.loads(row["payload"])["event_id"] == row["event_id"]
 
 
 def test_deferred_disabled_channel_does_not_consume_retry_budget(monkeypatch, tmp_path):

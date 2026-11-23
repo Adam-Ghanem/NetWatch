@@ -2,6 +2,7 @@
 
 A crash after webhook acceptance but before acknowledgement can cause replay;
 consumers should deduplicate the stable event_id. No destination URLs are persisted.
+A successful local acknowledgement clears the stored payload body; receipt metadata remains.
 """
 
 from __future__ import annotations
@@ -163,11 +164,14 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
             cursor = conn.execute(
                 """
                 UPDATE notification_deliveries SET
-                    status = ?, available_at = ?, claimed_at = '', claim_token = '',
+                    status = ?,
+                    payload = CASE WHEN ? = 'delivered' THEN '{}' ELSE payload END,
+                    available_at = ?, claimed_at = '', claim_token = '',
                     delivered_at = ?, last_result = ?, attempts = attempts - ?
                 WHERE id = ? AND status = 'pending' AND claim_token = ?
                 """,
                 (
+                    state,
                     state,
                     _iso(_now() + timedelta(seconds=delay)),
                     _iso(_now()) if state == "delivered" else "",
