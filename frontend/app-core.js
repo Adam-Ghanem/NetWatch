@@ -13,8 +13,33 @@ function sameOriginApiBase(value) {
 
 const API_BASE = sameOriginApiBase(window.NETWATCH_API_BASE);
 
+function readSessionSecret(name) {
+  try {
+    return window.sessionStorage.getItem(name) || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function writeSessionSecret(name, value) {
+  try {
+    const storage = window.sessionStorage;
+    if (value) storage.setItem(name, value);
+    else storage.removeItem(name);
+    return true;
+  } catch (_) {
+    // Storage can be unavailable in private, embedded, or restricted contexts.
+    try {
+      window.sessionStorage.removeItem(name);
+    } catch (_) {
+      // Keep the key only in memory; never fall back to persistent storage.
+    }
+    return false;
+  }
+}
+
 const state = {
-  key: sessionStorage.getItem('netwatchApiKey') || '',
+  key: readSessionSecret('netwatchApiKey'),
   view: 'overview',
   health: null,
   role: '',
@@ -72,8 +97,7 @@ const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selec
 
 function setApiKey(value) {
   state.key = String(value || '').trim();
-  if (state.key) sessionStorage.setItem('netwatchApiKey', state.key);
-  else sessionStorage.removeItem('netwatchApiKey');
+  return writeSessionSecret('netwatchApiKey', state.key);
 }
 
 async function apiFetch(path, options = {}) {
@@ -508,8 +532,11 @@ async function connectSession() {
 }
 
 async function connectWithKey(key) {
-  setApiKey(key);
-  return connectSession();
+  const persisted = setApiKey(key);
+  await connectSession();
+  if (state.key && !persisted) {
+    showToast('Connected. Browser session storage is unavailable; the key stays in memory only until this page reloads.');
+  }
 }
 
 async function connectWithCompanySso() {
