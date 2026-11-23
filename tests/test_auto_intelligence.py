@@ -41,7 +41,7 @@ def test_auto_analysis_claim_persists_across_calls_and_skips_unchanged(isolated_
             second,
             interval_seconds=3600,
             claim_id="b" * 32,
-            now=start + timedelta(minutes=10),
+            now=start + timedelta(seconds=60),
         )
         == "in_progress"
     )
@@ -52,6 +52,15 @@ def test_auto_analysis_claim_persists_across_calls_and_skips_unchanged(isolated_
         now=start + timedelta(minutes=1),
     )
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            second,
+            interval_seconds=3600,
+            claim_id="c" * 32,
+            now=start + timedelta(minutes=10),
+        )
+        == "interval"
+    )
     assert (
         auto_intelligence.claim_auto_analysis(
             first,
