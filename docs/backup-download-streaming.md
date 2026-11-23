@@ -12,9 +12,15 @@ snapshot with SQLite's online backup API. It no longer calls
 - Starlette `FileResponse` uses its built-in bounded 64 KiB file-read chunks (the installed Starlette API does not accept a per-response `chunk_size` argument).
 - The response keeps the SQLite media type and timestamped attachment filename
   and adds `Cache-Control: no-store`.
-- A response background task removes the temporary directory after the
-  response lifecycle completes. If the process is terminated abruptly, normal
-  operating-system/container temporary-file cleanup is still required.
+- A dedicated `FileResponse` subclass removes the temporary directory in a
+  `finally` block around the ASGI response call. Cleanup therefore also runs
+  when sending raises (for example, a client disconnect), the response is
+  cancelled, or Starlette returns early for a malformed/unsatisfiable Range
+  header. The installed Starlette 1.3.1 implementation invokes a background
+  task only after its normal send path; its early Range returns and send errors
+  bypass that call ([upstream source](https://github.com/Kludex/starlette/blob/1.3.1/starlette/responses.py)).
+  If the process is terminated abruptly, operating-system/container temporary-file
+  cleanup is still required.
 
 ## Operational limits
 
