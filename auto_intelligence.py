@@ -67,12 +67,10 @@ def claim_auto_analysis(
     with _database() as conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
-        row = conn.execute(
-            """
+        row = conn.execute("""
             SELECT last_attempt_at, last_success_digest, pending_digest
             FROM intelligence_auto_state WHERE id = 1
-            """
-        ).fetchone()
+            """).fetchone()
         if row is not None:
             if row["last_success_digest"] == digest:
                 return "unchanged"
