@@ -393,11 +393,16 @@ def test_bounded_dns_resolver_rejects_queue_overflow_when_workers_stall(monkeypa
     entered = threading.Event()
     release = threading.Event()
     resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.05)
-    monkeypatch.setattr(
-        notifications.socket,
-        "getaddrinfo",
-        lambda *args, **kwargs: (entered.set(), release.wait(timeout=1), [_dns_record("93.184.216.34")])[-1],
-    )
+    calls: list[str] = []
+
+    def blocked_lookup(host, *args, **kwargs):
+        calls.append(host)
+        if host == "first.example.test":
+            entered.set()
+            release.wait(timeout=1)
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", blocked_lookup)
     first_errors: list[Exception] = []
 
     def first_lookup():
@@ -421,6 +426,7 @@ def test_bounded_dns_resolver_rejects_queue_overflow_when_workers_stall(monkeypa
     assert not first.is_alive()
     assert len(first_errors) == 1
     assert isinstance(first_errors[0], TimeoutError)
+    assert calls == ["first.example.test"]
 
 
 @pytest.mark.parametrize(
