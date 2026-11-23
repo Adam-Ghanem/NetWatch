@@ -9,7 +9,7 @@ snapshot with SQLite's online backup API. It no longer calls
 - Snapshot creation completes before the HTTP response is returned, so SQLite
   and filesystem errors can still fail the request before response headers.
 - The snapshot is stored in a private `TemporaryDirectory`.
-- Starlette `FileResponse` sends the file in bounded 64 KiB chunks.
+- Starlette `FileResponse` uses its built-in bounded 64 KiB file-read chunks (the installed Starlette API does not accept a per-response `chunk_size` argument).
 - The response keeps the SQLite media type and timestamped attachment filename
   and adds `Cache-Control: no-store`.
 - A response background task removes the temporary directory after the

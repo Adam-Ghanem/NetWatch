@@ -2064,7 +2064,6 @@ def database_backup(
             filename=f"netwatch-backup-{timestamp}.sqlite3",
             headers={"Cache-Control": "no-store"},
             background=BackgroundTask(temporary.cleanup),
-            chunk_size=64 * 1024,
         )
     except BaseException:
         temporary.cleanup()
