@@ -45,6 +45,7 @@ _DNS_RESOLVER_WORKERS = 2
 _DNS_RESOLVER_QUEUE_SIZE = 2
 NOTIFICATION_MAX_RETRIES = 3
 NOTIFICATION_RESPONSE_MAX_BYTES = 64 * 1024
+_RESPONSE_READ_CHUNK_BYTES = 64 * 1024
 NOTIFICATION_CIRCUIT_FAILURE_THRESHOLD = 5
 NOTIFICATION_CIRCUIT_COOLDOWN_SECONDS = 300
 _BACKOFF_BASE_SECONDS = 0.25
@@ -564,6 +565,62 @@ def _open_without_redirects(request: urllib.request.Request, timeout: int) -> An
     return open_public_https_without_redirects(request, timeout=timeout)
 
 
+def _response_socket(response: Any) -> Any | None:
+    """Find the socket behind an HTTP response without assuming one wrapper depth."""
+    pending = [response]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        candidate = getattr(current, "_sock", None)
+        if callable(getattr(candidate, "settimeout", None)):
+            return candidate
+        for attribute in ("fp", "raw"):
+            nested = getattr(current, attribute, None)
+            if nested is not None:
+                pending.append(nested)
+    return None
+
+
+def read_bounded_response(
+    response: Any,
+    *,
+    max_bytes: int,
+    timeout: float,
+) -> bytes:
+    """Read an HTTPS response incrementally under one monotonic body deadline."""
+    if max_bytes < 0 or timeout <= 0:
+        raise ValueError("Response byte and time limits must be positive.")
+
+    response_socket = _response_socket(response)
+    reader = getattr(response, "read1", None)
+    if response_socket is None or not callable(reader):
+        raise TimeoutError("HTTPS response lacks bounded incremental-read support.")
+
+    deadline = time.monotonic() + timeout
+    chunks: list[bytes] = []
+    total = 0
+    while total <= max_bytes:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+        try:
+            response_socket.settimeout(remaining)
+        except (OSError, ValueError) as exc:
+            raise TimeoutError("HTTPS response socket is unavailable.") from exc
+
+        chunk = reader(min(_RESPONSE_READ_CHUNK_BYTES, max_bytes + 1 - total))
+        if time.monotonic() >= deadline:
+            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    return b"".join(chunks)
+
+
 def _channel_payload(channel: NotificationChannel, payload: dict[str, Any]) -> dict[str, Any]:
     if channel.kind == "webhook":
         return payload
@@ -601,7 +658,11 @@ def _send_once(channel: NotificationChannel, payload: dict[str, Any]) -> None:
         ) as response:  # nosec B310
             response_status = getattr(response, "status", None)
             status = int(response_status if response_status is not None else response.getcode())
-            content = response.read(NOTIFICATION_RESPONSE_MAX_BYTES + 1)
+            content = read_bounded_response(
+                response,
+                max_bytes=NOTIFICATION_RESPONSE_MAX_BYTES,
+                timeout=NOTIFICATION_TIMEOUT_SECONDS,
+            )
     except NotificationConfigurationError:
         raise _DeliveryFailure(retryable=False) from None
     except urllib.error.HTTPError as exc:
