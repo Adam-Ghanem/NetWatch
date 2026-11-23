@@ -468,7 +468,7 @@ def test_pinned_https_connection_uses_ip_for_tcp_and_hostname_for_tls(monkeypatc
     connection = notifications._PinnedHTTPSConnection(
         "hooks.example.test", 443, "93.184.216.34", timeout=5
     )
-    connection._context = FakeContext()
+    setattr(connection, "_context", FakeContext())
     connection.connect()
     connection.close()
 
