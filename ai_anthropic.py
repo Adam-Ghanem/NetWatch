@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import socket
+import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable
@@ -21,6 +22,7 @@ from ai_advisor import (
     _bounded_int,
     _http_error,
     _open_without_redirects,
+    _read_bounded_response,
     api_key_is_usable,
     build_openai_request_payload,
 )
@@ -156,11 +158,15 @@ def request_anthropic_intelligence_brief(
         method="POST",
     )
     transport = opener or _open_without_redirects
+    timeout = max(5, min(int(timeout_seconds), 60))
+    deadline = time.monotonic() + timeout
     try:
-        with transport(
-            request, timeout=max(5, min(int(timeout_seconds), 60))
-        ) as response:  # nosec B310
-            raw = response.read(1_000_001)
+        with transport(request, timeout=timeout) as response:  # nosec B310
+            raw = _read_bounded_response(
+                response,
+                deadline=deadline,
+                require_socket=opener is None,
+            )
     except urllib.error.HTTPError as exc:
         raise _http_error(exc) from exc
     except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
