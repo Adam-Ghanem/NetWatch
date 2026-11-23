@@ -1437,7 +1437,8 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         with closing(sqlite3.connect(snapshot)) as destination_connection:
             source_connection.backup(destination_connection)
             assert (
-                destination_connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0] == "delete"
+                destination_connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+                == "delete"
             )
 
     # Make the original data directory unavailable before the application starts.
@@ -1464,14 +1465,8 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
     assert inventory.json()["count"] == 1
     assert inventory.json()["assets"][0]["ip_address"] == "192.0.2.10"
     assert history.status_code == 200
-    assert any(
-        item["scan_type"] == "offline-restore-smoke"
-        for item in history.json()["items"]
-    )
+    assert any(item["scan_type"] == "offline-restore-smoke" for item in history.json()["items"])
     assert observations.status_code == 200
-    assert any(
-        item["ip_address"] == "192.0.2.10"
-        for item in observations.json()["items"]
-    )
+    assert any(item["ip_address"] == "192.0.2.10" for item in observations.json()["items"])
     assert audit["status"] == "valid"
     assert audit["protected_entries"] == 1
