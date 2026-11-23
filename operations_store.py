@@ -83,7 +83,7 @@ class _BackupDownloadFileLock:
                     raise OSError(errno.EINVAL, "Backup lock must be a regular file.")
                 if os.name == "nt":
                     if os.fstat(fd).st_size == 0:
-                        os.write(fd, b"\\0")
+                        os.write(fd, b"0")
                     os.lseek(fd, 0, os.SEEK_SET)
                     import msvcrt
 
