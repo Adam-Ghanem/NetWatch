@@ -235,6 +235,23 @@ def test_auto_cycle_uses_evidence_only_and_no_repeat_call(monkeypatch, isolated_
     assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
 
 
+def test_auto_cycle_reports_superseded_claim_without_false_success(monkeypatch, isolated_db):
+    monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
+    monkeypatch.setattr(api, "AI_AUTO_INTERVAL_SECONDS", 3600)
+    monkeypatch.setattr(
+        api,
+        "enterprise_readiness",
+        lambda: {"capabilities": {"local_single_instance_safe": True}},
+    )
+    monkeypatch.setattr(api, "_intelligence_configuration_is_usable", lambda: True)
+    monkeypatch.setattr(api, "audit_integrity_is_ready", lambda **kwargs: True)
+    monkeypatch.setattr(api, "_intelligence_snapshot", lambda: {"assets": {"total": 2}})
+    monkeypatch.setattr(api, "_produce_intelligence_brief", lambda **kwargs: {"cached": False})
+    monkeypatch.setattr(api, "finish_auto_analysis", lambda *args, **kwargs: False)
+
+    assert api._run_auto_intelligence_once() == "superseded"
+
+
 def test_auto_cycle_fails_closed_on_provider_error(monkeypatch, isolated_db):
     monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
     monkeypatch.setattr(api, "AI_AUTO_INTERVAL_SECONDS", 3600)
