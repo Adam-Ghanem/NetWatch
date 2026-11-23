@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
+import tempfile
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+
+from typing import Any
 from fastapi.testclient import TestClient
 
 import backend.main as api
@@ -861,6 +865,60 @@ def test_database_backup_is_admin_only_streamed_and_cleaned_up(monkeypatch, tmp_
     assert viewer_backup.status_code == 403
     assert len(snapshot_paths) == 1
     assert not snapshot_paths[0].exists()
+
+
+@pytest.mark.parametrize("failure_mode", ["send_error", "invalid_range"])
+def test_database_backup_cleans_temporary_snapshot_when_response_is_interrupted(
+    tmp_path, failure_mode
+):
+    temporary = tempfile.TemporaryDirectory(dir=tmp_path)
+    temporary_path = Path(temporary.name)
+    snapshot_path = temporary_path / "netwatch.sqlite3"
+    snapshot_path.write_bytes(b"SQLite backup")
+
+    response = api._TemporaryFileResponse(
+        path=snapshot_path,
+        media_type="application/vnd.sqlite3",
+        cleanup=temporary.cleanup,
+    )
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+        if failure_mode == "send_error" and message["type"] == "http.response.body":
+            raise OSError("simulated client disconnect")
+
+    scope: Any = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/api/backups/database",
+        "raw_path": b"/api/backups/database",
+        "query_string": b"",
+        "headers": [(b"range", b"not-a-range")] if failure_mode == "invalid_range" else [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "extensions": {},
+    }
+
+    async def invoke() -> None:
+        if failure_mode == "send_error":
+            with pytest.raises(OSError, match="simulated client disconnect"):
+                await response(scope, receive, send)
+        else:
+            await response(scope, receive, send)
+
+    asyncio.run(invoke())
+
+    assert not temporary_path.exists()
+    if failure_mode == "invalid_range":
+        assert sent[0]["type"] == "http.response.start"
+        assert sent[0]["status"] == 400
 
 
 def test_due_scheduler_cycle_runs_claimed_policy_with_system_audit(monkeypatch, tmp_path):
