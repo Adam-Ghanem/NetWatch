@@ -140,9 +140,7 @@ class HttpsEventSink:
         try:
             with open_public_https_without_redirects(request, timeout=5) as response:
                 if not 200 <= int(response.status) < 300:
-                    raise EnterpriseAdapterUnavailable(
-                        "Event sink returned a non-success status."
-                    )
+                    raise EnterpriseAdapterUnavailable("Event sink returned a non-success status.")
                 content = response.read(64 * 1024 + 1)
         except NotificationConfigurationError:
             raise EnterpriseAdapterUnavailable(
