@@ -421,7 +421,10 @@ def _read_bounded_response(
     if not callable(reader):
         if require_socket:
             raise TimeoutError("Provider response lacks bounded incremental reads.")
-        reader = response.read
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Provider response exceeded its total deadline.")
+        return response.read(1_000_001)
     if require_socket and response_socket is None:
         raise TimeoutError("Provider response socket cannot enforce a total deadline.")
 
