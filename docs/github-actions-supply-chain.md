@@ -35,3 +35,17 @@ action references by this check and require their own review.
 
 Dependabot's GitHub Actions ecosystem can propose reviewed SHA updates when its
 configuration is enabled; proposals still require human review and CI.
+
+## Python CI coverage upload runtime
+
+Python CI pins Codecov Action v6 to the full commit SHA
+[`fb8b3582c8e4def4969c97caa2f19720cb33a72f`](https://github.com/codecov/codecov-action/commit/fb8b3582c8e4def4969c97caa2f19720cb33a72f),
+resolved from the signed upstream `v6` release tag. This replaces v5, whose
+composite action invoked `actions/github-script@v7` (Node.js 20). The reviewed
+v6 composite action invokes the full-SHA-pinned `actions/github-script@v8`
+(Node.js 24), removing that legacy nested runtime from the coverage-upload step.
+
+OIDC upload remains enabled. The Python CI workflow therefore retains its
+job-level `id-token: write` permission; do not broaden it to repository write
+permissions. Coverage upload remains non-blocking (`fail_ci_if_error: false`)
+and does not change test execution or coverage collection.

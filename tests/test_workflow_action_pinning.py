@@ -12,6 +12,7 @@ ACTION_REFERENCE = re.compile(
 VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
 SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
+CODECOV_ACTION_V6 = "codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6"
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
@@ -53,3 +54,10 @@ def test_security_ci_uses_node24_action_without_implicit_package_cache() -> None
     assert f"uses: {SETUP_NODE_V6}" in workflow
     assert 'node-version: "22"' in workflow
     assert "package-manager-cache: false" in workflow
+
+
+def test_python_ci_uses_reviewed_codecov_v6_with_oidc() -> None:
+    workflow = (WORKFLOW_DIR / "python-ci.yml").read_text(encoding="utf-8")
+
+    assert f"uses: {CODECOV_ACTION_V6}" in workflow
+    assert "use_oidc: true" in workflow
