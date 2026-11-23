@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -12,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import backend.main as api
+import enterprise_adapters
 import inventory_store
 import notifications
 import operations_store
@@ -350,3 +352,144 @@ def test_notification_status_never_returns_configured_urls(monkeypatch, tmp_path
     assert response.json()["channels"][0] == {"kind": "webhook", "enabled": True}
     assert "hooks.example.test" not in response.text
     assert "super-secret-path" not in response.text
+
+
+def _dns_record(address: str):
+    family = socket.AF_INET6 if ":" in address else socket.AF_INET
+    sockaddr = (address, 443, 0, 0) if family == socket.AF_INET6 else (address, 443)
+    return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "https://127.0.0.1/netwatch",
+        "https://10.0.0.5/netwatch",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[::1]/netwatch",
+        "https://[fc00::1]/netwatch",
+        "https://[::ffff:127.0.0.1]/netwatch",
+        "https://[2002:7f00:1::]/netwatch",
+    ],
+)
+def test_notification_url_validation_rejects_non_public_ip_literals(candidate):
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications.validate_notification_url(candidate)
+
+
+def test_public_https_transport_rejects_mixed_public_and_private_dns_answers(monkeypatch):
+    records = [_dns_record("93.184.216.34"), _dns_record("10.0.0.8")]
+    monkeypatch.setattr(
+        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
+    )
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("A non-public DNS answer must block connection."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications._open_without_redirects(request, timeout=5)
+
+
+def test_public_https_transport_pins_resolved_ip_and_keeps_original_host(monkeypatch):
+    records = [_dns_record("93.184.216.34")]
+    monkeypatch.setattr(
+        notifications.socket, "getaddrinfo", lambda *args, **kwargs: records
+    )
+    connections = []
+
+    class FakeResponse:
+        status = 204
+
+        def read(self, _limit):
+            return b"ok"
+
+        def close(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout):
+            self.host = host
+            self.port = port
+            self.address = address
+            self.timeout = timeout
+            self.closed = False
+            connections.append(self)
+
+        def request(self, method, selector, *, body, headers):
+            self.request_data = (method, selector, body, headers)
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with notifications._open_without_redirects(request, timeout=5) as response:
+        assert response.status == 204
+
+    assert len(connections) == 1
+    assert connections[0].host == "hooks.example.test"
+    assert connections[0].address == "93.184.216.34"
+    assert connections[0].request_data[0:3] == ("POST", "/netwatch", b"{}")
+    assert connections[0].closed is True
+
+
+def test_pinned_https_connection_uses_ip_for_tcp_and_hostname_for_tls(monkeypatch):
+    observed = {}
+
+    class FakeSocket:
+        def close(self):
+            observed["closed"] = True
+
+    class FakeContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            observed["server_hostname"] = server_hostname
+            return sock
+
+    def fake_create_connection(address, timeout, source_address):
+        observed["address"] = address
+        observed["timeout"] = timeout
+        return FakeSocket()
+
+    monkeypatch.setattr(notifications.socket, "create_connection", fake_create_connection)
+    connection = notifications._PinnedHTTPSConnection(
+        "hooks.example.test", 443, "93.184.216.34", timeout=5
+    )
+    connection._context = FakeContext()
+    connection.connect()
+    connection.close()
+
+    assert observed["address"] == ("93.184.216.34", 443)
+    assert observed["server_hostname"] == "hooks.example.test"
+    assert observed["timeout"] == 5
+    assert observed["closed"] is True
+
+
+def test_enterprise_event_sink_rejects_private_dns_answers(monkeypatch):
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("127.0.0.1")],
+    )
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("Private event sink must not connect."),
+    )
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(enterprise_adapters.EnterpriseAdapterUnavailable):
+        sink.publish({"kind": "synthetic-test"})
