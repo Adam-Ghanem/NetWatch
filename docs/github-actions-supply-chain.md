@@ -45,7 +45,28 @@ composite action invoked `actions/github-script@v7` (Node.js 20). The reviewed
 v6 composite action invokes the full-SHA-pinned `actions/github-script@v8`
 (Node.js 24), removing that legacy nested runtime from the coverage-upload step.
 
-OIDC upload remains enabled. The Python CI workflow therefore retains its
-job-level `id-token: write` permission; do not broaden it to repository write
-permissions. Coverage upload remains non-blocking (`fail_ci_if_error: false`)
-and does not change test execution or coverage collection.
+## Python CI OIDC boundary
+
+The Python `test` job executes repository code and third-party dependencies. It
+has `contents: read` and **does not** receive `id-token: write`. After tests
+succeed, it uploads only the generated `coverage.xml` as the required
+`python-coverage` Actions artifact. The artifact expires after one day, and a
+missing report fails the test job.
+
+A separate `coverage` job depends on the successful test job. It alone receives
+`id-token: write`, checks out commit metadata, downloads the named artifact, and
+runs the pinned Codecov v6 uploader with OIDC. The upload remains non-blocking
+(`fail_ci_if_error: false`), preserving optional telemetry behavior. This keeps
+OIDC token minting out of the test/dependency execution job; the dedicated
+coverage job still trusts its pinned checkout, artifact actions, and Codecov
+uploader, so those components require normal supply-chain review.
+
+The artifact handoff uses the official immutable release commits:
+- `actions/upload-artifact@v7`:
+  [`cf430e030ddbb5b0abf93d22962f4752f3646cd9`](https://github.com/actions/upload-artifact/commit/cf430e030ddbb5b0abf93d22962f4752f3646cd9)
+- `actions/download-artifact@v8`:
+  [`9000827ccba6bdab643e8b6fd33ac0654aef8333`](https://github.com/actions/download-artifact/commit/9000827ccba6bdab643e8b6fd33ac0654aef8333)
+
+Both releases use the Node.js 24 action runtime. The regression tests enforce
+the full SHA references, required artifact handoff, and the absence of OIDC
+permission from the Python test job.
