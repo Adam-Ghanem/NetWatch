@@ -37,7 +37,15 @@ per cycle, applies bounded retries, and marks exhausted deliveries dead.
 Only allowlisted notification payloads are retained, deidentified by default;
 raw targets are stored **only** when `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`.
 Admin `GET /api/notifications/status` shows receipt status and counters, not
-webhook URLs, serialized payloads or secrets.
+webhook URLs, serialized payloads or secrets. After a successful sink response is
+acknowledged in SQLite, the stored payload body is replaced with `{}`; the stable
+event ID and delivery metadata remain. Pending and dead receipts retain their
+allowlisted payloads for retry or operator triage.
+
+This is logical row-level minimization, **not secure erasure**: SQLite WAL files,
+freed pages, and existing backups may retain prior bytes until checkpointing,
+compaction, and backup rotation. Continue to use disk encryption and a defined
+backup-retention policy.
 
 **Limitations:** this is **at-least-once**, not exactly-once delivery. If NetWatch
 crashes after a webhook accepts a notification but before local acknowledgement,
