@@ -11,6 +11,9 @@ ACTION_REFERENCE = re.compile(
 )
 VERSION_COMMENT = re.compile(r"^v[0-9]+(?:\.[0-9]+(?:\.[0-9]+)?)?$")
 USES_LINE = re.compile(r"^\s*uses:\s*(\S+?)(?:\s+#\s*(\S.*))?\s*$")
+SETUP_NODE_V6 = (
+    "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6"
+)
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
@@ -44,3 +47,11 @@ def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
 
     if not checked_actions:
         raise AssertionError("Expected at least one external workflow action.")
+
+
+def test_security_ci_uses_node24_action_without_implicit_package_cache() -> None:
+    workflow = (WORKFLOW_DIR / "security-ci.yml").read_text(encoding="utf-8")
+
+    assert f"uses: {SETUP_NODE_V6}" in workflow
+    assert 'node-version: "22"' in workflow
+    assert "package-manager-cache: false" in workflow

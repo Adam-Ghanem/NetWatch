@@ -4,6 +4,18 @@ NetWatch workflows pin every third-party action to a full 40-character commit SH
 A trailing version comment (for example, `# v6`) is for reviewer readability only;
 GitHub executes the immutable SHA, not the mutable release tag.
 
+## Security CI Node.js runtime
+
+Security CI pins `actions/setup-node` to the official `v6` tag target
+[`249970729cb0ef3589644e2896645e5dc5ba9c38`](https://github.com/actions/setup-node/commit/249970729cb0ef3589644e2896645e5dc5ba9c38).
+The action itself runs on the Node.js 24 action runtime; the separate
+`node-version: "22"` input keeps Node.js 22 available to the workflow's
+`node --check` commands.
+
+This job only syntax-checks frontend JavaScript and does not install npm
+dependencies. It sets `package-manager-cache: false` so setup-node cannot
+implicitly enable package-manager caching for a future package manifest.
+
 ## Updating an action
 
 1. Identify the intended upstream release and verify that its release tag resolves
@@ -16,7 +28,8 @@ GitHub executes the immutable SHA, not the mutable release tag.
    workflow safe.
 
 The regression test `tests/test_workflow_action_pinning.py` rejects external action
-references that use mutable tags, branches, or abbreviated commit IDs. Local actions
+references that use mutable tags, branches, or abbreviated commit IDs. It also
+guards the reviewed setup-node v6 pin and the explicit cache opt-out. Local actions
 (`./...`) and Docker actions (`docker://...`) are not treated as GitHub repository
 action references by this check and require their own review.
 
