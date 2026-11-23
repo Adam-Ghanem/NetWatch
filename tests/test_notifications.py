@@ -455,7 +455,7 @@ def test_pinned_https_connection_uses_ip_for_tcp_and_hostname_for_tls(monkeypatc
             observed["server_hostname"] = server_hostname
             return sock
 
-    def fake_create_connection(address, timeout, source_address):
+    def fake_create_connection(address, timeout):
         observed["address"] = address
         observed["timeout"] = timeout
         return FakeSocket()
@@ -464,7 +464,7 @@ def test_pinned_https_connection_uses_ip_for_tcp_and_hostname_for_tls(monkeypatc
     connection = notifications._PinnedHTTPSConnection(
         "hooks.example.test", 443, "93.184.216.34", timeout=5
     )
-    setattr(connection, "_context", FakeContext())
+    setattr(connection, "_tls_context", FakeContext())
     connection.connect()
     connection.close()
 
