@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 import subprocess
 import sys
@@ -191,6 +192,23 @@ def test_backup_snapshot_lock_coordinates_other_processes(monkeypatch, tmp_path)
         cwd=Path(__file__).resolve().parents[1],
     )
     assert released.stdout.strip() == "acquired"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits are required for this regression")
+def test_backup_lock_rejects_hard_link_alias_without_changing_target_permissions(tmp_path):
+    target_path = tmp_path / "unrelated-sensitive-file"
+    target_path.write_text("do not mutate", encoding="utf-8")
+    target_path.chmod(0o640)
+    lock_path = tmp_path / ".netwatch-backup-download.lock"
+    lock_path.hardlink_to(target_path)
+    original_mode = target_path.stat().st_mode & 0o777
+
+    lock = operations_store._BackupDownloadFileLock(lock_path)
+    with pytest.raises(OSError, match="must not be hard-linked"):
+        lock.acquire()
+
+    assert target_path.read_text(encoding="utf-8") == "do not mutate"
+    assert target_path.stat().st_mode & 0o777 == original_mode
 
 
 def test_alert_cases_are_deduplicated_and_require_resolution_evidence(monkeypatch, tmp_path):
