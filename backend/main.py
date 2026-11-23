@@ -329,6 +329,8 @@ _rate_lock = threading.Lock()
 _rate_events: dict[str, deque[float]] = defaultdict(deque)
 _scan_slots = threading.BoundedSemaphore(MAX_CONCURRENT_SCANS)
 _capture_slots = threading.BoundedSemaphore(MAX_CONCURRENT_CAPTURES)
+_MAX_CONCURRENT_BACKUP_DOWNLOADS = 1
+_backup_download_slots = threading.BoundedSemaphore(_MAX_CONCURRENT_BACKUP_DOWNLOADS)
 _intelligence_rate_lock = threading.Lock()
 _intelligence_rate_events: dict[str, deque[float]] = defaultdict(deque)
 _intelligence_slots = threading.BoundedSemaphore(AI_MAX_CONCURRENT_REQUESTS)
@@ -2066,7 +2068,33 @@ class _TemporaryFileResponse(FileResponse):
 def database_backup(
     context: AuthContext = Depends(require_audited_admin_access),
 ) -> FileResponse:
-    snapshot_path, temporary = database_backup_snapshot()
+    if not _backup_download_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=503,
+            detail="A database backup is already being prepared or downloaded. Retry later.",
+            headers={"Retry-After": "30"},
+        )
+
+    try:
+        snapshot_path, temporary = database_backup_snapshot()
+    except BaseException:
+        _backup_download_slots.release()
+        raise
+
+    cleanup_lock = threading.Lock()
+    cleanup_complete = False
+
+    def cleanup_snapshot() -> None:
+        nonlocal cleanup_complete
+        with cleanup_lock:
+            if cleanup_complete:
+                return
+            cleanup_complete = True
+        try:
+            temporary.cleanup()
+        finally:
+            _backup_download_slots.release()
+
     try:
         record_audit_event(
             context.role,
@@ -2082,10 +2110,10 @@ def database_backup(
             media_type="application/vnd.sqlite3",
             filename=f"netwatch-backup-{timestamp}.sqlite3",
             headers={"Cache-Control": "no-store"},
-            cleanup=temporary.cleanup,
+            cleanup=cleanup_snapshot,
         )
     except BaseException:
-        temporary.cleanup()
+        cleanup_snapshot()
         raise
 
 

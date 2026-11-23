@@ -12,6 +12,10 @@ snapshot with SQLite's online backup API. It no longer calls
 - Starlette `FileResponse` uses its built-in bounded 64 KiB file-read chunks (the installed Starlette API does not accept a per-response `chunk_size` argument).
 - The response keeps the SQLite media type and timestamped attachment filename
   and adds `Cache-Control: no-store`.
+- Only one backup snapshot may be prepared or downloaded concurrently per
+  application process. Additional Admin requests receive HTTP 503 with
+  `Retry-After: 30` before creating a snapshot. The slot is held until response
+  cleanup and is released immediately if snapshot creation fails.
 - A dedicated `FileResponse` subclass removes the temporary directory in a
   `finally` block around the ASGI response call. Cleanup therefore also runs
   when sending raises (for example, a client disconnect), the response is
@@ -26,7 +30,9 @@ snapshot with SQLite's online backup API. It no longer calls
 
 Streaming avoids materializing the entire snapshot in application memory; it
 does **not** cap the snapshot's total disk size or make temporary storage
-durable. Ensure the configured temporary filesystem has adequate free space,
+durable. The concurrency limit is process-local: a deployment with multiple
+ASGI worker processes can prepare one snapshot per worker, and this is not a
+global disk quota. Ensure the configured temporary filesystem has adequate free space,
 restricted permissions, and appropriate disk encryption for the sensitivity
 of the database. Temporary-file cleanup is not secure erasure, and backups
 must still be copied to approved encrypted off-host storage through a separate

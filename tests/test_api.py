@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import backend.main as api
@@ -918,6 +919,95 @@ def test_database_backup_cleans_temporary_snapshot_when_response_is_interrupted(
     if failure_mode == "invalid_range":
         assert sent[0]["type"] == "http.response.start"
         assert sent[0]["status"] == 400
+
+
+def test_database_backup_limits_concurrent_downloads_until_response_cleanup(
+    monkeypatch, tmp_path
+):
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(api, "_backup_download_slots", slots)
+    temporary = tempfile.TemporaryDirectory(dir=tmp_path)
+    temporary_path = Path(temporary.name)
+    snapshot_path = temporary_path / "netwatch.sqlite3"
+    snapshot_path.write_bytes(b"SQLite backup")
+    snapshot_calls = []
+
+    def create_snapshot():
+        snapshot_calls.append(snapshot_path)
+        return snapshot_path, temporary
+
+    monkeypatch.setattr(api, "database_backup_snapshot", create_snapshot)
+    monkeypatch.setattr(api, "record_audit_event", lambda *args, **kwargs: None)
+    context = api.AuthContext(
+        role="admin",
+        actor_id="test-admin",
+        auth_method="test",
+        request_id="backup-concurrency-test",
+    )
+
+    response = api.database_backup(context=context)
+    with pytest.raises(HTTPException) as exc_info:
+        api.database_backup(context=context)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.headers == {"Retry-After": "30"}
+    assert len(snapshot_calls) == 1
+    assert snapshot_path.is_file()
+
+    sent: list[dict[str, Any]] = []
+
+    async def receive() -> dict[str, Any]:
+        await asyncio.sleep(3_600)
+        return {"type": "http.request"}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    scope: Any = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/api/backups/database",
+        "raw_path": b"/api/backups/database",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("testserver", 80),
+        "extensions": {},
+    }
+    asyncio.run(response(scope, receive, send))
+
+    assert sent[0]["type"] == "http.response.start"
+    assert sent[0]["status"] == 200
+    assert not temporary_path.exists()
+    assert slots.acquire(blocking=False)
+    slots.release()
+
+
+def test_database_backup_releases_concurrency_slot_when_snapshot_creation_fails(
+    monkeypatch,
+):
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(api, "_backup_download_slots", slots)
+
+    def fail_snapshot():
+        raise OSError("synthetic snapshot failure")
+
+    monkeypatch.setattr(api, "database_backup_snapshot", fail_snapshot)
+    context = api.AuthContext(
+        role="admin",
+        actor_id="test-admin",
+        auth_method="test",
+        request_id="backup-failure-test",
+    )
+
+    with pytest.raises(OSError, match="synthetic snapshot failure"):
+        api.database_backup(context=context)
+
+    assert slots.acquire(blocking=False)
+    slots.release()
 
 
 def test_due_scheduler_cycle_runs_claimed_policy_with_system_audit(monkeypatch, tmp_path):
