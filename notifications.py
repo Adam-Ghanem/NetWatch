@@ -446,9 +446,7 @@ def open_public_https_without_redirects(
     addresses = _public_https_addresses(parsed.hostname, port)
     last_error: Exception | None = None
     for address in addresses:
-        connection = _PinnedHTTPSConnection(
-            parsed.hostname, port, address, timeout=timeout
-        )
+        connection = _PinnedHTTPSConnection(parsed.hostname, port, address, timeout=timeout)
         try:
             connection.connect()
         except (http.client.HTTPException, OSError) as exc:
