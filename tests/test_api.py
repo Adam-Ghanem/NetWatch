@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1382,3 +1383,89 @@ def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path)
     assert status.json()["available"] is False
     assert brief.status_code == 503
     assert local.status_code == 200
+
+
+def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
+    monkeypatch, tmp_path
+):
+    """Exercise the real API lifespan against a restored synthetic SQLite snapshot."""
+    live_dir = tmp_path / "live"
+    restored_dir = tmp_path / "restored"
+    source = live_dir / "netwatch.db"
+    snapshot = restored_dir / "netwatch.db"
+
+    # Reuse the API test setup for test-only keys and a private source data directory.
+    client = _client(monkeypatch, live_dir)
+    inventory_store.init_db()
+
+    with closing(inventory_store._connect()) as live:
+        live.execute(
+            "INSERT INTO assets (ip_address, first_seen, last_seen, status) " "VALUES (?, ?, ?, ?)",
+            ("192.0.2.10", "2026-11-23T20:00:00Z", "2026-11-23T20:00:00Z", "Online"),
+        )
+        cursor = live.execute(
+            "INSERT INTO scan_runs (created_at, scan_type, target, summary, status) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                "2026-11-23T20:00:00Z",
+                "offline-restore-smoke",
+                "192.0.2.0/24",
+                "synthetic fixture",
+                "completed",
+            ),
+        )
+        scan_run_id = cursor.lastrowid
+        assert scan_run_id is not None
+        live.execute(
+            "INSERT INTO network_observations "
+            "(scan_run_id, ip_address, observed, status) VALUES (?, ?, ?, ?)",
+            (scan_run_id, "192.0.2.10", 1, "Online"),
+        )
+        live.commit()
+
+    inventory_store.record_audit_event(
+        "admin",
+        "backup_restore_smoke",
+        "192.0.2.10",
+        "completed",
+        "Synthetic isolated application-restore fixture.",
+    )
+
+    restored_dir.mkdir(parents=True)
+    with closing(sqlite3.connect(source)) as source_connection:
+        with closing(sqlite3.connect(snapshot)) as destination_connection:
+            source_connection.backup(destination_connection)
+            assert (
+                destination_connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+                == "delete"
+            )
+
+    # Make the original data directory unavailable before the application starts.
+    unavailable_dir = tmp_path / "source-unavailable"
+    live_dir.rename(unavailable_dir)
+    assert not source.exists()
+    assert (unavailable_dir / "netwatch.db").is_file()
+
+    # The actual FastAPI lifespan now initializes and serves only the restored copy.
+    monkeypatch.setattr(inventory_store, "DATA_DIR", restored_dir)
+    monkeypatch.setattr(inventory_store, "DB_FILE", snapshot)
+    with client as restored_client:
+        readiness = restored_client.get("/api/health/ready")
+        inventory = restored_client.get("/api/inventory", headers=API_HEADERS)
+        history = restored_client.get("/api/history", headers=API_HEADERS)
+        observations = restored_client.get("/api/observations", headers=API_HEADERS)
+        audit = inventory_store.verify_audit_integrity()
+
+    assert readiness.status_code == 200
+    assert readiness.json()["database"] == "ready"
+    assert readiness.json()["access"] == "ready"
+    assert readiness.json()["audit_integrity"] == "ready"
+    assert inventory.status_code == 200
+    assert inventory.json()["count"] == 1
+    assert inventory.json()["assets"][0]["ip_address"] == "192.0.2.10"
+    assert history.status_code == 200
+    assert any(item["scan_type"] == "offline-restore-smoke" for item in history.json()["items"])
+    assert observations.status_code == 200
+    assert any(item["ip_address"] == "192.0.2.10" for item in observations.json()["items"])
+    assert audit["status"] == "valid"
+    assert audit["protected_entries"] == 1
