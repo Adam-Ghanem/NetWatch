@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from contextlib import closing
 import sqlite3
 import threading
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -1383,7 +1383,6 @@ def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path)
     assert status.json()["available"] is False
     assert brief.status_code == 503
     assert local.status_code == 200
-
 
 
 def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
