@@ -52,6 +52,10 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
 - No provider has network scan, shell or remediation tools.
 - The app enforces rate/concurrency/time limits, daily AI budgets and
   provider/model-specific caching. Configure spend/rate caps at the provider.
+- Provider response bodies are read in 64 KiB chunks under one monotonic
+  deadline; the socket timeout is reduced to the remaining budget for each
+  chunk. This prevents a slow trickle response from holding an analysis worker
+  beyond its bounded response window. Responses remain capped at 1 MB.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
