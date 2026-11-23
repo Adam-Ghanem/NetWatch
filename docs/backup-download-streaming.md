@@ -12,10 +12,16 @@ snapshot with SQLite's online backup API. It no longer calls
 - Starlette `FileResponse` uses its built-in bounded 64 KiB file-read chunks (the installed Starlette API does not accept a per-response `chunk_size` argument).
 - The response keeps the SQLite media type and timestamped attachment filename
   and adds `Cache-Control: no-store`.
-- Only one backup snapshot may be prepared or downloaded concurrently per
-  application process. Additional Admin requests receive HTTP 503 with
-  `Retry-After: 30` before creating a snapshot. The slot is held until response
-  cleanup and is released immediately if snapshot creation fails.
+- A process-local semaphore provides a fast per-worker guard. An OS advisory
+  lock file named `.netwatch-backup-download.lock` beside the SQLite database
+  coordinates other workers/processes that share the same data directory.
+  Additional Admin requests receive HTTP 503 with `Retry-After: 30` before
+  creating a snapshot. The lock remains held through response cleanup and is
+  released if snapshot creation fails or the process exits.
+- The coordination file is persistent, contains no credentials or backup data,
+  and is created with owner-only permissions on POSIX systems. Do not remove it
+  while NetWatch processes are running; the operating system releases the
+  advisory lock when a process closes its descriptor or exits.
 - A dedicated `FileResponse` subclass removes the temporary directory in a
   `finally` block around the ASGI response call. Cleanup therefore also runs
   when sending raises (for example, a client disconnect), the response is
@@ -30,13 +36,16 @@ snapshot with SQLite's online backup API. It no longer calls
 
 Streaming avoids materializing the entire snapshot in application memory; it
 does **not** cap the snapshot's total disk size or make temporary storage
-durable. The concurrency limit is process-local: a deployment with multiple
-ASGI worker processes can prepare one snapshot per worker, and this is not a
-global disk quota. Ensure the configured temporary filesystem has adequate free space,
-restricted permissions, and appropriate disk encryption for the sensitivity
-of the database. Temporary-file cleanup is not secure erasure, and backups
-must still be copied to approved encrypted off-host storage through a separate
-operator-controlled process.
+durable. The advisory lock coordinates processes only when they share the same
+resolved database directory and the filesystem honors the platform's file-lock
+semantics. It is not a distributed multi-host lock or a global disk quota;
+for network filesystems with uncertain locking behavior, use one application
+worker or a separately reviewed distributed coordinator. Ensure the configured
+temporary filesystem has adequate free space, restricted permissions, and
+appropriate disk encryption for the sensitivity of the database.
+Temporary-file cleanup is not secure erasure, and backups must still be copied
+to approved encrypted off-host storage through a separate operator-controlled
+process.
 
 The endpoint remains Admin-only and audit-gated. The audit event records
 successful snapshot generation, not proof that the client received every byte.
