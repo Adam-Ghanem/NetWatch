@@ -706,6 +706,7 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
     )
     assert inventory_store.recent_service_findings() == []
 
+
 def test_audit_readiness_cache_rechecks_external_database_mutations(
     monkeypatch, tmp_path
 ):
