@@ -638,8 +638,9 @@ def test_audit_identity_and_integrity_are_admin_only(monkeypatch, tmp_path):
     assert integrity.status_code == 403
 
 
-
-def test_host_check_records_unknown_when_icmp_probe_is_unavailable(monkeypatch, tmp_path):
+def test_host_check_records_unknown_when_icmp_probe_is_unavailable(
+    monkeypatch, tmp_path
+):
     profile = SimpleNamespace(
         ip_address="192.168.1.10",
         address_family="ipv4",
@@ -674,6 +675,7 @@ def test_host_check_records_unknown_when_icmp_probe_is_unavailable(monkeypatch, 
     assert response.json()["reachability_status"] == "unknown"
     assert runs[0]["status"] == "unknown"
     assert assets == []
+
 
 def test_tampered_audit_chain_pauses_privileged_operations_but_remains_inspectable(
     monkeypatch, tmp_path

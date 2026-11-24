@@ -110,7 +110,9 @@ def profile_host(ip: str) -> HostProfile:
         "online" if online else "offline" if result is not None else "unknown"
     )
     hostname = reverse_hostname(target) if online else "-"
-    identity = identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
+    identity = (
+        identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
+    )
 
     if online:
         notes = "Host replied to ICMP ping"
