@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 import inventory_store
 import retention_store
 
@@ -133,3 +135,83 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
         "old-pending": "pending",
         "recent-delivered": "delivered",
     }
+
+def _insert_old_asset_event(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.init_db()
+    old = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat(timespec="seconds")
+    with inventory_store._connect() as conn:
+        conn.execute(
+            "INSERT INTO asset_events (created_at, ip_address, event_type, details) "
+            "VALUES (?, '192.0.2.10', 'new_asset', 'synthetic')",
+            (old,),
+        )
+
+
+def test_retention_cleanup_commits_deletion_with_audit_event(monkeypatch, tmp_path):
+    _insert_old_asset_event(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-retention-audit-key-with-enough-characters",
+    )
+
+    result = retention_store.cleanup_retention(
+        older_than_days=90,
+        dry_run=False,
+        max_rows=100,
+        audit_context={
+            "actor_role": "admin",
+            "actor_id": "retention-test",
+            "auth_method": "api_key",
+            "request_id": "retention-atomic-success",
+        },
+    )
+
+    assert result["deleted"]["asset_events"] == 1
+    with inventory_store._connect() as conn:
+        remaining = conn.execute("SELECT COUNT(*) FROM asset_events").fetchone()[0]
+        audit = conn.execute(
+            "SELECT action, actor_id, request_id FROM audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert remaining == 0
+    assert tuple(audit) == (
+        "retention_cleanup",
+        "retention-test",
+        "retention-atomic-success",
+    )
+
+
+def test_retention_cleanup_rolls_back_deletion_when_audit_append_fails(monkeypatch, tmp_path):
+    _insert_old_asset_event(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-retention-audit-key-with-enough-characters",
+    )
+    append_audit = inventory_store.record_audit_event_in_transaction
+
+    def fail_after_audit_insert(conn, *args, **kwargs):
+        append_audit(conn, *args, **kwargs)
+        raise RuntimeError("simulated audit append failure")
+
+    monkeypatch.setattr(
+        inventory_store,
+        "record_audit_event_in_transaction",
+        fail_after_audit_insert,
+    )
+
+    with pytest.raises(RuntimeError, match="simulated audit append failure"):
+        retention_store.cleanup_retention(
+            older_than_days=90,
+            dry_run=False,
+            max_rows=100,
+            audit_context={"actor_role": "admin"},
+        )
+
+    with inventory_store._connect() as conn:
+        remaining = conn.execute("SELECT COUNT(*) FROM asset_events").fetchone()[0]
+        audit_count = conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]
+        chain_count = conn.execute("SELECT COUNT(*) FROM audit_chain_state").fetchone()[0]
+    assert remaining == 1
+    assert audit_count == 0
+    assert chain_count == 0
+
