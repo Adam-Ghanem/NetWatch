@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 from email.message import Message
@@ -193,3 +194,33 @@ def test_claude_total_response_timeout_fails_closed(monkeypatch):
         )
 
     assert caught.value.code == "provider_unavailable"
+
+
+
+@pytest.mark.parametrize("failure", ["socket_reset", "truncated_http"])
+def test_claude_transport_read_errors_fail_closed(monkeypatch, failure):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def fail_read(*_, **__):
+        if failure == "socket_reset":
+            raise ConnectionResetError("synthetic provider socket reset")
+        raise http.client.IncompleteRead(b"partial provider response")
+
+    monkeypatch.setattr(ai_anthropic, "_read_bounded_response", fail_read)
+
+    with pytest.raises(AIProviderError) as caught:
+        request_anthropic_intelligence_brief(
+            {"assets": {"total": 1}},
+            api_key="test-anthropic-provider-key-long-enough",
+            safety_id="nw_opaque_123",
+            model="claude-test-model",
+            opener=lambda *_args, **_kwargs: FakeResponse(),
+        )
+
+    assert caught.value.code == "provider_unavailable"
+    assert str(caught.value) == "The intelligence provider is temporarily unavailable."
