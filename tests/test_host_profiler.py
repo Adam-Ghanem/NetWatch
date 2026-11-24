@@ -88,7 +88,7 @@ def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(monkeypatch, fa
             raise OSError("permission denied: /private/runtime/path")
         if failure == "timeout":
             raise subprocess.TimeoutExpired("ping", timeout=5)
-        raise UnicodeDecodeError("utf-8", b"\\xff", 0, 1, "invalid start byte")
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
 
     monkeypatch.setattr(host_profiler, "ping_host_raw", fail_probe)
     monkeypatch.setattr(
