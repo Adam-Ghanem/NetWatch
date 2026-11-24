@@ -78,3 +78,21 @@ Both releases use the Node.js 24 action runtime. The regression tests enforce
 the full SHA references, required artifact handoff, and the absence of OIDC
 permission from the Python test job. They also ensure this document describes
 the same Codecov release and immutable reference as the executable workflow.
+
+
+## Python CI pull-request coverage
+
+The Python CI `pull_request` trigger intentionally has no `branches` allowlist.
+GitHub evaluates a `pull_request.branches` filter against the PR's **base**
+branch, not its source branch. A prefix allowlist can silently omit stacked PRs
+when a new security, reliability, or maintenance branch prefix is introduced.
+All pull requests targeting any base branch therefore receive formatting,
+lint, type-check, compilation, and pytest validation. The `push` trigger remains
+restricted to `main`.
+
+The test job has only `contents: read` and never receives OIDC permission. The
+separate Codecov coverage job runs for pushes and same-repository pull requests;
+it is skipped for fork-originated pull requests. Fork PRs still run the full
+Python test job, but do not receive an OIDC-backed coverage upload. This keeps
+OIDC token minting outside untrusted fork workflows while preserving Python CI
+coverage for stacked PR targets.
