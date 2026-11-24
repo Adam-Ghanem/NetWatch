@@ -37,3 +37,16 @@ def test_public_ipv6_scan_is_blocked_without_socket_activity(monkeypatch):
     assert len(result) == 1
     assert result[0]["Status"] == "Blocked"
     assert "local IPv6" in result[0]["Recommendation"]
+
+
+def test_out_of_range_numeric_ipv6_scope_is_blocked_before_socket_creation(monkeypatch):
+    def fail_socket(*args, **kwargs):
+        raise AssertionError("socket activity must not occur for an invalid scope ID")
+
+    monkeypatch.setattr(port_scanner.socket, "socket", fail_socket)
+
+    result = port_scanner.scan_ports("fe80::10%4294967296")
+
+    assert len(result) == 1
+    assert result[0]["Status"] == "Blocked"
+    assert "scope" in result[0]["Recommendation"].lower()

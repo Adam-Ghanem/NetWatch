@@ -20,6 +20,7 @@ ALLOWED_IPV4_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
 ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
     ipaddress.IPv6Network(cidr) for cidr in ("fc00::/7", "fe80::/10", "::1/128")
 )
+_MAX_IPV6_SCOPE_ID = (1 << 32) - 1
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,21 @@ def validate_target_ip(target: str) -> ValidationResult:
                 False,
                 error="Invalid IPv6 interface scope identifier.",
             )
+        if scope.isdigit():
+            if not scope.isascii():
+                return ValidationResult(
+                    False,
+                    error="Numeric IPv6 interface scopes must use ASCII digits.",
+                )
+            scope_id = int(scope)
+            if not 1 <= scope_id <= _MAX_IPV6_SCOPE_ID:
+                return ValidationResult(
+                    False,
+                    error=(
+                        "Numeric IPv6 interface scope must be between 1 and "
+                        f"{_MAX_IPV6_SCOPE_ID}."
+                    ),
+                )
         if not ip.is_link_local:
             return ValidationResult(
                 False,
