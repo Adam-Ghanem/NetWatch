@@ -1507,6 +1507,24 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         lambda _: pytest.fail("The restore smoke must not execute a network scan."),
     )
     with client as restored_client:
+        # The snapshot deliberately excludes the audit HMAC key. Readiness must
+        # remain blocked until the operator supplies the matching key externally.
+        monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY")
+        missing_key_readiness = restored_client.get("/api/health/ready")
+        missing_key_integrity = restored_client.get(
+            "/api/audit-log/integrity", headers=API_HEADERS
+        )
+
+        monkeypatch.setenv(
+            "NETWATCH_AUDIT_HMAC_KEY",
+            "wrong-audit-key-with-enough-characters-0000",
+        )
+        wrong_key_readiness = restored_client.get("/api/health/ready")
+        wrong_key_integrity = restored_client.get(
+            "/api/audit-log/integrity", headers=API_HEADERS
+        )
+
+        monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", AUDIT_HMAC_KEY)
         readiness = restored_client.get("/api/health/ready")
         inventory = restored_client.get("/api/inventory", headers=API_HEADERS)
         history = restored_client.get("/api/history", headers=API_HEADERS)
@@ -1539,6 +1557,11 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         )
         audit = inventory_store.verify_audit_integrity()
 
+    assert missing_key_readiness.status_code == 503
+    assert missing_key_readiness.json()["audit_integrity"] == "invalid_or_disabled"
+    assert missing_key_integrity.json()["status"] == "unavailable"
+    assert wrong_key_readiness.status_code == 503
+    assert wrong_key_integrity.json()["status"] == "invalid"
     assert readiness.status_code == 200
     assert readiness.json()["database"] == "ready"
     assert readiness.json()["access"] == "ready"
