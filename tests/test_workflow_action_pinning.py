@@ -95,7 +95,6 @@ def test_supply_chain_documentation_matches_the_pinned_codecov_release() -> None
     assert "Codecov v6" not in documentation
 
 
-
 def test_python_ci_runs_for_pull_requests_targeting_any_base_branch() -> None:
     workflow = (WORKFLOW_DIR / "python-ci.yml").read_text(encoding="utf-8")
     push_block = workflow.split("\n  push:\n", maxsplit=1)[1].split(
