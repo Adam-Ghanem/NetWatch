@@ -18,6 +18,7 @@ AUDIT_HMAC_KEY_PLACEHOLDER = "replace-with-an-independent-audit-hmac-key"
 DEFAULTS = {
     "NETWATCH_OPERATOR_KEY": "",
     "NETWATCH_VIEWER_KEY": "",
+    "NETWATCH_AUDIT_HMAC_KEY_FILE": "",
     "NETWATCH_OIDC_ENABLED": "false",
     "NETWATCH_OIDC_ISSUER": "",
     "NETWATCH_OIDC_AUDIENCE": "",
@@ -75,6 +76,7 @@ def write_env(values: dict[str, str]) -> None:
     preferred = [
         "NETWATCH_API_KEY",
         "NETWATCH_AUDIT_HMAC_KEY",
+        "NETWATCH_AUDIT_HMAC_KEY_FILE",
         "OPENAI_API_KEY",
         "NETWATCH_AI_SAFETY_SECRET",
         "NETWATCH_AI_SUBJECT_ID",
@@ -126,7 +128,24 @@ def ensure_configuration() -> str:
     ):
         values["NETWATCH_AI_SAFETY_SECRET"] = secrets.token_urlsafe(32)
 
-    audit_hmac_key = values.get("NETWATCH_AUDIT_HMAC_KEY", "").strip()
+    audit_hmac_key_file = os.getenv(
+        "NETWATCH_AUDIT_HMAC_KEY_FILE",
+        values.get("NETWATCH_AUDIT_HMAC_KEY_FILE", ""),
+    ).strip()
+    if audit_hmac_key_file:
+        audit_hmac_key = os.getenv(
+            "NETWATCH_AUDIT_HMAC_KEY",
+            values.get("NETWATCH_AUDIT_HMAC_KEY", ""),
+        ).strip()
+        if audit_hmac_key and audit_hmac_key != AUDIT_HMAC_KEY_PLACEHOLDER:
+            raise ValueError(
+                "Configure NETWATCH_AUDIT_HMAC_KEY or " "NETWATCH_AUDIT_HMAC_KEY_FILE, not both."
+            )
+        values["NETWATCH_AUDIT_HMAC_KEY"] = ""
+        values["NETWATCH_AUDIT_HMAC_KEY_FILE"] = audit_hmac_key_file
+        audit_hmac_key = ""
+    else:
+        audit_hmac_key = values.get("NETWATCH_AUDIT_HMAC_KEY", "").strip()
     separated_values = tuple(
         value
         for value in (
@@ -138,7 +157,7 @@ def ensure_configuration() -> str:
         )
         if value
     )
-    if (
+    if not audit_hmac_key_file and (
         len(audit_hmac_key) < MIN_AUDIT_HMAC_KEY_LENGTH
         or audit_hmac_key == AUDIT_HMAC_KEY_PLACEHOLDER
         or any(secrets.compare_digest(audit_hmac_key, value) for value in separated_values)

@@ -88,6 +88,58 @@ def test_launcher_replaces_weak_existing_key(monkeypatch, tmp_path: Path):
     assert len(key) >= launcher.MIN_API_KEY_LENGTH
 
 
+def test_launcher_preserves_file_backed_audit_key_source(monkeypatch, tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "NETWATCH_API_KEY=existing-admin-key-with-at-least-32-characters\n"
+        "NETWATCH_AUDIT_HMAC_KEY=replace-with-an-independent-audit-hmac-key\n"
+        "NETWATCH_AUDIT_HMAC_KEY_FILE=/run/secrets/netwatch_audit_hmac_key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+
+    launcher.ensure_configuration()
+    values = launcher.read_env()
+
+    assert values["NETWATCH_AUDIT_HMAC_KEY"] == ""
+    assert values["NETWATCH_AUDIT_HMAC_KEY_FILE"] == "/run/secrets/netwatch_audit_hmac_key"
+
+
+def test_launcher_rejects_both_audit_key_sources(monkeypatch, tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "NETWATCH_API_KEY=existing-admin-key-with-at-least-32-characters\n"
+        "NETWATCH_AUDIT_HMAC_KEY=existing-independent-audit-key-with-32-plus-characters\n"
+        "NETWATCH_AUDIT_HMAC_KEY_FILE=/run/secrets/netwatch_audit_hmac_key\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+
+    with pytest.raises(ValueError, match="not both"):
+        launcher.ensure_configuration()
+
+
+def test_launcher_accepts_file_key_path_from_process_environment(monkeypatch, tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "NETWATCH_API_KEY=existing-admin-key-with-at-least-32-characters\n"
+        "NETWATCH_AUDIT_HMAC_KEY=\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY_FILE",
+        "/run/secrets/netwatch_audit_hmac_key",
+    )
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", "")
+
+    launcher.ensure_configuration()
+    values = launcher.read_env()
+
+    assert values["NETWATCH_AUDIT_HMAC_KEY"] == ""
+    assert values["NETWATCH_AUDIT_HMAC_KEY_FILE"] == "/run/secrets/netwatch_audit_hmac_key"
+
+
 def test_launcher_separates_provider_and_safety_credentials(monkeypatch, tmp_path: Path):
     env_file = tmp_path / ".env"
     provider_key = "provider-key-with-at-least-thirty-two-characters"

@@ -41,7 +41,7 @@ If a bearer token is present but invalid, NetWatch rejects it and never falls ba
 
 Inject secrets from the platform's managed secret store at runtime:
 
-- `NETWATCH_AUDIT_HMAC_KEY`: independent 32+ character value, backed up separately from SQLite.
+- `NETWATCH_AUDIT_HMAC_KEY` or `NETWATCH_AUDIT_HMAC_KEY_FILE`: independent 32+ character value, backed up separately from SQLite. Configure exactly one source.
 - `OPENAI_API_KEY`: optional provider project key.
 - `NETWATCH_AI_SAFETY_SECRET`: optional independent AI pseudonymization key.
 - `NETWATCH_AI_SUBJECT_ID`: optional opaque deployment subject.
@@ -53,6 +53,8 @@ The staged backend settings are explicit and fail closed:
 - `NETWATCH_DATABASE_BACKEND`, `NETWATCH_COORDINATION_BACKEND`, `NETWATCH_OBJECT_STORAGE_BACKEND`, and `NETWATCH_EVENT_SINK`: backend selections; do not select shared-service values until the matching adapters are deployed and tested.
 
 Do not put these values in Git, a ConfigMap, image layer, frontend setting, ticket, report, or screenshot. Each enabled role key must be unique. The audit HMAC key must not equal a role key, provider key, or AI safety secret; NetWatch readiness fails when that separation is violated.
+
+For file-based injection, set `NETWATCH_AUDIT_HMAC_KEY_FILE` to an **absolute path inside the container** and leave `NETWATCH_AUDIT_HMAC_KEY` empty. Mount the secret read-only at that path (for example, a Docker secret or an approved read-only bind mount). The loader checks the path with `lstat` and rejects non-regular files (including FIFOs and devices) before opening; it also rejects symlinks, group/world-writable permissions, unstable files, invalid UTF-8, and content larger than 4 KiB. The file is opened in non-blocking mode as a second guard against a regular-file-to-FIFO swap between the metadata check and open. It never includes file contents or OS path details in an error. Kubernetes deployments may continue using the existing Secret-to-environment mapping; no manifest change is required. Do not mount a ConfigMap or place key material in an image layer.
 
 Treat the audit HMAC key as long-lived integrity material under the organization's managed-key lifecycle. Replacing it while protected rows remain makes verification fail closed. Restore the previous key to recover verification; before any planned audit-chain reinitialization, export and archive the existing evidence in approved append-only storage. NetWatch intentionally has no remote endpoint that resets or re-signs the chain.
 

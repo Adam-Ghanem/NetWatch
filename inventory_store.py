@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import sqlite3
+import stat
 import threading
 import time
 from dataclasses import dataclass
@@ -44,6 +45,7 @@ _AUDIT_KEY_SEPARATION_VARIABLES = (
     "OPENAI_API_KEY",
     "NETWATCH_AI_SAFETY_SECRET",
 )
+_AUDIT_HMAC_KEY_FILE_MAX_BYTES = 4_096
 _AUDIT_READINESS_CACHE_SECONDS = 5.0
 _audit_readiness_cache_lock = threading.Lock()
 _audit_readiness_cache_identity = b""
@@ -358,9 +360,110 @@ def _audit_value(value: object, max_length: int) -> str:
     return " ".join(str(value).split())[:max_length]
 
 
+def _read_audit_hmac_key_file(path_value: str) -> str | None:
+    """Read a bounded audit key from an absolute, stable, non-symlink secret file."""
+    path = Path(path_value)
+    if not path.is_absolute():
+        return None
+
+    descriptor: int | None = None
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    try:
+        path_before = os.lstat(path)
+        if stat.S_ISLNK(path_before.st_mode):
+            return None
+        if not stat.S_ISREG(path_before.st_mode):
+            return None
+
+        descriptor = os.open(os.fspath(path), flags)
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            return None
+        if before.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return None
+        if (
+            before.st_size < MIN_AUDIT_HMAC_KEY_LENGTH
+            or before.st_size > _AUDIT_HMAC_KEY_FILE_MAX_BYTES
+        ):
+            return None
+        if (path_before.st_dev, path_before.st_ino) != (before.st_dev, before.st_ino):
+            return None
+
+        chunks: list[bytes] = []
+        remaining = _AUDIT_HMAC_KEY_FILE_MAX_BYTES + 1
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1_024))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+
+        after = os.fstat(descriptor)
+        path_after = os.lstat(path)
+        if stat.S_ISLNK(path_after.st_mode):
+            return None
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+            before.st_mode,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+            after.st_mode,
+        )
+        if before_identity != after_identity:
+            return None
+        if (after.st_dev, after.st_ino) != (path_after.st_dev, path_after.st_ino):
+            return None
+        if after.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return None
+        if len(raw) != before.st_size or len(raw) > _AUDIT_HMAC_KEY_FILE_MAX_BYTES:
+            return None
+
+        try:
+            value = raw.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            return None
+        if (
+            len(value) < MIN_AUDIT_HMAC_KEY_LENGTH
+            or "\x00" in value
+            or any(character.isspace() for character in value)
+        ):
+            return None
+        return value
+    except OSError:
+        return None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _audit_hmac_key() -> bytes | None:
-    value = os.getenv("NETWATCH_AUDIT_HMAC_KEY", "").strip()
-    if len(value) < MIN_AUDIT_HMAC_KEY_LENGTH or value == AUDIT_HMAC_KEY_PLACEHOLDER:
+    environment_value = os.getenv("NETWATCH_AUDIT_HMAC_KEY", "").strip()
+    file_path = os.getenv("NETWATCH_AUDIT_HMAC_KEY_FILE", "").strip()
+    if environment_value and file_path:
+        return None
+
+    value = _read_audit_hmac_key_file(file_path) if file_path else environment_value
+    if not value or len(value) < MIN_AUDIT_HMAC_KEY_LENGTH:
+        return None
+    if value == AUDIT_HMAC_KEY_PLACEHOLDER:
         return None
     for variable in _AUDIT_KEY_SEPARATION_VARIABLES:
         other = os.getenv(variable, "").strip()

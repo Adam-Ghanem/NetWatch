@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -537,9 +538,165 @@ def test_audit_key_must_be_separate_from_role_keys(monkeypatch, tmp_path):
     assert inventory_store.audit_integrity_is_ready() is False
 
 
+def test_audit_hmac_key_loads_from_read_only_secret_file(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    key = "independent-file-backed-audit-key-with-32-plus-characters"
+    key_file = tmp_path / "audit-hmac.key"
+    key_file.write_text(f"{key}\n", encoding="utf-8")
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() == key.encode("utf-8")
+    inventory_store.record_audit_event(
+        "admin", "backup_verified", "backup", "completed", "Synthetic file-key test."
+    )
+    assert inventory_store.verify_audit_integrity()["status"] == "valid"
+
+
+def test_audit_hmac_key_file_rejects_symlinks(monkeypatch, tmp_path):
+    key = "independent-file-backed-audit-key-with-32-plus-characters"
+    target = tmp_path / "real.key"
+    target.write_text(key, encoding="utf-8")
+    target.chmod(0o400)
+    link = tmp_path / "linked.key"
+    link.symlink_to(target)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(link))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Named pipes are POSIX-only.")
+def test_audit_hmac_key_file_rejects_fifo_before_open(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit-hmac.pipe"
+    os.mkfifo(key_file)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    def unexpected_open(*args, **kwargs):
+        raise AssertionError("Non-regular secret paths must be rejected before open.")
+
+    monkeypatch.setattr(inventory_store.os, "open", unexpected_open)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "mkfifo") or not hasattr(os, "O_NONBLOCK"),
+    reason="Non-blocking FIFO opens require POSIX support.",
+)
+def test_audit_hmac_key_file_nonblocking_open_handles_fifo_swap(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit-hmac.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    original_lstat = os.lstat
+    original_open = os.open
+    swapped = False
+
+    def swap_to_fifo(path):
+        nonlocal swapped
+        result = original_lstat(path)
+        if Path(path) == key_file and not swapped:
+            key_file.unlink()
+            os.mkfifo(key_file)
+            swapped = True
+        return result
+
+    def require_nonblocking_open(path, flags, *args, **kwargs):
+        assert flags & os.O_NONBLOCK
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(inventory_store.os, "lstat", swap_to_fifo)
+    monkeypatch.setattr(inventory_store.os, "open", require_nonblocking_open)
+
+    assert inventory_store._audit_hmac_key() is None
+    assert swapped
+
+
+def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, tmp_path):
+    key_file = tmp_path / "writable.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o660)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+def test_audit_hmac_key_file_rejects_permission_change_during_read(monkeypatch, tmp_path):
+    key_file = tmp_path / "changing-permissions.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+    original_read = inventory_store.os.read
+
+    def change_permissions_after_read(descriptor, size):
+        content = original_read(descriptor, size)
+        key_file.chmod(0o660)
+        return content
+
+    monkeypatch.setattr(inventory_store.os, "read", change_permissions_after_read)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.parametrize("raw", [b"x" * 4_097, b"\xff" * 64])
+def test_audit_hmac_key_file_rejects_oversized_or_non_utf8_content(monkeypatch, tmp_path, raw):
+    key_file = tmp_path / "invalid.key"
+    key_file.write_bytes(raw)
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+def test_audit_hmac_key_rejects_ambiguous_environment_and_file_sources(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-environment-audit-key-with-32-plus-characters",
+    )
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+def test_audit_hmac_key_file_still_enforces_key_separation(monkeypatch, tmp_path):
+    key = "independent-file-backed-audit-key-with-32-plus-characters"
+    key_file = tmp_path / "audit.key"
+    key_file.write_text(key, encoding="utf-8")
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+    monkeypatch.setenv("NETWATCH_API_KEY", key)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
 def test_audit_integrity_reports_unavailable_without_separate_key(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY_FILE", raising=False)
     inventory_store.record_audit_event(
         "legacy", "host_check", "192.168.1.1", "completed", "Legacy event."
     )
