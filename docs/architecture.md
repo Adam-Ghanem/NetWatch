@@ -138,7 +138,7 @@ The nine operational tables have separate responsibilities:
 - `maintenance_windows` records global or policy-specific UTC execution pauses and their change reason.
 - `intelligence_events` records bounded call status, safe error codes, token counts, model metadata, expiry, and de-identified structured output. It does not store prompts, snapshots, keys, or raw scan evidence.
 
-A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery. For a single-host check, a completed probe with no reply is `offline`; a missing, denied, timed-out, or undecodable local ping process is `unknown`, never proof of downtime.
+A missing ICMP reply changes the current status to `Not observed` but does not overwrite the last confirmed sighting. This keeps historical evidence honest when firewalls or temporary network conditions affect discovery. For a single-host check, a completed probe with no reply is `offline`; a missing, denied, timed-out, or undecodable local ping process is `unknown`, never proof of downtime. Raw local process exception details are not exposed to operators.
 
 The older CSV history remains only for Streamlit compatibility.
 
