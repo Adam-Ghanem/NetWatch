@@ -215,3 +215,26 @@ def test_reverse_dns_worker_budget_caps_hung_lookups(monkeypatch):
     # Once the underlying resolver returns, its slot is released for reuse.
     assert device_identity.reverse_hostname("192.0.2.12", timeout_seconds=1) == "late-host"
     assert len(workers) == 2
+
+
+def test_reverse_dns_releases_slot_when_thread_start_fails(monkeypatch):
+    import threading
+
+    import device_identity
+
+    slots = threading.BoundedSemaphore(1)
+
+    class FailedThread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(device_identity, "_reverse_dns_slots", slots)
+    monkeypatch.setattr(device_identity.threading, "Thread", FailedThread)
+
+    assert device_identity.reverse_hostname("192.0.2.13", timeout_seconds=1) == "-"
+    # A failed Thread.start() must not permanently consume resolver capacity.
+    assert slots.acquire(blocking=False) is True
+    slots.release()
