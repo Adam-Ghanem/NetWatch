@@ -691,9 +691,7 @@ def test_enterprise_event_sink_normalizes_http_protocol_error_from_transport(mon
     def fail_transport(*_, **__):
         raise failure
 
-    monkeypatch.setattr(
-        enterprise_adapters, "open_public_https_without_redirects", fail_transport
-    )
+    monkeypatch.setattr(enterprise_adapters, "open_public_https_without_redirects", fail_transport)
     sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
 
     with pytest.raises(
@@ -737,4 +735,3 @@ def test_enterprise_event_sink_normalizes_truncated_http_response_without_body_l
         sink.publish({"kind": "synthetic-test"})
 
     assert "private-response-fragment" not in str(captured.value)
-
