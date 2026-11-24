@@ -1083,6 +1083,40 @@ def record_audit_event(
     _invalidate_audit_readiness_cache()
 
 
+
+def record_audit_event_in_transaction(
+    conn: sqlite3.Connection,
+    actor_role: str,
+    action: str,
+    target: str,
+    outcome: str,
+    details: str,
+    *,
+    actor_id: str = "",
+    auth_method: str = "",
+    request_id: str = "",
+) -> None:
+    """Append an audit event without committing the caller's transaction.
+
+    The caller owns the transaction so a protected mutation and its audit
+    evidence can commit or roll back together.
+    """
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    _insert_audit_event(
+        conn,
+        actor_role,
+        action,
+        target,
+        outcome,
+        details,
+        actor_id=actor_id,
+        auth_method=auth_method,
+        request_id=request_id,
+    )
+    _prune_audit_log(conn)
+    _invalidate_audit_readiness_cache()
+
 def update_asset_context(
     ip_address: str,
     *,
