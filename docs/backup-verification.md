@@ -12,6 +12,7 @@ can download a consistent snapshot. The verifier below works **offline** and
   audit_log, operation_alerts, and service_findings
 - SQLite foreign-key consistency (PRAGMA foreign_key_check)
 - Row counts for those tables
+- A basename-only `path` in JSON output; parent directory names are not emitted
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
 - Whether the file changed during verification (size and modification time)
@@ -71,3 +72,8 @@ The verifier also does **not** encrypt backups, upload/rotate them off-host,
 provide RTO/RPO guarantees, or establish multi-tenant/multi-replica readiness.
 Use approved encrypted backup storage and exercise a real recovery procedure
 before making production resilience claims.
+
+The CLI reports filesystem access failures with a generic message rather than
+including operating-system exception text that may contain local directory paths.
+This reduces accidental path disclosure when JSON output is copied into recovery
+registers or support tickets; it does not hide paths from the local host's own logs.

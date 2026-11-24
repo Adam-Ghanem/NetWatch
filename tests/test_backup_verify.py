@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
+import sys
 
 import pytest
 
-from scripts.verify_sqlite_backup import TABLES, verify
+from scripts.verify_sqlite_backup import TABLES, main, verify
 
 
 def _backup(path, *, schema=10):
@@ -113,3 +115,37 @@ def test_backup_verification_rejects_non_sqlite_data(tmp_path):
 
     with pytest.raises(sqlite3.DatabaseError):
         verify(path)
+
+
+
+def test_backup_verification_redacts_parent_directory(tmp_path):
+    path = tmp_path / "private-volume" / "backup.sqlite3"
+    path.parent.mkdir()
+    _backup(path)
+
+    report = verify(path)
+
+    assert report["path"] == path.name
+    assert str(path.parent) not in str(report["path"])
+
+
+def test_backup_cli_redacts_filesystem_paths_on_oserror(
+    tmp_path, monkeypatch, capsys
+):
+    path = tmp_path / "backup.sqlite3"
+    path.write_bytes(b"placeholder")
+
+    def fail_read(_path):
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr("scripts.verify_sqlite_backup._file_sha256", fail_read)
+    monkeypatch.setattr(sys, "argv", ["verify_sqlite_backup.py", str(path)])
+
+    assert main() == 2
+    output = capsys.readouterr().out
+
+    assert str(tmp_path) not in output
+    assert json.loads(output) == {
+        "ok": False,
+        "error": "Unable to access backup file.",
+    }

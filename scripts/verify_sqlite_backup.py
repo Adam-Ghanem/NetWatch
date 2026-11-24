@@ -98,7 +98,7 @@ def verify(
         raise ValueError("Backup changed during verification; use an offline snapshot.")
 
     return {
-        "path": str(path.resolve()),
+        "path": path.name,
         "bytes": after.st_size,
         "sha256": digest,
         "integrity": integrity,
@@ -121,7 +121,15 @@ def main() -> int:
     args = parser.parse_args()
     try:
         report = verify(args.backup, args.expected_schema, args.expected_sha256)
-    except (OSError, ValueError, sqlite3.Error) as exc:
+    except OSError:
+        print(
+            json.dumps(
+                {"ok": False, "error": "Unable to access backup file."},
+                indent=2,
+            )
+        )
+        return 2
+    except (ValueError, sqlite3.Error) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
         return 2
     print(json.dumps({"ok": True, **report}, indent=2, sort_keys=True))
