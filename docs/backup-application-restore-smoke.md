@@ -24,6 +24,9 @@ The smoke checks:
   restore, and the updated audit chain remains valid.
 - Authenticated `/api/scan-policies` and `/api/maintenance-windows` retain
   the disabled authorized policy and its maintenance-window relationship.
+- The audit HMAC key remains external to the snapshot. Missing or incorrect
+  key material keeps readiness at HTTP 503; readiness returns only after the
+  matching key is supplied separately.
 - The test replaces the network scanner with a failure guard; no scan is run.
 
 All records and keys are test fixtures. The test performs no network scan,
