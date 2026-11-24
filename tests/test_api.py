@@ -1511,18 +1511,14 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         # remain blocked until the operator supplies the matching key externally.
         monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY")
         missing_key_readiness = restored_client.get("/api/health/ready")
-        missing_key_integrity = restored_client.get(
-            "/api/audit-log/integrity", headers=API_HEADERS
-        )
+        missing_key_integrity = restored_client.get("/api/audit-log/integrity", headers=API_HEADERS)
 
         monkeypatch.setenv(
             "NETWATCH_AUDIT_HMAC_KEY",
             "wrong-audit-key-with-enough-characters-0000",
         )
         wrong_key_readiness = restored_client.get("/api/health/ready")
-        wrong_key_integrity = restored_client.get(
-            "/api/audit-log/integrity", headers=API_HEADERS
-        )
+        wrong_key_integrity = restored_client.get("/api/audit-log/integrity", headers=API_HEADERS)
 
         monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", AUDIT_HMAC_KEY)
         readiness = restored_client.get("/api/health/ready")
