@@ -1,5 +1,7 @@
+import errno
 import os
 import sqlite3
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -679,6 +681,49 @@ def test_audit_hmac_key_file_allows_read_only_service_group(monkeypatch, tmp_pat
 
     assert inventory_store._audit_hmac_key() == key.encode("utf-8")
 
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required.")
+def test_audit_hmac_key_file_rejects_extended_posix_access_acl(monkeypatch, tmp_path):
+    key_file = tmp_path / "named-acl.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o440)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    def expose_named_acl(descriptor, attribute):
+        assert isinstance(descriptor, int)
+        assert attribute == "system.posix_acl_access"
+        return b"synthetic-named-user-acl"
+
+    monkeypatch.setattr(inventory_store.os, "getxattr", expose_named_acl)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required.")
+@pytest.mark.parametrize("error_number", [errno.ENODATA, errno.ENOTSUP])
+def test_audit_hmac_key_file_accepts_absent_or_unsupported_posix_acl(
+    monkeypatch, tmp_path, error_number
+):
+    key = "independent-file-backed-audit-key-with-32-plus-characters"
+    key_file = tmp_path / "no-named-acl.key"
+    key_file.write_text(key, encoding="utf-8")
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    def no_extended_acl(descriptor, attribute):
+        assert isinstance(descriptor, int)
+        assert attribute == "system.posix_acl_access"
+        raise OSError(error_number, "no extended access ACL")
+
+    monkeypatch.setattr(inventory_store.os, "getxattr", no_extended_acl)
+
+    assert inventory_store._audit_hmac_key() == key.encode("utf-8")
 
 def test_audit_hmac_key_file_rejects_permission_change_during_read(monkeypatch, tmp_path):
     key_file = tmp_path / "changing-permissions.key"
