@@ -566,7 +566,9 @@ def test_audit_hmac_key_file_rejects_symlinks(monkeypatch, tmp_path):
     assert inventory_store._audit_hmac_key() is None
 
 
-def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, tmp_path):
+def test_audit_hmac_key_file_rejects_group_or_world_writable_files(
+    monkeypatch, tmp_path
+):
     key_file = tmp_path / "writable.key"
     key_file.write_text(
         "independent-file-backed-audit-key-with-32-plus-characters",
