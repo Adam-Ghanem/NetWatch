@@ -56,6 +56,8 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   deadline; the socket timeout is reduced to the remaining budget for each
   chunk. This prevents a slow trickle response from holding an analysis worker
   beyond its bounded response window. Responses remain capped at 1 MB.
+- Socket resets and truncated HTTP framing are normalized to a generic
+  provider-unavailable error; raw transport exception details are not returned.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.

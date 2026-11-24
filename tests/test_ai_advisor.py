@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import json
 import threading
 import urllib.request
@@ -416,3 +417,32 @@ def test_openai_total_response_timeout_fails_closed(monkeypatch):
         )
 
     assert caught.value.code == "provider_unavailable"
+
+
+
+@pytest.mark.parametrize("failure", ["socket_reset", "truncated_http"])
+def test_openai_transport_read_errors_fail_closed(monkeypatch, failure):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def fail_read(*_, **__):
+        if failure == "socket_reset":
+            raise ConnectionResetError("synthetic provider socket reset")
+        raise http.client.IncompleteRead(b"partial provider response")
+
+    monkeypatch.setattr(ai_advisor, "_read_bounded_response", fail_read)
+
+    with pytest.raises(AIProviderError) as caught:
+        request_intelligence_brief(
+            _snapshot(),
+            api_key="test-openai-project-key-with-enough-characters",
+            safety_id="nw_test_identifier",
+            opener=lambda *_args, **_kwargs: FakeResponse(),
+        )
+
+    assert caught.value.code == "provider_unavailable"
+    assert str(caught.value) == "The intelligence provider is temporarily unavailable."

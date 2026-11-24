@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import http.client
 import json
 import re
-import socket
 import time
 import urllib.error
 import urllib.request
@@ -494,7 +494,7 @@ def request_intelligence_brief(
             )
     except urllib.error.HTTPError as exc:
         raise _http_error(exc) from exc
-    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+    except (OSError, http.client.HTTPException) as exc:
         raise AIProviderError(
             "provider_unavailable", "The intelligence provider is temporarily unavailable."
         ) from exc
