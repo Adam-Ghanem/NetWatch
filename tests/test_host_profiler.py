@@ -88,12 +88,18 @@ def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(monkeypatch, fa
             raise OSError("permission denied: /private/runtime/path")
         if failure == "timeout":
             raise subprocess.TimeoutExpired("ping", timeout=5)
-        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        raise UnicodeDecodeError("utf-8", b"\\xff", 0, 1, "invalid start byte")
 
     monkeypatch.setattr(host_profiler, "ping_host_raw", fail_probe)
-    monkeypatch.setattr(host_profiler, "reverse_hostname", lambda _target: pytest.fail("no DNS"))
     monkeypatch.setattr(
-        host_profiler, "identity_for_ip", lambda *_args, **_kwargs: _identity()
+        host_profiler,
+        "reverse_hostname",
+        lambda _target: pytest.fail("no DNS"),
+    )
+    monkeypatch.setattr(
+        host_profiler,
+        "identity_for_ip",
+        lambda *_args, **_kwargs: _identity(),
     )
 
     profile = host_profiler.profile_host("192.168.1.10")
@@ -113,7 +119,9 @@ def test_profile_host_keeps_completed_no_reply_distinct_from_probe_failure(monke
         lambda _target: SimpleNamespace(returncode=1, stdout="", stderr="no reply"),
     )
     monkeypatch.setattr(
-        host_profiler, "identity_for_ip", lambda *_args, **_kwargs: _identity()
+        host_profiler,
+        "identity_for_ip",
+        lambda *_args, **_kwargs: _identity(),
     )
 
     profile = host_profiler.profile_host("192.168.1.10")
