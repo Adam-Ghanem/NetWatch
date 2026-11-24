@@ -33,6 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
+          black --diff scripts/start.py tests/test_start_script.py || true
           black --check .
           isort --check-only .
 
