@@ -77,7 +77,7 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
             INSERT INTO notification_deliveries(
                 event_id, alert_id, channel, payload, status, attempts,
                 created_at, available_at, claimed_at, claim_token, delivered_at, last_result
-            ) VALUES (?, ?, 'webhook', ?, ?, 1, ?, ?, '', '', ?, 'synthetic')
+            ) VALUES (?, ?, 'webhook', ?, ?, 1, ?, ?, ?, ?, ?, 'synthetic')
             """,
             [
                 (
@@ -87,17 +87,30 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
                     "delivered",
                     old,
                     old,
+                    "",
+                    "",
                     old,
                 ),
-                ("old-dead", 2, '{"private":"triage-only"}', "dead", old, old, ""),
-                ("old-pending", 3, '{"private":"retry"}', "pending", old, old, ""),
-                ("recent-delivered", 4, "{}", "delivered", recent, recent, recent),
+                ("old-dead", 2, '{"private":"triage-only"}', "dead", old, old, "", "", ""),
+                ("old-pending", 3, '{"private":"retry"}', "pending", old, old, "", "", ""),
+                ("recent-delivered", 4, "{}", "delivered", recent, recent, "", "", recent),
+                (
+                    "old-dead-claimed",
+                    5,
+                    '{"private":"claimed"}',
+                    "dead",
+                    old,
+                    old,
+                    old,
+                    "synthetic-active-claim",
+                    "",
+                ),
             ],
         )
 
     status = retention_store.retention_status()
     tables = {row["table"]: row for row in status["tables"]}
-    assert tables["notification_deliveries"]["count"] == 4
+    assert tables["notification_deliveries"]["count"] == 5
     assert "private" not in str(tables["notification_deliveries"])
 
     preview = retention_store.cleanup_retention(older_than_days=90, dry_run=True, max_rows=100)
@@ -116,6 +129,7 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
         }
 
     assert remaining == {
+        "old-dead-claimed": "dead",
         "old-pending": "pending",
         "recent-delivered": "delivered",
     }
