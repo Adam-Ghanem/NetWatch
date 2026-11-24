@@ -259,7 +259,7 @@ def show_host_check() -> None:
     ):
         target = validation.value or ip
         profile = profile_host(target)
-        status = "online" if profile.online else "offline/blocked"
+        status = profile.reachability_status
         msg = f"{profile.notes}; latency={profile.latency_ms}; ttl={profile.ttl}; hostname={profile.hostname}"
         add_event(f"Host profile for {target}: {msg}")
         add_history("host_profile", target, msg, status=status)
@@ -286,6 +286,8 @@ def show_host_check() -> None:
                 scan_run_id=scan_run_id,
             )
             st.success("Host replied to ICMP ping")
+        elif profile.reachability_status == "unknown":
+            st.warning(profile.notes)
         else:
             st.error(profile.notes)
         record_audit_event("legacy", "host_check", target, "completed", f"Status: {status}.")

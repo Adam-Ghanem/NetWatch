@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import subprocess
 from dataclasses import dataclass
 
 from device_identity import identity_for_ip, reverse_hostname
@@ -15,6 +16,7 @@ class HostProfile:
     address_family: str
     hostname: str
     online: bool
+    reachability_status: str
     latency_ms: float | None
     ttl: int | None
     os_hint: str
@@ -77,6 +79,7 @@ def profile_host(ip: str) -> HostProfile:
             address_family=_address_family(ip),
             hostname="-",
             online=False,
+            reachability_status="blocked",
             latency_ms=None,
             ttl=None,
             os_hint="Blocked",
@@ -92,16 +95,25 @@ def profile_host(ip: str) -> HostProfile:
         )
 
     target = validation.value or ip.strip()
-    result = ping_host_raw(target)
-    output = f"{result.stdout}\n{result.stderr}"
+    try:
+        result = ping_host_raw(target)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        # A missing executable, denied process launch, timeout, or decode failure
+        # means the probe did not produce reachability evidence.
+        result = None
+
+    output = f"{result.stdout}\n{result.stderr}" if result is not None else ""
     latency = parse_latency_ms(output)
     ttl = parse_ttl(output)
-    online = result.returncode == 0
+    online = result is not None and result.returncode == 0
+    reachability_status = "online" if online else "offline" if result is not None else "unknown"
     hostname = reverse_hostname(target) if online else "-"
     identity = identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
 
     if online:
         notes = "Host replied to ICMP ping"
+    elif result is None:
+        notes = "ICMP probe unavailable; reachability is unknown"
     else:
         notes = "No ping reply; host may be offline or blocking ICMP"
 
@@ -110,6 +122,7 @@ def profile_host(ip: str) -> HostProfile:
         address_family=_address_family(target),
         hostname=hostname,
         online=online,
+        reachability_status=reachability_status,
         latency_ms=latency,
         ttl=ttl,
         os_hint=os_hint_from_ttl(ttl),

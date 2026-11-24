@@ -1535,8 +1535,20 @@ $('#host-form').addEventListener('submit', async (event) => {
       body: JSON.stringify({ ip: $('#host-ip').value.trim(), authorized: $('#host-authorized').checked }),
     });
     $('#host-result-title').textContent = result.ip_address;
+    const hostReachability = result.reachability_status || (result.online ? 'online' : 'offline');
+    const hostReachabilityLabel = hostReachability === 'online'
+      ? 'Online'
+      : hostReachability === 'unknown'
+        ? 'Unknown'
+        : hostReachability === 'blocked'
+          ? 'Blocked'
+          : 'No reply';
     renderMiniMetrics($('#host-metrics'), [
-      { label: 'Status', value: result.online ? 'Online' : 'No reply', note: 'ICMP result' },
+      {
+        label: 'Status',
+        value: hostReachabilityLabel,
+        note: hostReachability === 'unknown' ? 'ICMP probe unavailable' : 'ICMP result',
+      },
       { label: 'Latency', value: result.latency_ms === null ? '—' : `${result.latency_ms} ms`, note: 'Round trip' },
       { label: 'Device', value: result.device_name, note: result.device_type },
       { label: 'MAC address', value: result.mac_address, note: result.randomized_mac ? 'Private / randomized' : 'Neighbor evidence' },
@@ -1553,7 +1565,7 @@ $('#host-form').addEventListener('submit', async (event) => {
       ['Observation', result.notes],
       ['Target', result.ip_address],
     ]);
-    setFormStatus('host-status', result.notes, result.online ? 'success' : 'error');
+    setFormStatus('host-status', result.notes, hostReachability === 'online' ? 'success' : hostReachability === 'unknown' ? '' : 'error');
   } catch (error) {
     setFormStatus('host-status', error.message, 'error');
   } finally {

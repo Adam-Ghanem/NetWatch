@@ -1228,7 +1228,7 @@ def check_host(
     target = validation.value or payload.ip
     with _scan_slot():
         result = profile_host(target)
-    status = "online" if result.online else "offline"
+    status = result.reachability_status
     msg = (
         f"{result.notes}; latency={result.latency_ms}; ttl={result.ttl}; hostname={result.hostname}"
     )
