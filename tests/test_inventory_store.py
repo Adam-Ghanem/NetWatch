@@ -566,9 +566,7 @@ def test_audit_hmac_key_file_rejects_symlinks(monkeypatch, tmp_path):
     assert inventory_store._audit_hmac_key() is None
 
 
-def test_audit_hmac_key_file_rejects_group_or_world_writable_files(
-    monkeypatch, tmp_path
-):
+def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, tmp_path):
     key_file = tmp_path / "writable.key"
     key_file.write_text(
         "independent-file-backed-audit-key-with-32-plus-characters",
@@ -581,9 +579,7 @@ def test_audit_hmac_key_file_rejects_group_or_world_writable_files(
     assert inventory_store._audit_hmac_key() is None
 
 
-def test_audit_hmac_key_file_rejects_permission_change_during_read(
-    monkeypatch, tmp_path
-):
+def test_audit_hmac_key_file_rejects_permission_change_during_read(monkeypatch, tmp_path):
     key_file = tmp_path / "changing-permissions.key"
     key_file.write_text(
         "independent-file-backed-audit-key-with-32-plus-characters",
@@ -605,9 +601,7 @@ def test_audit_hmac_key_file_rejects_permission_change_during_read(
 
 
 @pytest.mark.parametrize("raw", [b"x" * 4_097, b"\xff" * 64])
-def test_audit_hmac_key_file_rejects_oversized_or_non_utf8_content(
-    monkeypatch, tmp_path, raw
-):
+def test_audit_hmac_key_file_rejects_oversized_or_non_utf8_content(monkeypatch, tmp_path, raw):
     key_file = tmp_path / "invalid.key"
     key_file.write_bytes(raw)
     key_file.chmod(0o400)
@@ -617,9 +611,7 @@ def test_audit_hmac_key_file_rejects_oversized_or_non_utf8_content(
     assert inventory_store._audit_hmac_key() is None
 
 
-def test_audit_hmac_key_rejects_ambiguous_environment_and_file_sources(
-    monkeypatch, tmp_path
-):
+def test_audit_hmac_key_rejects_ambiguous_environment_and_file_sources(monkeypatch, tmp_path):
     key_file = tmp_path / "audit.key"
     key_file.write_text(
         "independent-file-backed-audit-key-with-32-plus-characters",
