@@ -683,7 +683,9 @@ def test_audit_hmac_key_file_allows_read_only_service_group(monkeypatch, tmp_pat
 
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required.")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required."
+)
 def test_audit_hmac_key_file_rejects_extended_posix_access_acl(monkeypatch, tmp_path):
     key_file = tmp_path / "named-acl.key"
     key_file.write_text(
@@ -704,7 +706,9 @@ def test_audit_hmac_key_file_rejects_extended_posix_access_acl(monkeypatch, tmp_
     assert inventory_store._audit_hmac_key() is None
 
 
-@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required.")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required."
+)
 @pytest.mark.parametrize("error_number", [errno.ENODATA, errno.ENOTSUP])
 def test_audit_hmac_key_file_accepts_absent_or_unsupported_posix_acl(
     monkeypatch, tmp_path, error_number
