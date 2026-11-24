@@ -46,9 +46,8 @@ confirmed cleanup may remove only `delivered` or `dead` receipts older than the 
 retention age, subject to the existing per-table row cap. Pending/retry receipts
 are never eligible, even when old; rows with an active claim are also excluded.
 Cleanup remains dry-run by default, is audited, and never deletes `audit_log` or
-`audit_chain_state`. This is logical row deletion, not secure erasure from SQLite
-WAL pages, freed pages, or existing backups; continue to use disk encryption and
-backup rotation.
+`audit_chain_state`. Deleting rows removes them from the live database view; it
+does not immediately purge SQLite WAL pages, freed pages, or existing backups.
 
 This is logical row-level minimization, **not secure erasure**: SQLite WAL files,
 freed pages, and existing backups may retain prior bytes until checkpointing,
