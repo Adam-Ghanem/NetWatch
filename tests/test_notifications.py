@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import socket
@@ -683,3 +684,57 @@ def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
         ("connect", "93.184.216.34"),
         ("request", "93.184.216.34"),
     ]
+
+def test_enterprise_event_sink_normalizes_http_protocol_error_from_transport(monkeypatch):
+    failure = http.client.RemoteDisconnected("private transport detail")
+
+    def fail_transport(*_, **__):
+        raise failure
+
+    monkeypatch.setattr(
+        enterprise_adapters, "open_public_https_without_redirects", fail_transport
+    )
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(
+        enterprise_adapters.EnterpriseAdapterUnavailable,
+        match="Event sink transport is unavailable",
+    ) as captured:
+        sink.publish({"kind": "synthetic-test"})
+
+    assert "private transport detail" not in str(captured.value)
+
+
+def test_enterprise_event_sink_normalizes_truncated_http_response_without_body_leak(
+    monkeypatch,
+):
+    class _ResponseContext:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    failure = http.client.IncompleteRead(b"private-response-fragment", 100)
+    monkeypatch.setattr(
+        enterprise_adapters,
+        "open_public_https_without_redirects",
+        lambda *_, **__: _ResponseContext(),
+    )
+
+    def fail_read(*_, **__):
+        raise failure
+
+    monkeypatch.setattr(enterprise_adapters, "read_bounded_response", fail_read)
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(
+        enterprise_adapters.EnterpriseAdapterUnavailable,
+        match="Event sink transport is unavailable",
+    ) as captured:
+        sink.publish({"kind": "synthetic-test"})
+
+    assert "private-response-fragment" not in str(captured.value)
+
