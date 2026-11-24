@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import os
 import secrets
+import stat
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -56,22 +58,58 @@ DEFAULTS = {
 }
 
 
+def _env_file_identity() -> tuple[int, int] | None:
+    """Reject aliases and special files before reading or replacing local secrets."""
+    try:
+        info = ENV_FILE.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ValueError("Cannot safely inspect the local .env file.") from exc
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("The local .env path must be a regular file with exactly one hard link.")
+    return info.st_dev, info.st_ino
+
+
 def read_env() -> dict[str, str]:
     values: dict[str, str] = {}
-    if not ENV_FILE.exists():
+    identity = _env_file_identity()
+    if identity is None:
         return values
-    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        clean_key = key.strip()
-        if clean_key:
-            values[clean_key] = value.strip()
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(ENV_FILE, flags)
+    except OSError as exc:
+        raise ValueError("Cannot safely open the local .env file.") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or (opened.st_dev, opened.st_ino) != identity
+            or _env_file_identity() != identity
+        ):
+            raise ValueError("The local .env file changed or is not a private regular file.")
+        stream = os.fdopen(descriptor, "r", encoding="utf-8")
+        descriptor = -1
+        with stream:
+            for raw_line in stream:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                clean_key = key.strip()
+                if clean_key:
+                    values[clean_key] = value.strip()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     return values
 
 
 def write_env(values: dict[str, str]) -> None:
+    _env_file_identity()
     preferred = [
         "NETWATCH_API_KEY",
         "NETWATCH_AUDIT_HMAC_KEY",
@@ -84,12 +122,47 @@ def write_env(values: dict[str, str]) -> None:
     ordered = [key for key in preferred if key in values] + extras
     lines = ["# Local NetWatch settings. Do not commit this file."]
     lines.extend(f"{key}={values[key]}" for key in ordered)
-    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    payload = "\n".join(lines) + "\n"
+
+    descriptor = -1
+    temporary_path: Path | None = None
     try:
-        os.chmod(ENV_FILE, 0o600)
-    except (OSError, NotImplementedError):
-        # Some Windows and mounted filesystems do not support POSIX modes.
-        pass
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".netwatch-env-", dir=ENV_FILE.parent
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            if hasattr(os, "fchmod"):
+                os.fchmod(descriptor, 0o600)
+            else:
+                os.chmod(temporary_path, 0o600)
+        except (OSError, NotImplementedError):
+            # Windows and mounted filesystems may not support POSIX mode changes.
+            pass
+        stream = os.fdopen(descriptor, "w", encoding="utf-8")
+        descriptor = -1
+        with stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+
+        # Recheck before replacement. os.replace replaces a final symlink itself;
+        # it never follows that link to truncate an unrelated target.
+        _env_file_identity()
+        os.replace(temporary_path, ENV_FILE)
+        temporary_path = None
+    except ValueError:
+        raise
+    except OSError as exc:
+        raise ValueError("Cannot safely write the local .env file.") from exc
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def ensure_configuration() -> str:
