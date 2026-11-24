@@ -495,9 +495,34 @@ def _audit_chain_is_valid(conn: sqlite3.Connection, key: bytes) -> tuple[bool, i
     return valid, protected_entries, legacy_entries
 
 
+def _audit_readiness_file_signature(path: Path) -> bytes:
+    """Return a cheap identity for a SQLite file or journal sidecar."""
+    try:
+        metadata = path.stat()
+    except OSError as error:
+        return f"unavailable:{error.errno}".encode("ascii")
+    return ":".join(
+        str(value)
+        for value in (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_size,
+            metadata.st_mtime_ns,
+            metadata.st_ctime_ns,
+        )
+    ).encode("ascii")
+
+
 def _audit_readiness_identity(key: bytes) -> bytes:
-    database_path = os.fsencode(os.fspath(DB_FILE.absolute()))
-    return hashlib.sha256(key + b"\0" + database_path).digest()
+    database_path = DB_FILE.absolute()
+    components = [os.fsencode(os.fspath(database_path))]
+    for candidate in (
+        database_path,
+        Path(f"{database_path}-wal"),
+        Path(f"{database_path}-journal"),
+    ):
+        components.append(_audit_readiness_file_signature(candidate))
+    return hashlib.sha256(key + b"\0" + b"\0".join(components)).digest()
 
 
 def _check_audit_integrity(key: bytes) -> bool:
@@ -523,9 +548,12 @@ def audit_integrity_is_ready(*, use_cache: bool = True) -> bool:
 
     key = _audit_hmac_key()
     if key is None:
+        _invalidate_audit_readiness_cache()
         return False
     if not use_cache:
-        return _check_audit_integrity(key)
+        result = _check_audit_integrity(key)
+        _invalidate_audit_readiness_cache()
+        return result
 
     identity = _audit_readiness_identity(key)
     now = time.monotonic()
@@ -1372,6 +1400,7 @@ def verify_audit_integrity() -> dict[str, object]:
     init_db()
     key = _audit_hmac_key()
     if key is None:
+        _invalidate_audit_readiness_cache()
         return {
             "status": "unavailable",
             "valid": False,
@@ -1383,6 +1412,7 @@ def verify_audit_integrity() -> dict[str, object]:
     with _connect() as conn:
         valid, protected_entries, legacy_entries = _audit_chain_is_valid(conn, key)
 
+    _invalidate_audit_readiness_cache()
     if not valid:
         status = "invalid"
     elif protected_entries:
