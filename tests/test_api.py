@@ -1467,8 +1467,8 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
     now = datetime.now(timezone.utc)
     operations_store.create_maintenance_window(
         name="Restore smoke maintenance",
-        starts_at=(now - timedelta(minutes=1)).isoformat(timespec="seconds"),
-        ends_at=(now + timedelta(hours=1)).isoformat(timespec="seconds"),
+        starts_at=(now - timedelta(days=1)).isoformat(timespec="seconds"),
+        ends_at=(now + timedelta(days=1)).isoformat(timespec="seconds"),
         reason="Synthetic restore verification",
         policy_id=int(policy["id"]),
         enabled=True,
