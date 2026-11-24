@@ -140,8 +140,14 @@ def _probe_one(
     port, service = _SERVICE_PROFILES[profile_name]
     payload, correlation = _build_probe(profile_name)
     row = _base_row(port, service)
-    family, socket_address = _socket_target(target, port)
     started = time.perf_counter()
+
+    try:
+        family, socket_address = _socket_target(target, port)
+    except (OSError, UnicodeError):
+        row["Status"] = "Blocked"
+        row["Service Detection"] = "Target validation"
+        return row
 
     try:
         with socket_factory(family, socket.SOCK_DGRAM) as sock:
