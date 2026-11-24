@@ -15,9 +15,7 @@ SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v
 CODECOV_ACTION_V7_1_1 = "codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1"
 UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7"
 DOWNLOAD_ARTIFACT_V8 = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8"
-CODECOV_GITHUB_SCRIPT_V8 = (
-    "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0"
-)
+CODECOV_GITHUB_SCRIPT_V8 = "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0"
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
