@@ -136,6 +136,7 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
         "recent-delivered": "delivered",
     }
 
+
 def _insert_old_asset_event(monkeypatch, tmp_path):
     _use_temporary_database(monkeypatch, tmp_path)
     inventory_store.init_db()
