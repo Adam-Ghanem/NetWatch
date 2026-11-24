@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import http.client
 import io
 import json
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -12,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import backend.main as api
+import enterprise_adapters
 import inventory_store
 import notifications
 import operations_store
@@ -22,8 +25,28 @@ VIEWER_KEY = "notification-viewer-key-with-at-least-32-characters"
 AUDIT_KEY = "notification-audit-key-with-at-least-32-characters"
 
 
+class _FakeResponseSocket:
+    def settimeout(self, timeout: float) -> None:
+        self.timeout = timeout
+
+
+class _FakeResponseRaw:
+    def __init__(self, sock: _FakeResponseSocket) -> None:
+        self._sock = sock
+
+
+class _FakeResponseFile:
+    def __init__(self, sock: _FakeResponseSocket) -> None:
+        self.raw = _FakeResponseRaw(sock)
+
+
 class _FakeResponse:
     status = 204
+
+    def __init__(self) -> None:
+        self._socket = _FakeResponseSocket()
+        self.fp = _FakeResponseFile(self._socket)
+        self._read = False
 
     def __enter__(self):
         return self
@@ -34,8 +57,47 @@ class _FakeResponse:
     def getcode(self) -> int:
         return self.status
 
-    def read(self, _: int) -> bytes:
-        return b"ok"
+    def read1(self, limit: int) -> bytes:
+        if self._read:
+            return b""
+        self._read = True
+        return b"ok"[:limit]
+
+    def read(self, limit: int) -> bytes:
+        return self.read1(limit)
+
+
+def test_bounded_https_response_enforces_one_monotonic_deadline(monkeypatch):
+    now = [0.0]
+    socket_timeouts: list[float] = []
+
+    class SlowSocket:
+        def settimeout(self, timeout: float) -> None:
+            socket_timeouts.append(timeout)
+
+    class SlowRaw:
+        _sock = SlowSocket()
+
+    class SlowFile:
+        raw = SlowRaw()
+
+    class SlowResponse:
+        fp = SlowFile()
+
+        def read1(self, limit: int) -> bytes:
+            now[0] += 2.0
+            return b"x" * min(4, limit)
+
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+
+    with pytest.raises(TimeoutError, match="total body-read deadline"):
+        notifications.read_bounded_response(
+            SlowResponse(),
+            max_bytes=10,
+            timeout=5,
+        )
+
+    assert socket_timeouts == [5.0, 3.0, 1.0]
 
 
 def _configure_webhook(monkeypatch) -> None:
@@ -350,3 +412,327 @@ def test_notification_status_never_returns_configured_urls(monkeypatch, tmp_path
     assert response.json()["channels"][0] == {"kind": "webhook", "enabled": True}
     assert "hooks.example.test" not in response.text
     assert "super-secret-path" not in response.text
+
+
+def _dns_record(address: str):
+    family = socket.AF_INET6 if ":" in address else socket.AF_INET
+    sockaddr = (address, 443, 0, 0) if family == socket.AF_INET6 else (address, 443)
+    return (family, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", sockaddr)
+
+
+def test_public_https_transport_fails_closed_on_dns_timeout(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.02)
+    monkeypatch.setattr(notifications, "_DNS_RESOLVER", resolver)
+
+    def blocked_lookup(*args, **kwargs):
+        entered.set()
+        release.wait(timeout=1)
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", blocked_lookup)
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("TCP must not start after a DNS timeout."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    try:
+        with pytest.raises(TimeoutError, match="DNS resolution timed out"):
+            notifications._open_without_redirects(request, timeout=5)
+        assert entered.wait(timeout=1)
+    finally:
+        release.set()
+
+
+def test_bounded_dns_resolver_rejects_queue_overflow_when_workers_stall(monkeypatch):
+    entered = threading.Event()
+    release = threading.Event()
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.05)
+    calls: list[str] = []
+
+    def blocked_lookup(host, *args, **kwargs):
+        calls.append(host)
+        if host == "first.example.test":
+            entered.set()
+            release.wait(timeout=1)
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", blocked_lookup)
+    first_errors: list[Exception] = []
+
+    def first_lookup():
+        try:
+            resolver.resolve("first.example.test", 443)
+        except Exception as exc:
+            first_errors.append(exc)
+
+    first = threading.Thread(target=first_lookup)
+    first.start()
+    try:
+        assert entered.wait(timeout=1)
+        with pytest.raises(TimeoutError, match="DNS resolution timed out"):
+            resolver.resolve("queued.example.test", 443)
+        with pytest.raises(TimeoutError, match="DNS resolver queue is full"):
+            resolver.resolve("overflow.example.test", 443)
+    finally:
+        release.set()
+        first.join(timeout=1)
+
+    assert not first.is_alive()
+    assert len(first_errors) == 1
+    assert isinstance(first_errors[0], TimeoutError)
+    assert calls == ["first.example.test"]
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "https://127.0.0.1/netwatch",
+        "https://10.0.0.5/netwatch",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[::1]/netwatch",
+        "https://[fc00::1]/netwatch",
+        "https://[::ffff:127.0.0.1]/netwatch",
+        "https://[2002:7f00:1::]/netwatch",
+        "https://[64:ff9b::a00:1]/netwatch",
+        "https://[64:ff9b:1::a00:1]/netwatch",
+        "https://[::a00:1]/netwatch",
+    ],
+)
+def test_notification_url_validation_rejects_non_public_ip_literals(candidate):
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications.validate_notification_url(candidate)
+
+
+def test_public_https_transport_rejects_mixed_public_and_private_dns_answers(monkeypatch):
+    records = [_dns_record("93.184.216.34"), _dns_record("10.0.0.8")]
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("A non-public DNS answer must block connection."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications._open_without_redirects(request, timeout=5)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "64:ff9b::a00:1",
+        "64:ff9b:1::a00:1",
+        "::a00:1",
+    ],
+)
+def test_public_https_transport_rejects_ipv6_translation_dns_answers(monkeypatch, address):
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record(address)],
+    )
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("IPv6 translation destinations must not connect."),
+    )
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(notifications.NotificationConfigurationError):
+        notifications._open_without_redirects(request, timeout=5)
+
+
+def test_public_https_transport_pins_resolved_ip_and_keeps_original_host(monkeypatch):
+    records = [_dns_record("93.184.216.34")]
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
+    connections = []
+
+    class FakeResponse:
+        status = 204
+
+        def read(self, _limit):
+            return b"ok"
+
+        def close(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout):
+            self.host = host
+            self.port = port
+            self.address = address
+            self.timeout = timeout
+            self.closed = False
+            connections.append(self)
+
+        def connect(self):
+            self.connected = True
+
+        def request(self, method, selector, *, body, headers):
+            self.request_data = (method, selector, body, headers)
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch",
+        data=b"{}",
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    with notifications._open_without_redirects(request, timeout=5) as response:
+        assert response.status == 204
+
+    assert len(connections) == 1
+    assert connections[0].host == "hooks.example.test"
+    assert connections[0].address == "93.184.216.34"
+    assert connections[0].request_data[0:3] == ("POST", "/netwatch", b"{}")
+    assert connections[0].closed is True
+
+
+def test_pinned_https_connection_uses_ip_for_tcp_and_hostname_for_tls(monkeypatch):
+    observed = {}
+
+    class FakeSocket:
+        def close(self):
+            observed["closed"] = True
+
+    class FakeContext:
+        def wrap_socket(self, sock, *, server_hostname):
+            observed["server_hostname"] = server_hostname
+            return sock
+
+    def fake_create_connection(address, timeout):
+        observed["address"] = address
+        observed["timeout"] = timeout
+        return FakeSocket()
+
+    monkeypatch.setattr(notifications.socket, "create_connection", fake_create_connection)
+    connection = notifications._PinnedHTTPSConnection(
+        "hooks.example.test", 443, "93.184.216.34", timeout=5
+    )
+    setattr(connection, "_tls_context", FakeContext())
+    connection.connect()
+    connection.close()
+
+    assert observed["address"] == ("93.184.216.34", 443)
+    assert observed["server_hostname"] == "hooks.example.test"
+    assert observed["timeout"] == 5
+    assert observed["closed"] is True
+
+
+def test_enterprise_event_sink_rejects_private_dns_answers(monkeypatch):
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("127.0.0.1")],
+    )
+    monkeypatch.setattr(
+        notifications.socket,
+        "create_connection",
+        lambda *args, **kwargs: pytest.fail("Private event sink must not connect."),
+    )
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(enterprise_adapters.EnterpriseAdapterUnavailable):
+        sink.publish({"kind": "synthetic-test"})
+
+
+def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
+    records = [_dns_record("93.184.216.34"), _dns_record("1.1.1.1")]
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", lambda *args, **kwargs: records)
+    attempts = []
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout):
+            self.address = address
+
+        def connect(self):
+            attempts.append(("connect", self.address))
+
+        def request(self, method, selector, *, body, headers):
+            attempts.append(("request", self.address))
+            raise OSError("delivery outcome is unknown")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch", data=b"{}", method="POST"
+    )
+
+    with pytest.raises(OSError, match="delivery outcome is unknown"):
+        notifications._open_without_redirects(request, timeout=5)
+
+    assert attempts == [
+        ("connect", "93.184.216.34"),
+        ("request", "93.184.216.34"),
+    ]
+
+
+def test_enterprise_event_sink_normalizes_http_protocol_error_from_transport(monkeypatch):
+    failure = http.client.BadStatusLine("private protocol detail")
+
+    def fail_transport(*_, **__):
+        raise failure
+
+    monkeypatch.setattr(enterprise_adapters, "open_public_https_without_redirects", fail_transport)
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(
+        enterprise_adapters.EnterpriseAdapterUnavailable,
+        match="Event sink transport is unavailable",
+    ) as captured:
+        sink.publish({"kind": "synthetic-test"})
+
+    assert "private transport detail" not in str(captured.value)
+
+
+def test_enterprise_event_sink_normalizes_truncated_http_response_without_body_leak(
+    monkeypatch,
+):
+    class _ResponseContext:
+        status = 204
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    failure = http.client.IncompleteRead(b"private-response-fragment", 100)
+    monkeypatch.setattr(
+        enterprise_adapters,
+        "open_public_https_without_redirects",
+        lambda *_, **__: _ResponseContext(),
+    )
+
+    def fail_read(*_, **__):
+        raise failure
+
+    monkeypatch.setattr(enterprise_adapters, "read_bounded_response", fail_read)
+    sink = enterprise_adapters.HttpsEventSink("https://events.example.test/ingest")
+
+    with pytest.raises(
+        enterprise_adapters.EnterpriseAdapterUnavailable,
+        match="Event sink transport is unavailable",
+    ) as captured:
+        sink.publish({"kind": "synthetic-test"})
+
+    assert "private-response-fragment" not in str(captured.value)

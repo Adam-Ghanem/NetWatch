@@ -24,6 +24,12 @@ This document records the defensive controls used in NetWatch.
 - Wildcard-only allowlists fall back to safe local defaults.
 - API write requests are limited to **256 KiB** before body parsing, including streamed requests without `Content-Length`. Offline PCAP/PCAPNG uploads retain their separate **32 MiB** ceiling. Over-limit requests return HTTP `413` and malformed or duplicate `Content-Length` headers return HTTP `400`. Production reverse proxies should enforce their own matching size and timeout limits, since upstream buffering can happen before the application receives data.
 
+## Outbound event-sink safety
+
+The optional HTTPS enterprise event sink uses the same public-address validation as alert webhooks: DNS answers are checked as a set, the selected public IP is pinned for TCP, the original hostname is retained for TLS verification, and redirects/proxy discovery are disabled. DNS work uses a fixed worker pool and bounded queue; response bodies have a byte cap and a total read deadline.
+
+Socket and HTTP protocol/framing failures are normalized to a generic adapter-unavailable error. Raw transport exception text and partial response bodies are not returned to callers. A POST with an uncertain delivery outcome is not automatically replayed against another address.
+
 ## UI safety
 
 The supported dashboard is the same-origin FastAPI frontend. Role keys stay in browser session storage, and approved network actions require server-enforced authorization. Historical Streamlit code remains in the source tree but is intentionally excluded from installation and Docker Compose: its published Pillow < 13 constraint prevents applying the critical fixes in Pillow 13.0.0. Do not run the legacy application or bypass the dependency audit until compatible patched upstream releases exist.

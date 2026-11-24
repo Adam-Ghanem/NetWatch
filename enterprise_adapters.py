@@ -6,6 +6,7 @@ They require explicit configuration, installed optional dependencies, and a read
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.request
@@ -13,7 +14,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-from notifications import validate_notification_url
+from notifications import (
+    NOTIFICATION_RESPONSE_MAX_BYTES,
+    NOTIFICATION_TIMEOUT_SECONDS,
+    NotificationConfigurationError,
+    open_public_https_without_redirects,
+    read_bounded_response,
+    validate_notification_url,
+)
 
 
 class EnterpriseAdapterUnavailable(RuntimeError):
@@ -133,16 +141,25 @@ class HttpsEventSink:
             headers={"Content-Type": "application/json", "User-Agent": "NetWatch-enterprise/1"},
             method="POST",
         )
-        opener = urllib.request.build_opener(_NoRedirectHandler())
-        with opener.open(request, timeout=5) as response:  # nosec B310
-            if not 200 <= int(response.getcode()) < 300:
-                raise EnterpriseAdapterUnavailable("Event sink returned a non-success status.")
-            response.read(64 * 1024 + 1)
-
-
-class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+        try:
+            with open_public_https_without_redirects(
+                request, timeout=NOTIFICATION_TIMEOUT_SECONDS
+            ) as response:
+                if not 200 <= int(response.status) < 300:
+                    raise EnterpriseAdapterUnavailable("Event sink returned a non-success status.")
+                content = read_bounded_response(
+                    response,
+                    max_bytes=NOTIFICATION_RESPONSE_MAX_BYTES,
+                    timeout=NOTIFICATION_TIMEOUT_SECONDS,
+                )
+        except NotificationConfigurationError:
+            raise EnterpriseAdapterUnavailable(
+                "Event sink destination is not publicly routable."
+            ) from None
+        except (OSError, http.client.HTTPException):
+            raise EnterpriseAdapterUnavailable("Event sink transport is unavailable.") from None
+        if len(content) > NOTIFICATION_RESPONSE_MAX_BYTES:
+            raise EnterpriseAdapterUnavailable("Event sink response exceeds the size limit.")
 
 
 def build_enterprise_adapters() -> dict[str, Any]:

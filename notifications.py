@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
+import ipaddress
 import json
 import logging
 import os
 import queue
+import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -36,8 +40,12 @@ DeliveryStatus = Literal[
 
 NOTIFICATION_SCHEMA_VERSION = "netwatch-alert/v1"
 NOTIFICATION_TIMEOUT_SECONDS = 5
+_DNS_RESOLUTION_TIMEOUT_SECONDS = NOTIFICATION_TIMEOUT_SECONDS
+_DNS_RESOLVER_WORKERS = 2
+_DNS_RESOLVER_QUEUE_SIZE = 2
 NOTIFICATION_MAX_RETRIES = 3
 NOTIFICATION_RESPONSE_MAX_BYTES = 64 * 1024
+_RESPONSE_READ_CHUNK_BYTES = 64 * 1024
 NOTIFICATION_CIRCUIT_FAILURE_THRESHOLD = 5
 NOTIFICATION_CIRCUIT_COOLDOWN_SECONDS = 300
 _BACKOFF_BASE_SECONDS = 0.25
@@ -133,8 +141,30 @@ _worker_lock = threading.Lock()
 _workers_started = False
 
 
+_RESERVED_IPV6_DESTINATION_NETWORKS = (
+    ipaddress.ip_network("64:ff9b::/96"),
+    ipaddress.ip_network("64:ff9b:1::/48"),
+    ipaddress.ip_network("::/96"),
+)
+
+
+def _is_public_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            address = address.ipv4_mapped
+        elif (
+            address.is_reserved
+            or any(address in network for network in _RESERVED_IPV6_DESTINATION_NETWORKS)
+            or address.sixtofour is not None
+            or address.teredo is not None
+        ):
+            # Do not trust is_global alone for IPv6 translation/compatibility ranges.
+            return False
+    return address.is_global and not address.is_reserved
+
+
 def validate_notification_url(value: str, *, field_name: str = "Notification URL") -> str:
-    """Validate an HTTPS URL without credentials, query parameters, or fragments."""
+    """Validate an HTTPS URL and reject non-public literal IP destinations."""
     candidate = str(value).strip()
     try:
         parsed = urlparse(candidate)
@@ -154,6 +184,14 @@ def validate_notification_url(value: str, *, field_name: str = "Notification URL
     ):
         raise NotificationConfigurationError(
             f"{field_name} must be an HTTPS URL without credentials, query, or fragment."
+        )
+    try:
+        literal_address = ipaddress.ip_address(parsed.hostname)
+    except ValueError:
+        literal_address = None
+    if literal_address is not None and not _is_public_ip(literal_address):
+        raise NotificationConfigurationError(
+            f"{field_name} must not target a non-public IP address."
         )
     return candidate
 
@@ -345,9 +383,242 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Connect to a vetted IP while retaining hostname-based TLS verification."""
+
+    def __init__(self, host: str, port: int, address: str, *, timeout: int) -> None:
+        self._tls_context = ssl.create_default_context()
+        super().__init__(host, port=port, timeout=timeout, context=self._tls_context)
+        self._resolved_address = address
+
+    def connect(self) -> None:
+        sock = socket.create_connection(
+            (self._resolved_address, self.port),
+            self.timeout,
+        )
+        self.sock = self._tls_context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPResponse:
+    """Keep the pinned connection open until the bounded response is consumed."""
+
+    def __init__(
+        self,
+        connection: _PinnedHTTPSConnection,
+        response: http.client.HTTPResponse,
+    ) -> None:
+        self._connection = connection
+        self._response = response
+
+    def __enter__(self) -> http.client.HTTPResponse:
+        return self._response
+
+    def __exit__(self, *_: Any) -> None:
+        try:
+            self._response.close()
+        finally:
+            self._connection.close()
+
+
+class _BoundedDNSResolver:
+    """Resolve webhook hosts with a fixed worker pool and bounded pending queue."""
+
+    def __init__(
+        self,
+        *,
+        workers: int = _DNS_RESOLVER_WORKERS,
+        queue_size: int = _DNS_RESOLVER_QUEUE_SIZE,
+        timeout: float = _DNS_RESOLUTION_TIMEOUT_SECONDS,
+    ) -> None:
+        if workers < 1 or queue_size < 1 or timeout <= 0:
+            raise ValueError("DNS resolver limits must be positive.")
+        self._worker_count = workers
+        self._timeout = timeout
+        self._jobs: queue.Queue[
+            tuple[str, int, threading.Event, threading.Event, dict[str, Any]]
+        ] = queue.Queue(maxsize=queue_size)
+        self._start_lock = threading.Lock()
+        self._started = False
+
+    def _worker(self) -> None:
+        while True:
+            host, port, completed, cancelled, result = self._jobs.get()
+            try:
+                if not cancelled.is_set():
+                    try:
+                        result["records"] = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+                    except Exception as exc:
+                        result["error"] = (
+                            exc if isinstance(exc, OSError) else OSError("DNS resolution failed.")
+                        )
+            finally:
+                completed.set()
+                self._jobs.task_done()
+
+    def _ensure_workers(self) -> None:
+        with self._start_lock:
+            if self._started:
+                return
+            self._started = True
+            for index in range(self._worker_count):
+                worker = threading.Thread(
+                    target=self._worker,
+                    name=f"netwatch-webhook-dns-{index + 1}",
+                    daemon=True,
+                )
+                worker.start()
+
+    def resolve(self, host: str, port: int) -> list[tuple[Any, ...]]:
+        """Return resolver records or fail closed within the configured deadline."""
+        self._ensure_workers()
+        completed = threading.Event()
+        cancelled = threading.Event()
+        result: dict[str, Any] = {}
+        try:
+            self._jobs.put_nowait((host, port, completed, cancelled, result))
+        except queue.Full as exc:
+            raise TimeoutError("DNS resolver queue is full.") from exc
+        if not completed.wait(self._timeout):
+            cancelled.set()
+            raise TimeoutError("DNS resolution timed out.")
+        error = result.get("error")
+        if error is not None:
+            raise error
+        records = result.get("records")
+        if not isinstance(records, list):
+            raise OSError("DNS resolution returned no usable records.")
+        return records
+
+
+_DNS_RESOLVER = _BoundedDNSResolver()
+
+
+def _public_https_addresses(host: str, port: int) -> list[str]:
+    """Resolve once and reject the whole hostname if any answer is non-public."""
+    records = _DNS_RESOLVER.resolve(host, port)
+    addresses: list[str] = []
+    for family, _, _, _, sockaddr in records:
+        if family not in {socket.AF_INET, socket.AF_INET6}:
+            continue
+        raw_address = str(sockaddr[0])
+        if "%" in raw_address:
+            raise NotificationConfigurationError(
+                "Notification destination resolves to a non-public address."
+            )
+        try:
+            address = ipaddress.ip_address(raw_address)
+        except ValueError as exc:
+            raise NotificationConfigurationError(
+                "Notification destination could not be validated."
+            ) from exc
+        if not _is_public_ip(address):
+            raise NotificationConfigurationError(
+                "Notification destination resolves to a non-public address."
+            )
+        normalized = str(address)
+        if normalized not in addresses:
+            addresses.append(normalized)
+    if not addresses:
+        raise OSError("Notification destination did not resolve to a usable address.")
+    return addresses
+
+
+def open_public_https_without_redirects(
+    request: urllib.request.Request, timeout: int
+) -> _PinnedHTTPResponse:
+    """Send directly to a public, DNS-pinned IP without following redirects or proxies."""
+    parsed = urlparse(request.full_url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise NotificationConfigurationError("Outbound destination must use HTTPS.")
+    try:
+        port = parsed.port or 443
+    except ValueError as exc:
+        raise NotificationConfigurationError("Outbound destination port is invalid.") from exc
+    addresses = _public_https_addresses(parsed.hostname, port)
+    last_error: Exception | None = None
+    for address in addresses:
+        connection = _PinnedHTTPSConnection(parsed.hostname, port, address, timeout=timeout)
+        try:
+            connection.connect()
+        except (http.client.HTTPException, OSError) as exc:
+            connection.close()
+            last_error = exc
+            continue
+        try:
+            connection.request(
+                request.get_method(),
+                request.selector,
+                body=request.data,
+                headers=dict(request.header_items()),
+            )
+            response = connection.getresponse()
+        except (http.client.HTTPException, OSError):
+            connection.close()
+            raise
+        return _PinnedHTTPResponse(connection, response)
+    if last_error is not None:
+        raise last_error
+    raise OSError("Notification destination could not be reached.")
+
+
 def _open_without_redirects(request: urllib.request.Request, timeout: int) -> Any:
-    opener = urllib.request.build_opener(_NoRedirectHandler())
-    return opener.open(request, timeout=timeout)  # nosec B310
+    return open_public_https_without_redirects(request, timeout=timeout)
+
+
+def _response_socket(response: Any) -> Any | None:
+    """Find the socket behind an HTTP response without assuming one wrapper depth."""
+    pending = [response]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if id(current) in visited:
+            continue
+        visited.add(id(current))
+        candidate = getattr(current, "_sock", None)
+        if callable(getattr(candidate, "settimeout", None)):
+            return candidate
+        for attribute in ("fp", "raw"):
+            nested = getattr(current, attribute, None)
+            if nested is not None:
+                pending.append(nested)
+    return None
+
+
+def read_bounded_response(
+    response: Any,
+    *,
+    max_bytes: int,
+    timeout: float,
+) -> bytes:
+    """Read an HTTPS response incrementally under one monotonic body deadline."""
+    if max_bytes < 0 or timeout <= 0:
+        raise ValueError("Response byte and time limits must be positive.")
+
+    response_socket = _response_socket(response)
+    reader = getattr(response, "read1", None)
+    if response_socket is None or not callable(reader):
+        raise TimeoutError("HTTPS response lacks bounded incremental-read support.")
+
+    deadline = time.monotonic() + timeout
+    chunks: list[bytes] = []
+    total = 0
+    while total <= max_bytes:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+        try:
+            response_socket.settimeout(remaining)
+        except (OSError, ValueError) as exc:
+            raise TimeoutError("HTTPS response socket is unavailable.") from exc
+
+        chunk = reader(min(_RESPONSE_READ_CHUNK_BYTES, max_bytes + 1 - total))
+        if time.monotonic() >= deadline:
+            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    return b"".join(chunks)
 
 
 def _channel_payload(channel: NotificationChannel, payload: dict[str, Any]) -> dict[str, Any]:
@@ -387,7 +658,13 @@ def _send_once(channel: NotificationChannel, payload: dict[str, Any]) -> None:
         ) as response:  # nosec B310
             response_status = getattr(response, "status", None)
             status = int(response_status if response_status is not None else response.getcode())
-            content = response.read(NOTIFICATION_RESPONSE_MAX_BYTES + 1)
+            content = read_bounded_response(
+                response,
+                max_bytes=NOTIFICATION_RESPONSE_MAX_BYTES,
+                timeout=NOTIFICATION_TIMEOUT_SECONDS,
+            )
+    except NotificationConfigurationError:
+        raise _DeliveryFailure(retryable=False) from None
     except urllib.error.HTTPError as exc:
         status = int(exc.code)
         exc.close()
