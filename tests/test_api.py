@@ -76,6 +76,9 @@ def test_unhandled_api_errors_keep_security_headers_and_request_id(monkeypatch, 
         raise RuntimeError("sensitive internal exception detail")
 
     api.app.add_api_route(path, fail, methods=["GET"], include_in_schema=False)
+    route = next(route for route in api.app.router.routes if getattr(route, "path", None) == path)
+    api.app.router.routes.remove(route)
+    api.app.router.routes.insert(0, route)
     try:
         with _client(monkeypatch, tmp_path, raise_server_exceptions=False) as client:
             response = client.get(path)
