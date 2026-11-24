@@ -31,6 +31,9 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
+      - name: Diagnostic Black diff for audit tests
+        run: black --diff tests/test_inventory_store.py
+
       - name: Check formatting and imports
         run: |
           black --check .
