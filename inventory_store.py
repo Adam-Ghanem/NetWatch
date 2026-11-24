@@ -361,7 +361,7 @@ def _audit_value(value: object, max_length: int) -> str:
 
 
 def _read_audit_hmac_key_file(path_value: str) -> str | None:
-    """Read a bounded audit key from an absolute, stable, non-writable secret file."""
+    """Read a bounded audit key from an absolute, stable, non-symlink secret file."""
     path = Path(path_value)
     if not path.is_absolute():
         return None
@@ -379,7 +379,10 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
             return None
         if before.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             return None
-        if not MIN_AUDIT_HMAC_KEY_LENGTH <= before.st_size <= _AUDIT_HMAC_KEY_FILE_MAX_BYTES:
+        if (
+            before.st_size < MIN_AUDIT_HMAC_KEY_LENGTH
+            or before.st_size > _AUDIT_HMAC_KEY_FILE_MAX_BYTES
+        ):
             return None
         if (path_before.st_dev, path_before.st_ino) != (before.st_dev, before.st_ino):
             return None
@@ -404,6 +407,7 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
             before.st_size,
             before.st_mtime_ns,
             before.st_ctime_ns,
+            before.st_mode,
         )
         after_identity = (
             after.st_dev,
@@ -411,10 +415,13 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
             after.st_size,
             after.st_mtime_ns,
             after.st_ctime_ns,
+            after.st_mode,
         )
         if before_identity != after_identity:
             return None
         if (after.st_dev, after.st_ino) != (path_after.st_dev, path_after.st_ino):
+            return None
+        if after.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             return None
         if len(raw) != before.st_size or len(raw) > _AUDIT_HMAC_KEY_FILE_MAX_BYTES:
             return None
