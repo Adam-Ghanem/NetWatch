@@ -15,6 +15,9 @@ SETUP_NODE_V6 = "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v
 CODECOV_ACTION_V7_1_1 = "codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1"
 UPLOAD_ARTIFACT_V7 = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7"
 DOWNLOAD_ARTIFACT_V8 = "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8"
+CODECOV_GITHUB_SCRIPT_V8 = (
+    "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0"
+)
 
 
 def test_external_workflow_actions_are_pinned_to_full_commit_shas() -> None:
@@ -80,3 +83,15 @@ def test_python_ci_uses_reviewed_codecov_v7_with_isolated_oidc_and_cleanup() -> 
     assert "cleanup: true" in coverage_job
     assert "disable_telem: true" in coverage_job
     assert "fail_ci_if_error: false" in coverage_job
+
+
+def test_supply_chain_documentation_matches_the_pinned_codecov_release() -> None:
+    documentation = (
+        Path(__file__).resolve().parents[1] / "docs" / "github-actions-supply-chain.md"
+    ).read_text(encoding="utf-8")
+
+    assert "Codecov Action **v7.1.1**" in documentation
+    assert CODECOV_ACTION_V7_1_1 in documentation
+    assert CODECOV_GITHUB_SCRIPT_V8 in documentation
+    assert "fb8b3582c8e4def4969c97caa2f19720cb33a72f" not in documentation
+    assert "Codecov v6" not in documentation
