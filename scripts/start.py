@@ -139,8 +139,7 @@ def ensure_configuration() -> str:
         ).strip()
         if audit_hmac_key and audit_hmac_key != AUDIT_HMAC_KEY_PLACEHOLDER:
             raise ValueError(
-                "Configure NETWATCH_AUDIT_HMAC_KEY or "
-                "NETWATCH_AUDIT_HMAC_KEY_FILE, not both."
+                "Configure NETWATCH_AUDIT_HMAC_KEY or " "NETWATCH_AUDIT_HMAC_KEY_FILE, not both."
             )
         values["NETWATCH_AUDIT_HMAC_KEY"] = ""
         values["NETWATCH_AUDIT_HMAC_KEY_FILE"] = audit_hmac_key_file
