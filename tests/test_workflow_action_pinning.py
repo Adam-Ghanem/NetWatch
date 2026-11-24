@@ -93,3 +93,26 @@ def test_supply_chain_documentation_matches_the_pinned_codecov_release() -> None
     assert CODECOV_GITHUB_SCRIPT_V8 in documentation
     assert "fb8b3582c8e4def4969c97caa2f19720cb33a72f" not in documentation
     assert "Codecov v6" not in documentation
+
+
+def test_python_ci_runs_for_pull_requests_targeting_any_base_branch() -> None:
+    workflow = (WORKFLOW_DIR / "python-ci.yml").read_text(encoding="utf-8")
+    push_block = workflow.split("\n  push:\n", maxsplit=1)[1].split(
+        "\n  pull_request:\n", maxsplit=1
+    )[0]
+    pull_request_block = workflow.split("\n  pull_request:\n", maxsplit=1)[1].split(
+        "\npermissions:\n", maxsplit=1
+    )[0]
+
+    assert "branches: [main]" in push_block
+    assert "branches:" not in pull_request_block
+
+
+def test_python_coverage_oidc_job_skips_fork_pull_requests() -> None:
+    workflow = (WORKFLOW_DIR / "python-ci.yml").read_text(encoding="utf-8")
+    coverage_job = workflow.split("\n  coverage:\n", maxsplit=1)[1]
+
+    assert (
+        "if: github.event_name != 'pull_request' || "
+        "github.event.pull_request.head.repo.full_name == github.repository"
+    ) in coverage_job
