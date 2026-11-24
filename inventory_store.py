@@ -1114,7 +1114,6 @@ def record_audit_event_in_transaction(
         request_id=request_id,
     )
     _prune_audit_log(conn)
-    _invalidate_audit_readiness_cache()
 
 
 def update_asset_context(
