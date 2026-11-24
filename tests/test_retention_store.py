@@ -80,7 +80,15 @@ def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, 
             ) VALUES (?, ?, 'webhook', ?, ?, 1, ?, ?, '', '', ?, 'synthetic')
             """,
             [
-                ("old-delivered", 1, '{"private":"must-not-be-returned"}', "delivered", old, old, old),
+                (
+                    "old-delivered",
+                    1,
+                    '{"private":"must-not-be-returned"}',
+                    "delivered",
+                    old,
+                    old,
+                    old,
+                ),
                 ("old-dead", 2, '{"private":"triage-only"}', "dead", old, old, ""),
                 ("old-pending", 3, '{"private":"retry"}', "pending", old, old, ""),
                 ("recent-delivered", 4, "{}", "delivered", recent, recent, recent),
