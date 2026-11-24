@@ -36,6 +36,13 @@ def test_ipv6_scope_restricted_to_link_local_targets():
     assert "link-local" in (result.error or "")
 
 
+def test_numeric_ipv6_scope_id_accepts_unsigned_32bit_maximum():
+    result = validate_target_ip("fe80::1%4294967295")
+
+    assert result.ok
+    assert result.value == "fe80::1%4294967295"
+
+
 def test_private_cidr_allowed():
     result = validate_cidr("192.168.1.0/24")
     assert result.ok
@@ -78,6 +85,10 @@ def test_risk_classification():
         "fe80::1%eth0;id",
         "fe80::1%eth0%extra",
         "fe80::1%eth0/../",
+        "fe80::1%0",
+        "fe80::1%4294967296",
+        "fe80::1%9999999999999999999999999999999999999999999999999999999999999999",
+        "fe80::1%١",
     ],
 )
 def test_target_validation_fails_closed_on_unsafe_or_malformed_input(target):
