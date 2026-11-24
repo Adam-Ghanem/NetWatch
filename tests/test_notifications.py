@@ -683,3 +683,63 @@ def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
         ("connect", "93.184.216.34"),
         ("request", "93.184.216.34"),
     ]
+
+def test_bounded_dns_resolver_retries_after_all_worker_starts_fail(monkeypatch):
+    real_thread = threading.Thread
+    attempts = 0
+
+    class FailedThread:
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    def thread_factory(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return FailedThread()
+        return real_thread(*args, **kwargs)
+
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.2)
+    monkeypatch.setattr(notifications.threading, "Thread", thread_factory)
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("93.184.216.34")],
+    )
+
+    with pytest.raises(OSError, match="DNS resolver worker startup failed"):
+        resolver.resolve("first.example.test", 443)
+
+    assert resolver._jobs.empty()
+    assert resolver.resolve("retry.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert attempts == 2
+
+
+def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeypatch):
+    real_thread = threading.Thread
+    attempts = 0
+
+    class FailedThread:
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    def thread_factory(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 2:
+            return FailedThread()
+        return real_thread(*args, **kwargs)
+
+    resolver = notifications._BoundedDNSResolver(workers=2, queue_size=2, timeout=0.2)
+    monkeypatch.setattr(notifications.threading, "Thread", thread_factory)
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("93.184.216.34")],
+    )
+
+    assert resolver.resolve("partial.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert attempts == 2
+    assert resolver.resolve("recovered.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert attempts == 3
+
