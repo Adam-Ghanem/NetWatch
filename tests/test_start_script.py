@@ -119,9 +119,7 @@ def test_launcher_rejects_both_audit_key_sources(monkeypatch, tmp_path: Path):
         launcher.ensure_configuration()
 
 
-def test_launcher_accepts_file_key_path_from_process_environment(
-    monkeypatch, tmp_path: Path
-):
+def test_launcher_accepts_file_key_path_from_process_environment(monkeypatch, tmp_path: Path):
     env_file = tmp_path / ".env"
     env_file.write_text(
         "NETWATCH_API_KEY=existing-admin-key-with-at-least-32-characters\n"
