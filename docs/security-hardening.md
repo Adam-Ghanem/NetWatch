@@ -23,6 +23,7 @@ This document records the defensive controls used in NetWatch.
 - CORS origins and HTTP Host headers use explicit local allowlists.
 - Wildcard-only allowlists fall back to safe local defaults.
 - API write requests are limited to **256 KiB** before body parsing, including streamed requests without `Content-Length`. Offline PCAP/PCAPNG uploads retain their separate **32 MiB** ceiling. Over-limit requests return HTTP `413` and malformed or duplicate `Content-Length` headers return HTTP `400`. Production reverse proxies should enforce their own matching size and timeout limits, since upstream buffering can happen before the application receives data.
+- Unhandled HTTP 500 responses use a generic body and retain the standard security headers, generated `X-Request-ID`, and `Cache-Control: no-store` for API paths. The response does not echo exception text; correlate the request ID with server-side request logs when investigating failures.
 
 ## UI safety
 
