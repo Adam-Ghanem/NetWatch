@@ -127,9 +127,7 @@ def write_env(values: dict[str, str]) -> None:
     descriptor = -1
     temporary_path: Path | None = None
     try:
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=".netwatch-env-", dir=ENV_FILE.parent
-        )
+        descriptor, temporary_name = tempfile.mkstemp(prefix=".netwatch-env-", dir=ENV_FILE.parent)
         temporary_path = Path(temporary_name)
         try:
             if hasattr(os, "fchmod"):
