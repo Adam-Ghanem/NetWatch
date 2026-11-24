@@ -4,6 +4,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -636,6 +637,43 @@ def test_audit_identity_and_integrity_are_admin_only(monkeypatch, tmp_path):
     assert audit.status_code == 403
     assert integrity.status_code == 403
 
+
+
+def test_host_check_records_unknown_when_icmp_probe_is_unavailable(monkeypatch, tmp_path):
+    profile = SimpleNamespace(
+        ip_address="192.168.1.10",
+        address_family="ipv4",
+        hostname="-",
+        online=False,
+        reachability_status="unknown",
+        latency_ms=None,
+        ttl=None,
+        os_hint="Unknown",
+        notes="ICMP probe unavailable; reachability is unknown",
+        mac_address="-",
+        manufacturer="Unknown",
+        device_name="Unknown device",
+        device_type="Unknown",
+        device_family="Unknown",
+        identity_confidence="Low",
+        identity_source="No identity evidence",
+        randomized_mac=False,
+    )
+    monkeypatch.setattr(api, "profile_host", lambda _target: profile)
+
+    with _client(monkeypatch, tmp_path) as client:
+        response = client.post(
+            "/api/scan/host",
+            headers=API_HEADERS,
+            json={"ip": "192.168.1.10", "authorized": True},
+        )
+        runs = inventory_store.recent_scan_runs(limit=1)
+        assets = inventory_store.asset_inventory()
+
+    assert response.status_code == 200
+    assert response.json()["reachability_status"] == "unknown"
+    assert runs[0]["status"] == "unknown"
+    assert assets == []
 
 def test_tampered_audit_chain_pauses_privileged_operations_but_remains_inspectable(
     monkeypatch, tmp_path

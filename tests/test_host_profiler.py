@@ -1,4 +1,7 @@
+import subprocess
 from types import SimpleNamespace
+
+import pytest
 
 import host_profiler
 from device_identity import DeviceIdentity
@@ -76,3 +79,48 @@ def test_profile_host_exposes_canonical_ipv4_address_family(monkeypatch):
 
     assert profile.ip_address == "192.168.1.10"
     assert profile.address_family == "ipv4"
+
+
+
+@pytest.mark.parametrize("failure", ["os_error", "timeout", "decode"])
+def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(
+    monkeypatch, failure
+):
+    def fail_probe(_target):
+        if failure == "os_error":
+            raise OSError("permission denied: /private/runtime/path")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired("ping", timeout=5)
+        raise UnicodeDecodeError("utf-8", b"\\xff", 0, 1, "invalid start byte")
+
+    monkeypatch.setattr(host_profiler, "ping_host_raw", fail_probe)
+    monkeypatch.setattr(host_profiler, "reverse_hostname", lambda _target: pytest.fail("no DNS"))
+    monkeypatch.setattr(
+        host_profiler, "identity_for_ip", lambda *_args, **_kwargs: _identity()
+    )
+
+    profile = host_profiler.profile_host("192.168.1.10")
+
+    assert profile.online is False
+    assert profile.reachability_status == "unknown"
+    assert profile.latency_ms is None
+    assert profile.ttl is None
+    assert profile.notes == "ICMP probe unavailable; reachability is unknown"
+    assert "/private/runtime/path" not in profile.notes
+
+
+def test_profile_host_keeps_completed_no_reply_distinct_from_probe_failure(monkeypatch):
+    monkeypatch.setattr(
+        host_profiler,
+        "ping_host_raw",
+        lambda _target: SimpleNamespace(returncode=1, stdout="", stderr="no reply"),
+    )
+    monkeypatch.setattr(
+        host_profiler, "identity_for_ip", lambda *_args, **_kwargs: _identity()
+    )
+
+    profile = host_profiler.profile_host("192.168.1.10")
+
+    assert profile.online is False
+    assert profile.reachability_status == "offline"
+    assert profile.notes == "No ping reply; host may be offline or blocking ICMP"
