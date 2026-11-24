@@ -93,6 +93,13 @@ def retention_status(*, now: datetime | None = None) -> dict[str, Any]:
             ),
             _table_summary(
                 conn,
+                "notification_deliveries",
+                "SELECT COUNT(*) FROM notification_deliveries",
+                "SELECT MIN(created_at) FROM notification_deliveries",
+                "SELECT MAX(created_at) FROM notification_deliveries",
+            ),
+            _table_summary(
+                conn,
                 "audit_log",
                 "SELECT COUNT(*) FROM audit_log",
                 "SELECT MIN(created_at) FROM audit_log",
@@ -140,6 +147,12 @@ def _eligible_queries(cutoff: str) -> dict[str, tuple[str, tuple[Any, ...]]]:
         "enterprise_jobs": (
             "SELECT id FROM enterprise_jobs WHERE created_at < ? "
             "AND status IN ('succeeded', 'failed') ORDER BY id ASC LIMIT ?",
+            (cutoff,),
+        ),
+        "notification_deliveries": (
+            "SELECT id FROM notification_deliveries WHERE created_at < ? "
+            "AND status IN ('delivered', 'dead') "
+            "AND claimed_at = '' AND claim_token = '' ORDER BY id ASC LIMIT ?",
             (cutoff,),
         ),
     }
