@@ -129,9 +129,7 @@ def test_backup_verification_redacts_parent_directory(tmp_path):
     assert str(path.parent) not in str(report["path"])
 
 
-def test_backup_cli_redacts_filesystem_paths_on_oserror(
-    tmp_path, monkeypatch, capsys
-):
+def test_backup_cli_redacts_filesystem_paths_on_oserror(tmp_path, monkeypatch, capsys):
     path = tmp_path / "backup.sqlite3"
     path.write_bytes(b"placeholder")
 
