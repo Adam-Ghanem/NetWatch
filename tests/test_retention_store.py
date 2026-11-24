@@ -64,3 +64,50 @@ def test_retention_cleanup_caps_requested_rows(monkeypatch, tmp_path):
     inventory_store.init_db()
     result = retention_store.cleanup_retention(older_than_days=1, dry_run=True, max_rows=999_999)
     assert result["max_rows"] == retention_store.RETENTION_MAX_DELETE_ROWS
+
+def test_notification_retention_deletes_only_old_terminal_receipts(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.init_db()
+    old = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat(timespec="seconds")
+    recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat(timespec="seconds")
+
+    with inventory_store._connect() as conn:
+        conn.executemany(
+            """
+            INSERT INTO notification_deliveries(
+                event_id, alert_id, channel, payload, status, attempts,
+                created_at, available_at, claimed_at, claim_token, delivered_at, last_result
+            ) VALUES (?, ?, 'webhook', ?, ?, 1, ?, ?, '', '', ?, 'synthetic')
+            """,
+            [
+                ("old-delivered", 1, '{"private":"must-not-be-returned"}', "delivered", old, old, old),
+                ("old-dead", 2, '{"private":"triage-only"}', "dead", old, old, ""),
+                ("old-pending", 3, '{"private":"retry"}', "pending", old, old, ""),
+                ("recent-delivered", 4, "{}", "delivered", recent, recent, recent),
+            ],
+        )
+
+    status = retention_store.retention_status()
+    tables = {row["table"]: row for row in status["tables"]}
+    assert tables["notification_deliveries"]["count"] == 4
+    assert "private" not in str(tables["notification_deliveries"])
+
+    preview = retention_store.cleanup_retention(older_than_days=90, dry_run=True, max_rows=100)
+    assert preview["eligible"]["notification_deliveries"] == 2
+    assert preview["deleted"]["notification_deliveries"] == 0
+    assert preview["total"] == 0
+
+    cleaned = retention_store.cleanup_retention(older_than_days=90, dry_run=False, max_rows=100)
+    assert cleaned["deleted"]["notification_deliveries"] == 2
+    with inventory_store._connect() as conn:
+        remaining = {
+            row["event_id"]: row["status"]
+            for row in conn.execute(
+                "SELECT event_id, status FROM notification_deliveries ORDER BY event_id"
+            ).fetchall()
+        }
+
+    assert remaining == {
+        "old-pending": "pending",
+        "recent-delivered": "delivered",
+    }
