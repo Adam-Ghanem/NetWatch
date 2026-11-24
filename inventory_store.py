@@ -1083,7 +1083,6 @@ def record_audit_event(
     _invalidate_audit_readiness_cache()
 
 
-
 def record_audit_event_in_transaction(
     conn: sqlite3.Connection,
     actor_role: str,
@@ -1116,6 +1115,7 @@ def record_audit_event_in_transaction(
     )
     _prune_audit_log(conn)
     _invalidate_audit_readiness_cache()
+
 
 def update_asset_context(
     ip_address: str,
