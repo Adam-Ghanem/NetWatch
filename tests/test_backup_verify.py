@@ -117,7 +117,6 @@ def test_backup_verification_rejects_non_sqlite_data(tmp_path):
         verify(path)
 
 
-
 def test_backup_verification_redacts_parent_directory(tmp_path):
     path = tmp_path / "private-volume" / "backup.sqlite3"
     path.parent.mkdir()
