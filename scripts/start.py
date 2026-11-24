@@ -132,11 +132,11 @@ def ensure_configuration() -> str:
         "NETWATCH_AUDIT_HMAC_KEY_FILE",
         values.get("NETWATCH_AUDIT_HMAC_KEY_FILE", ""),
     ).strip()
-    audit_hmac_key = os.getenv(
-        "NETWATCH_AUDIT_HMAC_KEY",
-        values.get("NETWATCH_AUDIT_HMAC_KEY", ""),
-    ).strip()
     if audit_hmac_key_file:
+        audit_hmac_key = os.getenv(
+            "NETWATCH_AUDIT_HMAC_KEY",
+            values.get("NETWATCH_AUDIT_HMAC_KEY", ""),
+        ).strip()
         if audit_hmac_key and audit_hmac_key != AUDIT_HMAC_KEY_PLACEHOLDER:
             raise ValueError(
                 "Configure NETWATCH_AUDIT_HMAC_KEY or "
@@ -145,6 +145,8 @@ def ensure_configuration() -> str:
         values["NETWATCH_AUDIT_HMAC_KEY"] = ""
         values["NETWATCH_AUDIT_HMAC_KEY_FILE"] = audit_hmac_key_file
         audit_hmac_key = ""
+    else:
+        audit_hmac_key = values.get("NETWATCH_AUDIT_HMAC_KEY", "").strip()
     separated_values = tuple(
         value
         for value in (
