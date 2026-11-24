@@ -24,6 +24,17 @@ This document records the defensive controls used in NetWatch.
 - Wildcard-only allowlists fall back to safe local defaults.
 - API write requests are limited to **256 KiB** before body parsing, including streamed requests without `Content-Length`. Offline PCAP/PCAPNG uploads retain their separate **32 MiB** ceiling. Over-limit requests return HTTP `413` and malformed or duplicate `Content-Length` headers return HTTP `400`. Production reverse proxies should enforce their own matching size and timeout limits, since upstream buffering can happen before the application receives data.
 
+## Local launcher secret-file safety
+
+The local launcher treats the final .env path as a security boundary:
+
+- Reads use a no-follow open where the platform supports it, then compare the opened file identity with the path inspected before opening.
+- Symlinks, non-regular files, and files with more than one hard link are rejected before their contents are read or replaced.
+- Updates are written to a private temporary file in the repository directory and atomically replace .env; the launcher never truncates a symlink or hard-link target.
+- POSIX permissions are set to owner-only (0600) where supported. On Windows, protect the repository directory and .env with the account's filesystem ACLs.
+
+Keep the repository directory writable only by the trusted NetWatch operator. These checks protect the .env final path; they do not protect against malicious code running as the same operator account or an attacker who can replace the repository directory itself.
+
 ## UI safety
 
 The supported dashboard is the same-origin FastAPI frontend. Role keys stay in browser session storage, and approved network actions require server-enforced authorization. Historical Streamlit code remains in the source tree but is intentionally excluded from installation and Docker Compose: its published Pillow < 13 constraint prevents applying the critical fixes in Pillow 13.0.0. Do not run the legacy application or bypass the dependency audit until compatible patched upstream releases exist.
