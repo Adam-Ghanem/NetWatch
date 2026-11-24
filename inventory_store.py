@@ -548,6 +548,7 @@ def audit_integrity_is_ready(*, use_cache: bool = True) -> bool:
 
     key = _audit_hmac_key()
     if key is None:
+        _invalidate_audit_readiness_cache()
         return False
     if not use_cache:
         result = _check_audit_integrity(key)
