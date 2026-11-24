@@ -68,6 +68,10 @@ The authenticated metrics endpoint exports only fixed numeric counters. It does 
 
 Admin snapshot downloads use SQLite's backup API instead of copying live database and WAL files. Snapshots are sensitive and must be stored in an approved encrypted location. Restore remains an offline, deployment-owned procedure so the API cannot destructively replace its live database.
 
+## CI supply-chain
+
+GitHub Actions in the maintained workflows are pinned to full commit SHAs with upstream version comments. The isolated Python coverage job uses the signed Codecov v7.1.1 release commit, requests OIDC only after the test job succeeds, enables temporary CLI cleanup, and disables Codecov CLI telemetry. Coverage ingestion remains non-blocking; a green GitHub job does not prove that Codecov accepted the report.
+
 ## Remaining production requirements
 
 For a remote or multi-user production deployment, place NetWatch behind an approved OIDC-aware TLS gateway, configure dedicated least-privilege groups, inject managed secrets, export audit/log evidence to append-only storage, configure provider spend/rate controls, automate encrypted off-host backups with restore drills, and complete monitoring, report approval, AI/privacy, retention, and deployment security reviews. The `shared_service` mode fails closed until external workers with leader election, shared transactional storage, distributed rate/quota state, object storage, tenant/resource policy enforcement, and migration tests are deployed. Selecting the mode alone never enables active-active behavior.
