@@ -1423,6 +1423,58 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
         )
         live.commit()
 
+    inventory_store.update_asset_ports(
+        "192.0.2.10",
+        [
+            {
+                "Port": 443,
+                "Protocol": "TCP",
+                "Service": "HTTPS",
+                "Service Product": "Synthetic Web Service",
+                "Service Version": "1.2.3",
+                "Service Confidence": "high",
+                "Status": "Open",
+                "Risk": "Medium",
+            }
+        ],
+        exposure_score=2,
+        exposure_level="Low",
+        scan_run_id=scan_run_id,
+    )
+
+    monkeypatch.setattr(operations_store, "durable_notifications_enabled", lambda: False)
+    monkeypatch.setattr(
+        operations_store,
+        "_queue_alert_notification_safely",
+        lambda *args, **kwargs: None,
+    )
+    operations_store.create_alerts_for_changes(
+        NetworkChangeSummary(
+            scan_run_id=scan_run_id,
+            observed_assets=("192.0.2.10",),
+            new_assets=("192.0.2.10",),
+            returned_assets=(),
+            not_observed_assets=(),
+        )
+    )
+    policy = operations_store.create_scan_policy(
+        name="Restore smoke approved policy",
+        cidr="10.77.0.0/30",
+        interval_minutes=60,
+        enabled=False,
+        authorized_by="restore-smoke:admin",
+    )
+    now = datetime.now(timezone.utc)
+    operations_store.create_maintenance_window(
+        name="Restore smoke maintenance",
+        starts_at=(now - timedelta(days=1)).isoformat(timespec="seconds"),
+        ends_at=(now + timedelta(days=1)).isoformat(timespec="seconds"),
+        reason="Synthetic restore verification",
+        policy_id=int(policy["id"]),
+        enabled=True,
+        created_by="restore-smoke:admin",
+    )
+
     inventory_store.record_audit_event(
         "admin",
         "backup_restore_smoke",
@@ -1449,11 +1501,42 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
     # The actual FastAPI lifespan now initializes and serves only the restored copy.
     monkeypatch.setattr(inventory_store, "DATA_DIR", restored_dir)
     monkeypatch.setattr(inventory_store, "DB_FILE", snapshot)
+    monkeypatch.setattr(
+        api,
+        "scan_network",
+        lambda _: pytest.fail("The restore smoke must not execute a network scan."),
+    )
     with client as restored_client:
         readiness = restored_client.get("/api/health/ready")
         inventory = restored_client.get("/api/inventory", headers=API_HEADERS)
         history = restored_client.get("/api/history", headers=API_HEADERS)
         observations = restored_client.get("/api/observations", headers=API_HEADERS)
+        service_findings = restored_client.get(
+            "/api/service-findings",
+            headers=API_HEADERS,
+            params={"scan_run_id": scan_run_id},
+        )
+        alerts = restored_client.get("/api/alerts?status=open", headers=API_HEADERS)
+        policies = restored_client.get("/api/scan-policies", headers=API_HEADERS)
+        maintenance = restored_client.get("/api/maintenance-windows", headers=API_HEADERS)
+
+        assert alerts.status_code == 200
+        assert alerts.json()["count"] == 1
+        alert_id = alerts.json()["items"][0]["id"]
+        monkeypatch.setenv("NETWATCH_OPERATOR_KEY", OPERATOR_API_KEY)
+        resolved = restored_client.patch(
+            f"/api/alerts/{alert_id}",
+            headers={"X-NetWatch-Key": OPERATOR_API_KEY},
+            json={
+                "status": "resolved",
+                "assigned_to": "Recovery Operations",
+                "resolution_note": "Validated against restored synthetic evidence.",
+            },
+        )
+        resolved_alerts = restored_client.get(
+            "/api/alerts?status=resolved",
+            headers=API_HEADERS,
+        )
         audit = inventory_store.verify_audit_integrity()
 
     assert readiness.status_code == 200
@@ -1467,5 +1550,24 @@ def test_isolated_snapshot_boots_application_and_serves_authenticated_evidence(
     assert any(item["scan_type"] == "offline-restore-smoke" for item in history.json()["items"])
     assert observations.status_code == 200
     assert any(item["ip_address"] == "192.0.2.10" for item in observations.json()["items"])
+    assert service_findings.status_code == 200
+    assert service_findings.json()["count"] == 1
+    assert service_findings.json()["items"][0]["port"] == 443
+    assert service_findings.json()["items"][0]["service_product"] == "Synthetic Web Service"
+    assert policies.status_code == 200
+    assert policies.json()["count"] == 1
+    assert policies.json()["items"][0]["cidr"] == "10.77.0.0/30"
+    assert policies.json()["items"][0]["enabled"] is False
+    assert policies.json()["items"][0]["maintenance_active"] is True
+    assert maintenance.status_code == 200
+    assert maintenance.json()["count"] == 1
+    assert maintenance.json()["items"][0]["policy_id"] == policy["id"]
+    assert maintenance.json()["items"][0]["active"] is True
+    assert resolved.status_code == 200
+    assert resolved.json()["alert"]["status"] == "resolved"
+    assert resolved.json()["alert"]["assigned_to"] == "Recovery Operations"
+    assert resolved_alerts.status_code == 200
+    assert resolved_alerts.json()["resolved_count"] == 1
+    assert resolved_alerts.json()["items"][0]["resolution_note"]
     assert audit["status"] == "valid"
-    assert audit["protected_entries"] == 1
+    assert audit["protected_entries"] == 2
