@@ -25,7 +25,12 @@ AUDIT_HMAC_KEY = "test-independent-audit-hmac-key-with-enough-characters"
 API_HEADERS = {"X-NetWatch-Key": TEST_API_KEY}
 
 
-def _client(monkeypatch, tmp_path: Path) -> TestClient:
+def _client(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    raise_server_exceptions: bool = True,
+) -> TestClient:
     monkeypatch.delenv("NETWATCH_OPERATOR_KEY", raising=False)
     monkeypatch.delenv("NETWATCH_VIEWER_KEY", raising=False)
     monkeypatch.setenv("NETWATCH_API_KEY", TEST_API_KEY)
@@ -37,7 +42,11 @@ def _client(monkeypatch, tmp_path: Path) -> TestClient:
     api._intelligence_rate_events.clear()
     monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
     monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
-    return TestClient(api.app, base_url="http://127.0.0.1")
+    return TestClient(
+        api.app,
+        base_url="http://127.0.0.1",
+        raise_server_exceptions=raise_server_exceptions,
+    )
 
 
 def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
@@ -57,6 +66,34 @@ def test_dashboard_is_served_with_security_headers(monkeypatch, tmp_path):
     assert "default-src 'self'" in response.headers["content-security-policy"]
     assert response.headers["strict-transport-security"].startswith("max-age=31536000")
     assert len(response.headers["x-request-id"]) == 32
+
+
+def test_unhandled_api_errors_keep_security_headers_and_request_id(monkeypatch, tmp_path):
+    path = "/api/test/unhandled-error"
+    original_routes = api.app.router.routes[:]
+
+    async def fail():
+        raise RuntimeError("sensitive internal exception detail")
+
+    api.app.add_api_route(path, fail, methods=["GET"], include_in_schema=False)
+    route = next(route for route in api.app.router.routes if getattr(route, "path", None) == path)
+    api.app.router.routes.remove(route)
+    api.app.router.routes.insert(0, route)
+    try:
+        with _client(monkeypatch, tmp_path, raise_server_exceptions=False) as client:
+            response = client.get(path)
+    finally:
+        api.app.router.routes[:] = original_routes
+
+    assert response.status_code == 500
+    assert response.text == "Internal Server Error"
+    assert "sensitive internal exception detail" not in response.text
+    assert len(response.headers["x-request-id"]) == 32
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cache-control"] == "no-store"
+    assert "default-src 'self'" in response.headers["content-security-policy"]
 
 
 def test_frontend_assets_are_served(monkeypatch, tmp_path):

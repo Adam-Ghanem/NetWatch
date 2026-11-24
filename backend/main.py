@@ -244,6 +244,38 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(API_ALLOWED_HOSTS))
 app.add_middleware(RequestBodyLimitMiddleware)
 
 
+def _apply_security_headers(request: Request, response: Response) -> Response:
+    """Apply the standard browser/API protections to normal and error responses."""
+    request_id = str(getattr(request.state, "request_id", "") or "")
+    if not request_id:
+        request_id = secrets.token_hex(16)
+        request.state.request_id = request_id
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.exception_handler(AuditIntegrityError)
 async def audit_integrity_error_handler(request: Request, _: AuditIntegrityError) -> JSONResponse:
     LOGGER.error(
@@ -255,6 +287,13 @@ async def audit_integrity_error_handler(request: Request, _: AuditIntegrityError
         status_code=503,
         content={"detail": "Audit integrity verification failed; protected operations are paused."},
     )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, _: Exception) -> PlainTextResponse:
+    """Keep generic 500 responses inside the same security-header boundary."""
+    response = PlainTextResponse("Internal Server Error", status_code=500)
+    return _apply_security_headers(request, response)
 
 
 @app.middleware("http")
@@ -290,29 +329,7 @@ async def security_headers(request: Request, call_next):
             elapsed * 1_000,
         )
 
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
-    response.headers["X-Request-ID"] = request.state.request_id
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self'; "
-        "style-src 'self'; "
-        "img-src 'self' data:; "
-        "connect-src 'self'; "
-        "object-src 'none'; "
-        "frame-ancestors 'none'; "
-        "base-uri 'self'; "
-        "form-action 'self'"
-    )
-    if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
-    return response
+    return _apply_security_headers(request, response)
 
 
 _api_key_header = APIKeyHeader(name="X-NetWatch-Key", auto_error=False)
