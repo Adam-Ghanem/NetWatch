@@ -212,4 +212,6 @@ def cleanup_retention(
                 auth_method=audit_context.get("auth_method", ""),
                 request_id=audit_context.get("request_id", ""),
             )
+    if audit_context is not None:
+        inventory_store._invalidate_audit_readiness_cache()
     return result
