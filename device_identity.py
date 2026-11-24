@@ -21,6 +21,8 @@ _MAC_PATTERN = re.compile(r"^[0-9A-F]{12}$")
 _MAC_INPUT_PATTERN = re.compile(r"^[0-9A-Fa-f:.-]+$")
 _SAFE_HOSTNAME_PATTERN = re.compile(r"[^A-Za-z0-9._ -]+")
 _UNUSABLE_NEIGHBOR_STATES = {"FAILED", "INCOMPLETE", "NOARP"}
+_MAX_CONCURRENT_REVERSE_DNS_LOOKUPS = 16
+_reverse_dns_slots = threading.BoundedSemaphore(_MAX_CONCURRENT_REVERSE_DNS_LOOKUPS)
 
 
 @dataclass(frozen=True)
@@ -349,24 +351,39 @@ def enrich_host_rows(
 
 def _reverse_hostname_worker(ip_address: str, result: list[str]) -> None:
     try:
-        hostname, _, _ = socket.gethostbyaddr(ip_address)
-    except OSError:
-        result.append("-")
-        return
-    result.append(_safe_hostname(hostname) or "-")
+        try:
+            hostname, _, _ = socket.gethostbyaddr(ip_address)
+        except OSError:
+            result.append("-")
+            return
+        result.append(_safe_hostname(hostname) or "-")
+    finally:
+        # A timed-out caller cannot cancel a system resolver call. Keep its
+        # slot occupied until the daemon worker actually exits.
+        _reverse_dns_slots.release()
 
 
 def reverse_hostname(
     ip_address: str, *, timeout_seconds: int = HOSTNAME_LOOKUP_TIMEOUT_SECONDS
 ) -> str:
+    # gethostbyaddr may outlive the caller's timeout. A process-wide semaphore
+    # bounds those uncancellable daemon workers across concurrent scan runs.
+    if not _reverse_dns_slots.acquire(blocking=False):
+        return "-"
+
     result: list[str] = []
-    worker = threading.Thread(
-        target=_reverse_hostname_worker,
-        args=(ip_address, result),
-        name="netwatch-reverse-dns",
-        daemon=True,
-    )
-    worker.start()
+    try:
+        worker = threading.Thread(
+            target=_reverse_hostname_worker,
+            args=(ip_address, result),
+            name="netwatch-reverse-dns",
+            daemon=True,
+        )
+        worker.start()
+    except RuntimeError:
+        _reverse_dns_slots.release()
+        return "-"
+
     worker.join(timeout=max(1, min(int(timeout_seconds), 3)))
     return result[0] if result else "-"
 

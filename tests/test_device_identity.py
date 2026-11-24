@@ -173,3 +173,68 @@ def test_scan_rows_can_disable_hostname_lookup(monkeypatch):
     assert called is False
     assert rows[0]["Hostname"] == "-"
     assert rows[0]["Device Name"] == "Unknown device"
+
+
+def test_reverse_dns_worker_budget_caps_hung_lookups(monkeypatch):
+    import threading
+
+    import device_identity
+
+    release = threading.Event()
+    started = threading.Event()
+    slots = threading.BoundedSemaphore(1)
+    workers = []
+    real_thread = threading.Thread
+
+    def tracked_thread(*args, **kwargs):
+        worker = real_thread(*args, **kwargs)
+        workers.append(worker)
+        return worker
+
+    def slow_lookup(_ip_address):
+        started.set()
+        release.wait(timeout=5)
+        return ("late-host", [], [])
+
+    monkeypatch.setattr(device_identity, "_reverse_dns_slots", slots)
+    monkeypatch.setattr(device_identity.socket, "gethostbyaddr", slow_lookup)
+    monkeypatch.setattr(device_identity.threading, "Thread", tracked_thread)
+
+    try:
+        assert device_identity.reverse_hostname("192.0.2.10", timeout_seconds=1) == "-"
+        assert started.is_set()
+        # The first timed-out system lookup still owns the only slot. A second
+        # caller must fail soft instead of creating another daemon thread.
+        assert device_identity.reverse_hostname("192.0.2.11", timeout_seconds=1) == "-"
+        assert len(workers) == 1
+    finally:
+        release.set()
+        for worker in workers:
+            worker.join(timeout=2)
+
+    # Once the underlying resolver returns, its slot is released for reuse.
+    assert device_identity.reverse_hostname("192.0.2.12", timeout_seconds=1) == "late-host"
+    assert len(workers) == 2
+
+
+def test_reverse_dns_releases_slot_when_thread_start_fails(monkeypatch):
+    import threading
+
+    import device_identity
+
+    slots = threading.BoundedSemaphore(1)
+
+    class FailedThread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(device_identity, "_reverse_dns_slots", slots)
+    monkeypatch.setattr(device_identity.threading, "Thread", FailedThread)
+
+    assert device_identity.reverse_hostname("192.0.2.13", timeout_seconds=1) == "-"
+    # A failed Thread.start() must not permanently consume resolver capacity.
+    assert slots.acquire(blocking=False) is True
+    slots.release()
