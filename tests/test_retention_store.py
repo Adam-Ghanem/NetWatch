@@ -189,6 +189,12 @@ def test_retention_cleanup_rolls_back_deletion_when_audit_append_fails(monkeypat
         "independent-retention-audit-key-with-enough-characters",
     )
     append_audit = inventory_store.record_audit_event_in_transaction
+    invalidations = []
+    monkeypatch.setattr(
+        inventory_store,
+        "_invalidate_audit_readiness_cache",
+        lambda: invalidations.append(True),
+    )
 
     def fail_after_audit_insert(conn, *args, **kwargs):
         append_audit(conn, *args, **kwargs)
@@ -215,4 +221,51 @@ def test_retention_cleanup_rolls_back_deletion_when_audit_append_fails(monkeypat
     assert remaining == 1
     assert audit_count == 0
     assert chain_count == 0
+    assert invalidations == []
+
+
+def test_retention_cleanup_invalidates_readiness_only_after_commit(monkeypatch, tmp_path):
+    _insert_old_asset_event(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-retention-audit-key-with-enough-characters",
+    )
+    invalidation_observations = []
+    original_invalidate = inventory_store._invalidate_audit_readiness_cache
+
+    def observe_committed_state_then_invalidate():
+        # A fresh connection can see both effects only after the cleanup
+        # connection has committed and exited its context manager.
+        with inventory_store._connect() as conn:
+            remaining = conn.execute("SELECT COUNT(*) FROM asset_events").fetchone()[0]
+            audit = conn.execute(
+                "SELECT action FROM audit_log ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+            chain = conn.execute(
+                "SELECT last_event_id FROM audit_chain_state WHERE id = 1"
+            ).fetchone()
+        invalidation_observations.append(
+            (remaining, audit["action"], chain["last_event_id"])
+        )
+        original_invalidate()
+
+    monkeypatch.setattr(
+        inventory_store,
+        "_invalidate_audit_readiness_cache",
+        observe_committed_state_then_invalidate,
+    )
+
+    retention_store.cleanup_retention(
+        older_than_days=90,
+        dry_run=False,
+        max_rows=100,
+        audit_context={
+            "actor_role": "admin",
+            "actor_id": "retention-cache-test",
+            "auth_method": "api_key",
+            "request_id": "retention-cache-after-commit",
+        },
+    )
+
+    assert invalidation_observations == [(0, "retention_cleanup", 1)]
 

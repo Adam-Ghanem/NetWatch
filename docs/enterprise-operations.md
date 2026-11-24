@@ -47,7 +47,9 @@ retention age, subject to the existing per-table row cap. Pending/retry receipts
 are never eligible, even when old; rows with an active claim are also excluded.
 Cleanup remains dry-run by default. The cleanup mutation and its corresponding
 audit event are committed in the same SQLite transaction; if audit insertion or
-integrity validation fails, the deletion rolls back. Cleanup never deletes
+integrity validation fails, the deletion rolls back. The audit-readiness cache is
+invalidated only after that transaction commits, so a rollback does not publish a
+cache invalidation for a mutation that never became visible. Cleanup never deletes
 `audit_log` or `audit_chain_state`. Deleting rows removes them from the live database view; it
 does not immediately purge SQLite WAL pages, freed pages, or existing backups.
 
