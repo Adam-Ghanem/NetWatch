@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import hmac
 import ipaddress
@@ -7,6 +8,7 @@ import json
 import os
 import sqlite3
 import stat
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -382,6 +384,24 @@ def _audit_hmac_key_file_permissions_are_private(file_stat: os.stat_result) -> b
     return False
 
 
+def _audit_hmac_key_file_has_no_extended_acl(descriptor: int) -> bool:
+    """Reject Linux access ACLs that can grant reads beyond checked mode bits."""
+    if not sys.platform.startswith("linux"):
+        # Other POSIX ACL implementations need platform-specific operator checks.
+        return True
+
+    getxattr = getattr(os, "getxattr", None)
+    if getxattr is None:
+        return False
+    try:
+        getxattr(descriptor, "system.posix_acl_access")
+    except OSError as exc:
+        return exc.errno in {errno.ENODATA, errno.ENOTSUP, errno.EOPNOTSUPP}
+    except (AttributeError, TypeError):
+        return False
+    return False
+
+
 def _read_audit_hmac_key_file(path_value: str) -> str | None:
     """Read a bounded audit key from an absolute, stable, non-symlink secret file."""
     path = Path(path_value)
@@ -409,6 +429,8 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
         if not stat.S_ISREG(before.st_mode):
             return None
         if not _audit_hmac_key_file_permissions_are_private(before):
+            return None
+        if not _audit_hmac_key_file_has_no_extended_acl(descriptor):
             return None
         if (
             before.st_size < MIN_AUDIT_HMAC_KEY_LENGTH
@@ -457,6 +479,8 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
         ):
             return None
         if not _audit_hmac_key_file_permissions_are_private(after):
+            return None
+        if not _audit_hmac_key_file_has_no_extended_acl(descriptor):
             return None
         if not _audit_hmac_key_file_permissions_are_private(path_after):
             return None
