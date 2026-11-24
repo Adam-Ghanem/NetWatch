@@ -165,7 +165,9 @@ def test_launcher_never_prints_generated_credentials(monkeypatch, capsys):
     assert "stored only in the private .env file" in output.out
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink creation may require elevated Windows privileges")
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX symlink creation may require elevated Windows privileges"
+)
 def test_launcher_rejects_symlink_env_without_reading_target(monkeypatch, tmp_path: Path):
     target = tmp_path / "sensitive.txt"
     original = "PRIVATE_SETTING=must-not-be-read-or-overwritten\n"
