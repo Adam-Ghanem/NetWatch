@@ -1109,23 +1109,12 @@ def retention_cleanup_endpoint(
             status_code=400,
             detail="Set confirmed=true before running destructive retention cleanup.",
         )
-    result = cleanup_retention(
+    return cleanup_retention(
         older_than_days=payload.older_than_days,
         dry_run=payload.dry_run,
         max_rows=payload.max_rows,
+        audit_context={"actor_role": context.role, **context.audit_fields},
     )
-    record_audit_event(
-        context.role,
-        "retention_cleanup_preview" if payload.dry_run else "retention_cleanup",
-        "operational retention tables",
-        "completed",
-        (
-            f"dry_run={payload.dry_run}; older_than_days={result['older_than_days']}; "
-            f"rows={result['total']}"
-        ),
-        **context.audit_fields,
-    )
-    return result
 
 
 @app.get("/api/metrics", response_class=PlainTextResponse)

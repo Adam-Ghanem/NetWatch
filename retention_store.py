@@ -163,11 +163,12 @@ def cleanup_retention(
     older_than_days: int | None = None,
     dry_run: bool = True,
     max_rows: int | None = None,
+    audit_context: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     days = _safe_days(older_than_days)
     limit = _safe_limit(max_rows)
     cutoff = _timestamp(_utc_now() - timedelta(days=days))
-    _, connect = _database_modules()
+    inventory_store, connect = _database_modules()
     candidates = _eligible_queries(cutoff)
     result: dict[str, Any] = {
         "dry_run": bool(dry_run),
@@ -196,4 +197,21 @@ def cleanup_retention(
                 result["total"] += int(cursor.rowcount)
             else:
                 result["deleted"][table] = 0
+        if audit_context is not None:
+            inventory_store.record_audit_event_in_transaction(
+                conn,
+                str(audit_context["actor_role"]),
+                "retention_cleanup_preview" if dry_run else "retention_cleanup",
+                "operational retention tables",
+                "completed",
+                (
+                    f"dry_run={bool(dry_run)}; older_than_days={days}; "
+                    f"rows={result['total']}"
+                ),
+                actor_id=audit_context.get("actor_id", ""),
+                auth_method=audit_context.get("auth_method", ""),
+                request_id=audit_context.get("request_id", ""),
+            )
+    if audit_context is not None:
+        inventory_store._invalidate_audit_readiness_cache()
     return result
