@@ -579,6 +579,29 @@ def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, 
     assert inventory_store._audit_hmac_key() is None
 
 
+def test_audit_hmac_key_file_rejects_permission_change_during_read(
+    monkeypatch, tmp_path
+):
+    key_file = tmp_path / "changing-permissions.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+    original_read = inventory_store.os.read
+
+    def change_permissions_after_read(descriptor, size):
+        content = original_read(descriptor, size)
+        key_file.chmod(0o660)
+        return content
+
+    monkeypatch.setattr(inventory_store.os, "read", change_permissions_after_read)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
 @pytest.mark.parametrize("raw", [b"x" * 4_097, b"\xff" * 64])
 def test_audit_hmac_key_file_rejects_oversized_or_non_utf8_content(
     monkeypatch, tmp_path, raw
