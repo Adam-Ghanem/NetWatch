@@ -82,9 +82,7 @@ def test_profile_host_exposes_canonical_ipv4_address_family(monkeypatch):
 
 
 @pytest.mark.parametrize("failure", ["os_error", "timeout", "decode"])
-def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(
-    monkeypatch, failure
-):
+def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(monkeypatch, failure):
     def fail_probe(_target):
         if failure == "os_error":
             raise OSError("permission denied: /private/runtime/path")
@@ -93,11 +91,7 @@ def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(
         raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
 
     monkeypatch.setattr(host_profiler, "ping_host_raw", fail_probe)
-    monkeypatch.setattr(
-        host_profiler,
-        "reverse_hostname",
-        lambda _target: pytest.fail("no DNS"),
-    )
+    monkeypatch.setattr(host_profiler, "reverse_hostname", lambda _target: pytest.fail("no DNS"))
     monkeypatch.setattr(
         host_profiler, "identity_for_ip", lambda *_args, **_kwargs: _identity()
     )
@@ -112,9 +106,7 @@ def test_profile_host_reports_unknown_when_icmp_probe_cannot_run(
     assert "/private/runtime/path" not in profile.notes
 
 
-def test_profile_host_keeps_completed_no_reply_distinct_from_probe_failure(
-    monkeypatch,
-):
+def test_profile_host_keeps_completed_no_reply_distinct_from_probe_failure(monkeypatch):
     monkeypatch.setattr(
         host_profiler,
         "ping_host_raw",

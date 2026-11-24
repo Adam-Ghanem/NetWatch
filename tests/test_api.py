@@ -638,9 +638,7 @@ def test_audit_identity_and_integrity_are_admin_only(monkeypatch, tmp_path):
     assert integrity.status_code == 403
 
 
-def test_host_check_records_unknown_when_icmp_probe_is_unavailable(
-    monkeypatch, tmp_path
-):
+def test_host_check_records_unknown_when_icmp_probe_is_unavailable(monkeypatch, tmp_path):
     profile = SimpleNamespace(
         ip_address="192.168.1.10",
         address_family="ipv4",

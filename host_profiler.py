@@ -106,13 +106,9 @@ def profile_host(ip: str) -> HostProfile:
     latency = parse_latency_ms(output)
     ttl = parse_ttl(output)
     online = result is not None and result.returncode == 0
-    reachability_status = (
-        "online" if online else "offline" if result is not None else "unknown"
-    )
+    reachability_status = "online" if online else "offline" if result is not None else "unknown"
     hostname = reverse_hostname(target) if online else "-"
-    identity = (
-        identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
-    )
+    identity = identity_for_ip(target, hostname=hostname) if online else identity_for_ip(target)
 
     if online:
         notes = "Host replied to ICMP ping"
