@@ -6,8 +6,8 @@ followed, and only schema-validated advisory output is accepted.
 
 from __future__ import annotations
 
+import http.client
 import json
-import socket
 import time
 import urllib.error
 import urllib.request
@@ -169,7 +169,7 @@ def request_anthropic_intelligence_brief(
             )
     except urllib.error.HTTPError as exc:
         raise _http_error(exc) from exc
-    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+    except (OSError, http.client.HTTPException) as exc:
         raise AIProviderError(
             "provider_unavailable", "The intelligence provider is temporarily unavailable."
         ) from exc
