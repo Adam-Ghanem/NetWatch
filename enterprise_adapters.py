@@ -6,6 +6,7 @@ They require explicit configuration, installed optional dependencies, and a read
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.request
@@ -155,7 +156,7 @@ class HttpsEventSink:
             raise EnterpriseAdapterUnavailable(
                 "Event sink destination is not publicly routable."
             ) from None
-        except OSError:
+        except (OSError, http.client.HTTPException):
             raise EnterpriseAdapterUnavailable("Event sink transport is unavailable.") from None
         if len(content) > NOTIFICATION_RESPONSE_MAX_BYTES:
             raise EnterpriseAdapterUnavailable("Event sink response exceeds the size limit.")
