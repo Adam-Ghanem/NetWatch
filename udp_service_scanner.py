@@ -144,7 +144,7 @@ def _probe_one(
 
     try:
         family, socket_address = _socket_target(target, port)
-    except (OSError, ValueError):
+    except (OSError, UnicodeError):
         row["Status"] = "Blocked"
         row["Service Detection"] = "Target validation"
         return row
