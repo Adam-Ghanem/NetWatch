@@ -38,12 +38,18 @@ configuration is enabled; proposals still require human review and CI.
 
 ## Python CI coverage upload runtime
 
-Python CI pins Codecov Action v6 to the full commit SHA
-[`fb8b3582c8e4def4969c97caa2f19720cb33a72f`](https://github.com/codecov/codecov-action/commit/fb8b3582c8e4def4969c97caa2f19720cb33a72f),
-resolved from the signed upstream `v6` release tag. This replaces v5, whose
-composite action invoked `actions/github-script@v7` (Node.js 20). The reviewed
-v6 composite action invokes the full-SHA-pinned `actions/github-script@v8`
-(Node.js 24), removing that legacy nested runtime from the coverage-upload step.
+Python CI pins Codecov Action **v7.1.1** to the full commit SHA
+[`303a32d7a59b442fa8d48b6a1cc6825c09c847a5`](https://github.com/codecov/codecov-action/commit/303a32d7a59b442fa8d48b6a1cc6825c09c847a5),
+resolved from the signed upstream `v7.1.1` release commit. The exact workflow
+reference is `codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1`.
+GitHub reports the upstream commit signature as verified; its release message is
+`chore(release): 7.1.1 (#1973)`.
+
+The pinned v7.1.1 composite action obtains its OIDC token through
+`actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0`,
+also pinned to a full commit SHA and using the Node.js 24 action runtime. This
+replaces the earlier Codecov v5 composite's `actions/github-script@v7`
+(Node.js 20) helper without relying on a mutable nested action reference.
 
 ## Python CI OIDC boundary
 
@@ -55,11 +61,12 @@ missing report fails the test job.
 
 A separate `coverage` job depends on the successful test job. It alone receives
 `id-token: write`, checks out commit metadata, downloads the named artifact, and
-runs the pinned Codecov v6 uploader with OIDC. The upload remains non-blocking
+runs the pinned Codecov v7.1.1 uploader with OIDC. The upload remains non-blocking
 (`fail_ci_if_error: false`), preserving optional telemetry behavior. This keeps
 OIDC token minting out of the test/dependency execution job; the dedicated
-coverage job still trusts its pinned checkout, artifact actions, and Codecov
-uploader, so those components require normal supply-chain review.
+coverage job still trusts its pinned checkout, artifact actions, Codecov
+uploader, and nested github-script action, so those components require normal
+supply-chain review.
 
 The artifact handoff uses the official immutable release commits:
 - `actions/upload-artifact@v7`:
@@ -69,4 +76,5 @@ The artifact handoff uses the official immutable release commits:
 
 Both releases use the Node.js 24 action runtime. The regression tests enforce
 the full SHA references, required artifact handoff, and the absence of OIDC
-permission from the Python test job.
+permission from the Python test job. They also ensure this document describes
+the same Codecov release and immutable reference as the executable workflow.
