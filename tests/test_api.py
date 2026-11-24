@@ -1265,6 +1265,11 @@ def test_retention_controls_are_admin_only_and_dry_run_first(monkeypatch, tmp_pa
     assert preview.json()["dry_run"] is True
     assert blocked.status_code == 400
     assert missing.status_code == 401
+    with inventory_store._connect() as conn:
+        preview_audit = conn.execute(
+            "SELECT action FROM audit_log ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert preview_audit["action"] == "retention_cleanup_preview"
 
 
 def test_readiness_center_is_admin_only_and_fail_closed(monkeypatch, tmp_path):
