@@ -32,7 +32,7 @@ jobs:
           python -m pip check
 
       - name: Diagnostic Black diff for audit tests
-        run: black --diff tests/test_inventory_store.py
+        run: black --diff scripts/start.py tests/test_start_script.py
 
       - name: Check formatting and imports
         run: |
