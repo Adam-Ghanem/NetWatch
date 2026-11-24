@@ -711,7 +711,9 @@ def test_bounded_dns_resolver_retries_after_all_worker_starts_fail(monkeypatch):
         resolver.resolve("first.example.test", 443)
 
     assert resolver._jobs.empty()
-    assert resolver.resolve("retry.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert resolver.resolve("retry.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
     assert attempts == 2
 
 
@@ -738,8 +740,12 @@ def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeyp
         lambda *args, **kwargs: [_dns_record("93.184.216.34")],
     )
 
-    assert resolver.resolve("partial.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert resolver.resolve("partial.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
     assert attempts == 2
-    assert resolver.resolve("recovered.example.test", 443) == [_dns_record("93.184.216.34")]
+    assert resolver.resolve("recovered.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
     assert attempts == 3
 
