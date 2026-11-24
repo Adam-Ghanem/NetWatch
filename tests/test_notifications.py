@@ -685,6 +685,7 @@ def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
         ("request", "93.184.216.34"),
     ]
 
+
 def test_enterprise_event_sink_normalizes_http_protocol_error_from_transport(monkeypatch):
     failure = http.client.RemoteDisconnected("private transport detail")
 
