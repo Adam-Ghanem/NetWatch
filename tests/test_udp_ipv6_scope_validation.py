@@ -25,7 +25,6 @@ def test_invalid_numeric_ipv6_scope_is_blocked_before_udp_socket_creation(scope_
     assert socket_created is False
 
 
-
 @pytest.mark.parametrize("error_type", [OSError, UnicodeError])
 def test_unavailable_named_ipv6_scope_is_blocked_before_udp_socket_creation(
     monkeypatch, error_type
