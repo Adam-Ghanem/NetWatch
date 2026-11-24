@@ -360,6 +360,28 @@ def _audit_value(value: object, max_length: int) -> str:
     return " ".join(str(value).split())[:max_length]
 
 
+def _audit_hmac_key_file_permissions_are_private(file_stat: os.stat_result) -> bool:
+    """Accept only read-only POSIX modes scoped to the service user or group."""
+    if os.name != "posix":
+        # Windows ACLs are not represented reliably by POSIX mode bits.
+        return not bool(file_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
+
+    mode = stat.S_IMODE(file_stat.st_mode)
+    if mode == 0o400:
+        try:
+            return file_stat.st_uid == os.geteuid()
+        except (AttributeError, OSError):
+            return False
+    if mode == 0o440:
+        try:
+            allowed_groups = set(os.getgroups())
+            allowed_groups.add(os.getegid())
+        except (AttributeError, OSError):
+            return False
+        return file_stat.st_gid in allowed_groups
+    return False
+
+
 def _read_audit_hmac_key_file(path_value: str) -> str | None:
     """Read a bounded audit key from an absolute, stable, non-symlink secret file."""
     path = Path(path_value)
@@ -379,12 +401,14 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
             return None
         if not stat.S_ISREG(path_before.st_mode):
             return None
+        if not _audit_hmac_key_file_permissions_are_private(path_before):
+            return None
 
         descriptor = os.open(os.fspath(path), flags)
         before = os.fstat(descriptor)
         if not stat.S_ISREG(before.st_mode):
             return None
-        if before.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        if not _audit_hmac_key_file_permissions_are_private(before):
             return None
         if (
             before.st_size < MIN_AUDIT_HMAC_KEY_LENGTH
@@ -426,9 +450,15 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
         )
         if before_identity != after_identity:
             return None
-        if (after.st_dev, after.st_ino) != (path_after.st_dev, path_after.st_ino):
+        if (after.st_dev, after.st_ino, after.st_mode) != (
+            path_after.st_dev,
+            path_after.st_ino,
+            path_after.st_mode,
+        ):
             return None
-        if after.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        if not _audit_hmac_key_file_permissions_are_private(after):
+            return None
+        if not _audit_hmac_key_file_permissions_are_private(path_after):
             return None
         if len(raw) != before.st_size or len(raw) > _AUDIT_HMAC_KEY_FILE_MAX_BYTES:
             return None

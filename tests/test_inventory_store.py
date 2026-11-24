@@ -633,6 +633,53 @@ def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, 
     assert inventory_store._audit_hmac_key() is None
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX secret-file modes are required.")
+@pytest.mark.parametrize("mode", [0o444, 0o600, 0o640])
+def test_audit_hmac_key_file_rejects_broad_or_writable_modes(monkeypatch, tmp_path, mode):
+    key_file = tmp_path / "insecure-mode.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(mode)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX group membership is required.")
+def test_audit_hmac_key_file_rejects_untrusted_group_read(monkeypatch, tmp_path):
+    key_file = tmp_path / "untrusted-group.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o440)
+    file_group = key_file.stat().st_gid
+    monkeypatch.setattr(inventory_store.os, "getgroups", lambda: [])
+    monkeypatch.setattr(inventory_store.os, "getegid", lambda: file_group + 1)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX group membership is required.")
+def test_audit_hmac_key_file_allows_read_only_service_group(monkeypatch, tmp_path):
+    key = "independent-file-backed-audit-key-with-32-plus-characters"
+    key_file = tmp_path / "service-group.key"
+    key_file.write_text(key, encoding="utf-8")
+    key_file.chmod(0o440)
+    file_group = key_file.stat().st_gid
+    monkeypatch.setattr(inventory_store.os, "getgroups", lambda: [file_group])
+    monkeypatch.setattr(inventory_store.os, "getegid", lambda: file_group + 1)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    assert inventory_store._audit_hmac_key() == key.encode("utf-8")
+
+
 def test_audit_hmac_key_file_rejects_permission_change_during_read(monkeypatch, tmp_path):
     key_file = tmp_path / "changing-permissions.key"
     key_file.write_text(
