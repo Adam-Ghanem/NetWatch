@@ -40,7 +40,15 @@ Admin `GET /api/notifications/status` shows receipt status and counters, not
 webhook URLs, serialized payloads or secrets. After a successful sink response is
 acknowledged in SQLite, the stored payload body is replaced with `{}`; the stable
 event ID and delivery metadata remain. Pending and dead receipts retain their
-allowlisted payloads for retry or operator triage.
+allowlisted payloads for retry or operator triage. The authenticated admin
+retention preview reports aggregate receipt counts and age only. An explicitly
+confirmed cleanup may remove only `delivered` or `dead` receipts older than the selected
+retention age, subject to the existing per-table row cap. Pending/retry receipts
+are never eligible, even when old; rows with an active claim are also excluded.
+Cleanup remains dry-run by default, is audited, and never deletes `audit_log` or
+`audit_chain_state`. This is logical row deletion, not secure erasure from SQLite
+WAL pages, freed pages, or existing backups; continue to use disk encryption and
+backup rotation.
 
 This is logical row-level minimization, **not secure erasure**: SQLite WAL files,
 freed pages, and existing backups may retain prior bytes until checkpointing,
