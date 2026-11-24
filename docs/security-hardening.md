@@ -6,7 +6,7 @@ This document records the defensive controls used in NetWatch.
 
 - Public Internet targets are blocked by validation logic.
 - The app accepts only private, loopback, or link-local addresses.
-- Scoped link-local IPv6 targets accept named interface scopes or numeric scope IDs; numeric IDs must be ASCII decimal values in the unsigned 32-bit range 1..4294967295. Invalid numeric IDs are rejected before TCP/UDP socket creation.
+- Scoped link-local IPv6 targets accept named interface scopes or numeric scope IDs; numeric IDs must be ASCII decimal values in the unsigned 32-bit range 1..4294967295. Invalid numeric IDs are rejected before TCP/UDP socket creation. UDP probes also fail closed before socket creation when a named local interface scope cannot be resolved.
 - CIDR scans have a maximum host limit.
 - Scan actions require a permission checkbox.
 - API rate, concurrency, inventory, worker, and timeout inputs have upper bounds.
