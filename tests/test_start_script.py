@@ -163,3 +163,53 @@ def test_launcher_never_prints_generated_credentials(monkeypatch, capsys):
     assert secret not in output.out
     assert secret not in output.err
     assert "stored only in the private .env file" in output.out
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink creation may require elevated Windows privileges")
+def test_launcher_rejects_symlink_env_without_reading_target(monkeypatch, tmp_path: Path):
+    target = tmp_path / "sensitive.txt"
+    original = "PRIVATE_SETTING=must-not-be-read-or-overwritten\n"
+    target.write_text(original, encoding="utf-8")
+    env_file = tmp_path / ".env"
+    env_file.symlink_to(target)
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+
+    with pytest.raises(ValueError, match="regular file"):
+        launcher.read_env()
+    with pytest.raises(ValueError, match="regular file"):
+        launcher.write_env({"NETWATCH_API_KEY": "generated-secret-with-at-least-32-characters"})
+
+    assert target.read_text(encoding="utf-8") == original
+    assert env_file.is_symlink()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX broken symlink behavior is platform-specific")
+def test_launcher_rejects_broken_env_symlink_before_creating_target(monkeypatch, tmp_path: Path):
+    target = tmp_path / "missing-target"
+    env_file = tmp_path / ".env"
+    env_file.symlink_to(target)
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+
+    with pytest.raises(ValueError, match="regular file"):
+        launcher.ensure_configuration()
+
+    assert not target.exists()
+    assert env_file.is_symlink()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX hard-link creation is not portable to Windows")
+def test_launcher_rejects_hard_linked_env_without_modifying_target(monkeypatch, tmp_path: Path):
+    target = tmp_path / "sensitive.txt"
+    original = "PRIVATE_SETTING=must-remain-unchanged\n"
+    target.write_text(original, encoding="utf-8")
+    env_file = tmp_path / ".env"
+    os.link(target, env_file)
+    monkeypatch.setattr(launcher, "ENV_FILE", env_file)
+
+    with pytest.raises(ValueError, match="exactly one hard link"):
+        launcher.read_env()
+    with pytest.raises(ValueError, match="exactly one hard link"):
+        launcher.write_env({"NETWATCH_API_KEY": "generated-secret-with-at-least-32-characters"})
+
+    assert target.read_text(encoding="utf-8") == original
+    assert env_file.stat().st_nlink == 2
