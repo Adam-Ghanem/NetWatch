@@ -684,6 +684,7 @@ def test_public_https_transport_does_not_retry_an_uncertain_post(monkeypatch):
         ("request", "93.184.216.34"),
     ]
 
+
 def test_bounded_dns_resolver_retries_after_all_worker_starts_fail(monkeypatch):
     real_thread = threading.Thread
     attempts = 0
