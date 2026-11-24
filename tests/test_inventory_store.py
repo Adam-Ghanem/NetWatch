@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -564,6 +565,59 @@ def test_audit_hmac_key_file_rejects_symlinks(monkeypatch, tmp_path):
     monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(link))
 
     assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="Named pipes are POSIX-only.")
+def test_audit_hmac_key_file_rejects_fifo_before_open(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit-hmac.pipe"
+    os.mkfifo(key_file)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    def unexpected_open(*args, **kwargs):
+        raise AssertionError("Non-regular secret paths must be rejected before open.")
+
+    monkeypatch.setattr(inventory_store.os, "open", unexpected_open)
+
+    assert inventory_store._audit_hmac_key() is None
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "mkfifo") or not hasattr(os, "O_NONBLOCK"),
+    reason="Non-blocking FIFO opens require POSIX support.",
+)
+def test_audit_hmac_key_file_nonblocking_open_handles_fifo_swap(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit-hmac.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    original_lstat = os.lstat
+    original_open = os.open
+    swapped = False
+
+    def swap_to_fifo(path):
+        nonlocal swapped
+        result = original_lstat(path)
+        if Path(path) == key_file and not swapped:
+            key_file.unlink()
+            os.mkfifo(key_file)
+            swapped = True
+        return result
+
+    def require_nonblocking_open(path, flags, *args, **kwargs):
+        assert flags & os.O_NONBLOCK
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(inventory_store.os, "lstat", swap_to_fifo)
+    monkeypatch.setattr(inventory_store.os, "open", require_nonblocking_open)
+
+    assert inventory_store._audit_hmac_key() is None
+    assert swapped
 
 
 def test_audit_hmac_key_file_rejects_group_or_world_writable_files(monkeypatch, tmp_path):

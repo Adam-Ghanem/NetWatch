@@ -367,10 +367,17 @@ def _read_audit_hmac_key_file(path_value: str) -> str | None:
         return None
 
     descriptor: int | None = None
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
         path_before = os.lstat(path)
         if stat.S_ISLNK(path_before.st_mode):
+            return None
+        if not stat.S_ISREG(path_before.st_mode):
             return None
 
         descriptor = os.open(os.fspath(path), flags)
