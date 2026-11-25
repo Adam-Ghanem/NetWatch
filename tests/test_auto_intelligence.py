@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -401,3 +402,51 @@ def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db
         now=start + timedelta(seconds=183),
     )
     assert intelligence_store.intelligence_metrics()["failed"] == 1
+
+
+
+def test_auto_analysis_closes_database_connections_on_all_paths(monkeypatch, isolated_db):
+    opened: list[sqlite3.Connection] = []
+    original_database = auto_intelligence._database
+
+    def tracked_database() -> sqlite3.Connection:
+        connection = original_database()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(auto_intelligence, "_database", tracked_database)
+    start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+    first_digest = _digest("connection-close-first")
+    second_digest = _digest("connection-close-second")
+    claim_id = "a" * 32
+
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            first_digest,
+            interval_seconds=3600,
+            claim_id=claim_id,
+            now=start,
+        )
+        == "claimed"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            second_digest,
+            interval_seconds=3600,
+            claim_id="b" * 32,
+            now=start + timedelta(seconds=30),
+        )
+        == "in_progress"
+    )
+    assert auto_intelligence.finish_auto_analysis(
+        first_digest,
+        claim_id=claim_id,
+        success=True,
+        now=start + timedelta(minutes=1),
+    )
+    assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
+
+    assert len(opened) == 4
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
