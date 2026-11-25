@@ -234,3 +234,60 @@ def test_rejects_output_path_that_aliases_the_input(tmp_path, monkeypatch):
         )
 
     assert source.read_bytes() == original
+
+
+
+def _fake_age_that_stalls(tmp_path: Path, monkeypatch, *, consume_input: bool) -> None:
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir(exist_ok=True)
+    executable = binary_dir / "age"
+    consume = "sys.stdin.buffer.read()\n" if consume_input else ""
+    executable.write_text(
+        f"""#!{sys.executable}
+import sys
+import time
+
+{consume}time.sleep(5)
+""",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+
+def test_times_out_when_age_stops_consuming_input(tmp_path, monkeypatch):
+    _fake_age_that_stalls(tmp_path, monkeypatch, consume_input=False)
+    monkeypatch.setattr(encryptor, "_AGE_INPUT_STALL_TIMEOUT_SECONDS", 0.05)
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"x" * (2 * 1024 * 1024))
+    output = tmp_path / "backup.age"
+
+    with pytest.raises(encryptor.BackupEncryptionError, match="stopped accepting input"):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=[_recipient()],
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
+
+
+def test_times_out_when_age_does_not_exit_after_input_closes(tmp_path, monkeypatch):
+    _fake_age_that_stalls(tmp_path, monkeypatch, consume_input=True)
+    monkeypatch.setattr(encryptor, "_AGE_EXIT_TIMEOUT_SECONDS", 0.05)
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"small backup")
+    output = tmp_path / "backup.age"
+
+    with pytest.raises(encryptor.BackupEncryptionError, match="did not finish after input closed"):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=[_recipient()],
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
