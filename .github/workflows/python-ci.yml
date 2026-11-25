@@ -36,6 +36,10 @@ jobs:
           black --check .
           isort --check-only .
 
+      - name: Show Black diff for notification test formatting failures
+        if: failure()
+        run: black --diff tests/test_notifications.py
+
       - name: Lint and type-check
         run: |
           flake8 .
