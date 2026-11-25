@@ -1,27 +1,18 @@
+"""Deprecated compatibility shim for the former raw-evidence OpenAI adapter.
+
+The old helper serialized arbitrary asset and finding mappings directly to a
+provider. It bypassed NetWatch Intelligence's de-identification, safety gates,
+structured-output validation, and bounded transport. This shim preserves the
+import and call signature but intentionally fails closed.
+"""
+
 from __future__ import annotations
 
-import json
-import os
 from collections.abc import Mapping, Sequence
-from typing import Any
-
-try:
-    from openai import OpenAI
-except ImportError:  # optional dependency
-    OpenAI = None
 
 
 class AIConfigurationError(RuntimeError):
-    pass
-
-
-def _client() -> Any:
-    key = os.getenv("OPENAI_API_KEY")
-    if not key:
-        raise AIConfigurationError("OPENAI_API_KEY is not configured")
-    if OpenAI is None:
-        raise AIConfigurationError("Install the optional OpenAI SDK to enable AI")
-    return OpenAI(api_key=key)
+    """Raised when a disabled or unsafe legacy AI integration is invoked."""
 
 
 def analyze_with_ai(
@@ -30,16 +21,14 @@ def analyze_with_ai(
     findings: Sequence[Mapping[str, object]] = (),
     model: str | None = None,
 ) -> str:
-    """Send bounded NetWatch evidence to an explicitly configured OpenAI model."""
-    selected_model = model or os.getenv("NETWATCH_AI_MODEL", "gpt-5-mini")
-    payload = {"asset": dict(asset), "findings": [dict(item) for item in findings]}
-    response = _client().responses.create(
-        model=selected_model,
-        instructions=(
-            "You are NetWatch's defensive security analysis assistant. "
-            "Analyze only the supplied evidence. Do not invent facts, credentials, "
-            "vulnerabilities, or observations. Return concise defensive guidance."
-        ),
-        input=json.dumps(payload, separators=(",", ":"), ensure_ascii=False),
+    """Reject legacy raw-evidence calls; use the supported Intelligence API.
+
+    Arguments remain in the signature for source compatibility. They are
+    deliberately neither inspected nor serialized, and no provider client is
+    initialized.
+    """
+    del asset, findings, model
+    raise AIConfigurationError(
+        "The legacy raw-evidence AI adapter is disabled; use NetWatch "
+        "Intelligence with a de-identified evidence snapshot."
     )
-    return response.output_text
