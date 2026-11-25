@@ -31,6 +31,9 @@ jobs:
           python -m pip install -r requirements-dev.txt
           python -m pip check
 
+      - name: Diagnostic Black diff for outbox regression
+        run: black --diff tests/test_notification_outbox.py || true
+
       - name: Check formatting and imports
         run: |
           black --check .
