@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from urllib.parse import urlparse
 
 from config import (
@@ -383,6 +383,62 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _DeadlineHeaderReader:
+    """Read HTTP header lines without resetting a shared monotonic deadline."""
+
+    def __init__(self, source: Any, sock: Any, deadline: float) -> None:
+        self._source = source
+        self._socket = sock
+        self._deadline = deadline
+
+    def readline(self, limit: int = -1) -> bytes:
+        line = bytearray()
+        while limit < 0 or len(line) < limit:
+            remaining = self._deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("HTTPS response exceeded its total header-read deadline.")
+            self._socket.settimeout(remaining)
+            chunk = self._source.read(1)
+            if time.monotonic() >= self._deadline:
+                raise TimeoutError("HTTPS response exceeded its total header-read deadline.")
+            if not chunk:
+                break
+            line.extend(chunk)
+            if chunk == b"\n":
+                break
+        return bytes(line)
+
+
+class _DeadlineHTTPResponse(http.client.HTTPResponse):
+    """Parse the HTTP status and headers under one monotonic deadline."""
+
+    def __init__(
+        self,
+        sock: Any,
+        debuglevel: int = 0,
+        method: str | None = None,
+        url: str | None = None,
+        *,
+        header_timeout: float,
+    ) -> None:
+        if header_timeout <= 0:
+            raise ValueError("Response header timeout must be positive.")
+        self._header_socket = sock
+        self._header_deadline = time.monotonic() + header_timeout
+        super().__init__(sock, debuglevel=debuglevel, method=method, url=url)
+
+    def begin(self) -> None:
+        original_fp = self.fp
+        self.fp = cast(
+            Any,
+            _DeadlineHeaderReader(original_fp, self._header_socket, self._header_deadline),
+        )
+        try:
+            super().begin()
+        finally:
+            self.fp = original_fp
+
+
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     """Connect to a vetted IP while retaining hostname-based TLS verification."""
 
@@ -397,6 +453,34 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
             self.timeout,
         )
         self.sock = self._tls_context.wrap_socket(sock, server_hostname=self.host)
+
+    def getresponse(self) -> http.client.HTTPResponse:
+        header_timeout = (
+            self.timeout if self.timeout is not None else NOTIFICATION_TIMEOUT_SECONDS
+        )
+
+        class _BoundedHeaderResponse(_DeadlineHTTPResponse):
+            def __init__(
+                self,
+                sock: Any,
+                debuglevel: int = 0,
+                method: str | None = None,
+                url: str | None = None,
+            ) -> None:
+                super().__init__(
+                    sock,
+                    debuglevel=debuglevel,
+                    method=method,
+                    url=url,
+                    header_timeout=header_timeout,
+                )
+
+        original_response_class = self.response_class
+        self.response_class = _BoundedHeaderResponse
+        try:
+            return super().getresponse()
+        finally:
+            self.response_class = original_response_class
 
 
 class _PinnedHTTPResponse:
