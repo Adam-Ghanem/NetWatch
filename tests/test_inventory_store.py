@@ -705,3 +705,51 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
         exposure_level="Low",
     )
     assert inventory_store.recent_service_findings() == []
+
+def test_database_readiness_does_not_create_missing_storage(monkeypatch, tmp_path):
+    missing_data_dir = tmp_path / "missing-data"
+    monkeypatch.setattr(inventory_store, "DATA_DIR", missing_data_dir)
+    monkeypatch.setattr(inventory_store, "DB_FILE", missing_data_dir / "netwatch.db")
+
+    assert inventory_store.database_is_ready() is False
+    assert not missing_data_dir.exists()
+    assert not inventory_store.DB_FILE.exists()
+
+
+def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.DB_FILE.write_bytes(b"synthetic database placeholder")
+
+    class FakeCursor:
+        def fetchone(self):
+            return ("assets",)
+
+    class FakeConnection:
+        def __init__(self):
+            self.statements = []
+            self.closed = False
+
+        def execute(self, statement):
+            self.statements.append(statement)
+            return FakeCursor()
+
+        def close(self):
+            self.closed = True
+
+    connection = FakeConnection()
+    opened = {}
+
+    def fake_connect(database, *, uri, timeout):
+        opened["database"] = database
+        opened["uri"] = uri
+        opened["timeout"] = timeout
+        return connection
+
+    monkeypatch.setattr(inventory_store.sqlite3, "connect", fake_connect)
+
+    assert inventory_store.database_is_ready() is True
+    assert opened["uri"] is True
+    assert opened["timeout"] == 5.0
+    assert "mode=ro" in opened["database"]
+    assert "PRAGMA query_only = ON" in connection.statements
+    assert connection.closed is True
