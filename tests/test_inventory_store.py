@@ -757,6 +757,7 @@ def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
     assert "PRAGMA query_only = ON" in connection.statements
     assert connection.closed is True
 
+
 def test_database_readiness_handles_live_wal_database_without_writes(
     monkeypatch, tmp_path
 ):
