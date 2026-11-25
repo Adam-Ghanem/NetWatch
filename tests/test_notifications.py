@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from email.message import Message
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -350,3 +351,59 @@ def test_notification_status_never_returns_configured_urls(monkeypatch, tmp_path
     assert response.json()["channels"][0] == {"kind": "webhook", "enabled": True}
     assert "hooks.example.test" not in response.text
     assert "super-secret-path" not in response.text
+
+
+def test_notification_worker_startup_retries_only_missing_worker(monkeypatch):
+    attempts: list[str] = []
+    fail_second_start = True
+
+    class _FakeThread:
+        def __init__(self, *, target, name, daemon):
+            assert target is notifications._notification_worker
+            assert daemon is True
+            self.name = name
+
+        def start(self):
+            nonlocal fail_second_start
+            attempts.append(self.name)
+            if self.name.endswith("-2") and fail_second_start:
+                fail_second_start = False
+                raise RuntimeError("simulated thread limit")
+
+    monkeypatch.setattr(notifications, "_notification_workers_started", 0)
+    monkeypatch.setattr(notifications, "threading", SimpleNamespace(Thread=_FakeThread))
+
+    assert notifications._ensure_notification_workers() is True
+    assert notifications._notification_workers_started == 1
+    assert notifications._ensure_notification_workers() is True
+    assert notifications._notification_workers_started == 2
+    assert notifications._ensure_notification_workers() is True
+    assert attempts == [
+        "netwatch-notification-delivery-1",
+        "netwatch-notification-delivery-2",
+        "netwatch-notification-delivery-2",
+    ]
+
+
+def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
+    notifications._reset_notification_state_for_tests()
+    monkeypatch.setenv("NETWATCH_WEBHOOK_URL", "https://hooks.example.test/netwatch-secret")
+    monkeypatch.delenv("NETWATCH_SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.setenv("NETWATCH_NOTIFY_MIN_SEVERITY", "High")
+    monkeypatch.setattr(notifications, "_notification_workers_started", 0)
+
+    class _FailingThread:
+        def __init__(self, *, target, name, daemon):
+            assert target is notifications._notification_worker
+            assert daemon is True
+
+        def start(self):
+            raise RuntimeError("simulated thread limit")
+
+    monkeypatch.setattr(notifications, "threading", SimpleNamespace(Thread=_FailingThread))
+    queued_before = notifications._notification_queue.qsize()
+
+    assert notifications.enqueue_alert_notification(_alert()) is False
+    assert notifications._notification_workers_started == 0
+    assert notifications._notification_queue.qsize() == queued_before
+

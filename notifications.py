@@ -130,7 +130,8 @@ _circuit_state: dict[NotificationKind, _CircuitState] = {
 }
 _notification_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=512)
 _worker_lock = threading.Lock()
-_workers_started = False
+_NOTIFICATION_WORKER_COUNT = 2
+_notification_workers_started = 0
 
 
 def validate_notification_url(value: str, *, field_name: str = "Notification URL") -> str:
@@ -519,26 +520,37 @@ def _notification_worker() -> None:
             _notification_queue.task_done()
 
 
-def _ensure_notification_workers() -> None:
-    global _workers_started
+def _ensure_notification_workers() -> bool:
+    """Keep the bounded worker pool usable after partial thread-start failures."""
+    global _notification_workers_started
     with _worker_lock:
-        if _workers_started:
-            return
-        for index in range(2):
-            worker = threading.Thread(
-                target=_notification_worker,
-                name=f"netwatch-notification-delivery-{index + 1}",
-                daemon=True,
-            )
-            worker.start()
-        _workers_started = True
+        while _notification_workers_started < _NOTIFICATION_WORKER_COUNT:
+            worker_index = _notification_workers_started + 1
+            try:
+                worker = threading.Thread(
+                    target=_notification_worker,
+                    name=f"netwatch-notification-delivery-{worker_index}",
+                    daemon=True,
+                )
+                worker.start()
+            except (OSError, RuntimeError) as exc:
+                LOGGER.warning(
+                    "notification_worker_start_failed worker=%s reason=%s",
+                    worker_index,
+                    type(exc).__name__,
+                )
+                return _notification_workers_started > 0
+            _notification_workers_started += 1
+    return _notification_workers_started > 0
 
 
 def enqueue_alert_notification(alert: dict[str, Any]) -> bool:
     """Queue notification delivery without delaying the alert database transaction."""
     if not notifications_enabled() or not alert_meets_notification_threshold(alert):
         return False
-    _ensure_notification_workers()
+    if not _ensure_notification_workers():
+        LOGGER.warning("notification_queue_unavailable delivery_dropped=true")
+        return False
     try:
         _notification_queue.put_nowait(dict(alert))
     except queue.Full:
