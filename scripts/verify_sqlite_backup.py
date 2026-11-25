@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Strict, read-only verification of an offline NetWatch SQLite backup.
 
-This checks backup structure and transport integrity, not encryption,
-off-host rotation, audit HMAC keys, or a successful application restore.
+The input is copied through one open file descriptor into a private temporary
+snapshot. The digest and SQLite checks therefore apply to the same bytes.
+This checks structure and transport integrity, not encryption, off-host
+rotation, audit HMAC keys, or a successful application restore.
 """
 
 from __future__ import annotations
@@ -11,8 +13,12 @@ import argparse
 import hashlib
 import hmac
 import json
+import os
 import sqlite3
-from contextlib import closing
+import stat
+import tempfile
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 TABLES = (
@@ -26,14 +32,6 @@ TABLES = (
 _HASH_CHUNK_BYTES = 1024 * 1024
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as backup:
-        for chunk in iter(lambda: backup.read(_HASH_CHUNK_BYTES), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _expected_digest(value: str | None) -> str | None:
     if value is None:
         return None
@@ -43,70 +41,148 @@ def _expected_digest(value: str | None) -> str | None:
     return normalized
 
 
+def _same_file_state(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        left.st_dev,
+        left.st_ino,
+        left.st_size,
+        left.st_mtime_ns,
+        left.st_ctime_ns,
+    ) == (
+        right.st_dev,
+        right.st_ino,
+        right.st_size,
+        right.st_mtime_ns,
+        right.st_ctime_ns,
+    )
+
+
+def _ensure_source_unchanged(path: Path, source_fd: int, original: os.stat_result) -> None:
+    try:
+        descriptor_state = os.fstat(source_fd)
+        path_state = path.lstat()
+    except OSError as exc:
+        raise ValueError("Backup changed during verification; use an offline snapshot.") from exc
+
+    if (
+        not stat.S_ISREG(path_state.st_mode)
+        or not _same_file_state(original, descriptor_state)
+        or not _same_file_state(original, path_state)
+    ):
+        raise ValueError("Backup changed during verification; use an offline snapshot.")
+
+
+@contextmanager
+def _snapshot_backup(path: Path) -> Iterator[tuple[Path, str, int]]:
+    """Copy a stable regular input into a private temporary snapshot and hash it."""
+    try:
+        path_state = path.lstat()
+    except OSError as exc:
+        raise ValueError("Backup file is missing or unavailable.") from exc
+
+    if not stat.S_ISREG(path_state.st_mode) or path_state.st_size == 0:
+        raise ValueError("Backup file is missing, empty, or not a regular file.")
+
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    try:
+        source_fd = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError("Backup file cannot be opened safely.") from exc
+
+    try:
+        original = os.fstat(source_fd)
+        if not stat.S_ISREG(original.st_mode) or not _same_file_state(path_state, original):
+            raise ValueError("Backup changed before verification; use an offline snapshot.")
+
+        with tempfile.TemporaryDirectory(prefix="netwatch-backup-verify-") as temporary_dir:
+            snapshot_fd, snapshot_name = tempfile.mkstemp(
+                prefix="snapshot-",
+                suffix=".sqlite3",
+                dir=temporary_dir,
+            )
+            digest = hashlib.sha256()
+            copied = 0
+            with os.fdopen(os.dup(source_fd), "rb") as source:
+                with os.fdopen(snapshot_fd, "wb") as snapshot:
+                    for chunk in iter(lambda: source.read(_HASH_CHUNK_BYTES), b""):
+                        snapshot.write(chunk)
+                        digest.update(chunk)
+                        copied += len(chunk)
+                    snapshot.flush()
+                    os.fsync(snapshot.fileno())
+
+            if copied != original.st_size:
+                raise ValueError("Backup changed during verification; use an offline snapshot.")
+            _ensure_source_unchanged(path, source_fd, original)
+
+            yield Path(snapshot_name), digest.hexdigest(), copied
+
+            # Recheck after SQLite validation so a path swap during the check fails closed.
+            _ensure_source_unchanged(path, source_fd, original)
+    finally:
+        os.close(source_fd)
+
+
 def verify(
     path: Path,
     expected_schema: int | None = None,
     expected_sha256: str | None = None,
 ) -> dict[str, object]:
-    """Verify a *stopped, standalone* SQLite snapshot without changing it."""
-    if not path.is_file() or path.stat().st_size == 0:
-        raise ValueError("Backup file is missing or empty.")
+    """Verify a *stopped, standalone* SQLite snapshot without changing its source."""
+    expected_hash = _expected_digest(expected_sha256)
     if expected_schema is not None and expected_schema < 1:
         raise ValueError("Expected schema must be a positive integer.")
 
-    expected_hash = _expected_digest(expected_sha256)
-    before = path.stat()
-    digest = _file_sha256(path)
-    if expected_hash is not None and not hmac.compare_digest(digest, expected_hash):
-        raise ValueError("Backup SHA-256 does not match the expected value.")
+    with _snapshot_backup(path) as (snapshot_path, digest, byte_count):
+        if expected_hash is not None and not hmac.compare_digest(digest, expected_hash):
+            raise ValueError("Backup SHA-256 does not match the expected value.")
 
-    # as_uri() percent-encodes filenames containing '?' and '#', unlike raw file: paths.
-    uri = f"{path.resolve().as_uri()}?mode=ro"
-    with closing(sqlite3.connect(uri, uri=True)) as connection:
-        connection.execute("PRAGMA query_only = ON")
-        result = connection.execute("PRAGMA integrity_check").fetchone()
-        integrity = str(result[0]) if result else ""
-        if integrity.lower() != "ok":
-            raise ValueError(f"SQLite integrity check failed: {integrity}")
+        # The private snapshot is the exact byte sequence used for both hashing and SQLite checks.
+        uri = f"{snapshot_path.resolve().as_uri()}?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
+            connection.execute("PRAGMA query_only = ON")
+            result = connection.execute("PRAGMA integrity_check").fetchone()
+            integrity = str(result[0]) if result else ""
+            if integrity.lower() != "ok":
+                raise ValueError(f"SQLite integrity check failed: {integrity}")
 
-        schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
-        if schema < 1:
-            raise ValueError("Backup has no NetWatch schema version.")
-        if expected_schema is not None and schema != expected_schema:
-            raise ValueError(f"Expected schema {expected_schema}, found {schema}.")
+            schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if schema < 1:
+                raise ValueError("Backup has no NetWatch schema version.")
+            if expected_schema is not None and schema != expected_schema:
+                raise ValueError(f"Expected schema {expected_schema}, found {schema}.")
 
-        present = {
-            row[0]
-            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+            present = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            missing = sorted(set(TABLES) - present)
+            if missing:
+                raise ValueError(f"Missing required NetWatch tables: {', '.join(missing)}.")
+
+            # Fetch one violation only; a damaged backup must not force an unbounded result.
+            violation = connection.execute("PRAGMA foreign_key_check").fetchone()
+            if violation is not None:
+                raise ValueError("Backup contains foreign key violations.")
+
+            counts = {
+                table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+                for table in TABLES
+            }
+
+        return {
+            "path": str(path.resolve()),
+            "bytes": byte_count,
+            "sha256": digest,
+            "integrity": integrity,
+            "foreign_key_violations": 0,
+            "schema_version": schema,
+            "counts": counts,
+            "read_only": True,
         }
-        missing = sorted(set(TABLES) - present)
-        if missing:
-            raise ValueError(f"Missing required NetWatch tables: {', '.join(missing)}.")
-
-        # Fetch one violation only; a damaged backup must not force an unbounded result.
-        violation = connection.execute("PRAGMA foreign_key_check").fetchone()
-        if violation is not None:
-            raise ValueError("Backup contains foreign key violations.")
-
-        counts = {
-            table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            for table in TABLES
-        }
-
-    after = path.stat()
-    if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
-        raise ValueError("Backup changed during verification; use an offline snapshot.")
-
-    return {
-        "path": str(path.resolve()),
-        "bytes": after.st_size,
-        "sha256": digest,
-        "integrity": integrity,
-        "foreign_key_violations": 0,
-        "schema_version": schema,
-        "counts": counts,
-        "read_only": True,
-    }
 
 
 def main() -> int:
