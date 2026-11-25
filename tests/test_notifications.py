@@ -835,6 +835,7 @@ def test_public_https_transport_restores_request_timeout_after_fallback_connect(
     assert connect_timeouts == pytest.approx([5.0, 1.0])
     assert request_timeouts == [(5, 5)]
 
+
 def test_pinned_https_response_headers_share_one_monotonic_deadline(monkeypatch):
     now = [0.0]
     timeouts: list[float] = []
