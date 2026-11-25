@@ -853,6 +853,9 @@ def test_pinned_https_response_headers_share_one_monotonic_deadline(monkeypatch)
             self.offset += len(chunk)
             return chunk
 
+        def flush(self) -> None:
+            return None
+
         def close(self) -> None:
             return None
 
@@ -889,6 +892,9 @@ def test_pinned_https_response_headers_parse_before_deadline():
             chunk = response_bytes[self.offset : self.offset + size]
             self.offset += len(chunk)
             return chunk
+
+        def flush(self) -> None:
+            return None
 
         def close(self) -> None:
             return None
