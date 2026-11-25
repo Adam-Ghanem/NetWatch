@@ -449,3 +449,38 @@ def test_auto_analysis_closes_database_connections_on_all_paths(monkeypatch, iso
     for connection in opened:
         with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
             connection.execute("SELECT 1")
+
+ 
+ 
+def test_auto_analysis_closes_connection_after_exception(monkeypatch, isolated_db):
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+
+    with pytest.raises(RuntimeError, match="synthetic transaction failure"):
+        with auto_intelligence._database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "CREATE TABLE connection_close_rollback_probe (id INTEGER PRIMARY KEY)"
+            )
+            raise RuntimeError("synthetic transaction failure")
+
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        opened[0].execute("SELECT 1")
+
+    check = original_connect()
+    try:
+        probe = check.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            ("connection_close_rollback_probe",),
+        ).fetchone()
+    finally:
+        check.close()
+    assert probe is None
