@@ -834,3 +834,81 @@ def test_public_https_transport_restores_request_timeout_after_fallback_connect(
 
     assert connect_timeouts == pytest.approx([5.0, 1.0])
     assert request_timeouts == [(5, 5)]
+
+def test_pinned_https_response_headers_share_one_monotonic_deadline(monkeypatch):
+    now = [0.0]
+    timeouts: list[float] = []
+    response_bytes = b"HTTP/1.1 204 No Content\r\nX-Test: ok\r\n\r\n"
+
+    class SlowFile:
+        def __init__(self):
+            self.offset = 0
+
+        def read(self, size: int = -1) -> bytes:
+            now[0] += 0.75
+            if self.offset >= len(response_bytes):
+                return b""
+            chunk = response_bytes[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            return chunk
+
+        def close(self) -> None:
+            return None
+
+    class FakeSocket:
+        def makefile(self, mode: str):
+            assert mode == "rb"
+            return SlowFile()
+
+        def settimeout(self, timeout: float) -> None:
+            timeouts.append(timeout)
+
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+    response = notifications._DeadlineHTTPResponse(
+        FakeSocket(),
+        method="POST",
+        header_timeout=2.0,
+    )
+
+    with pytest.raises(TimeoutError, match="total header-read deadline"):
+        response.begin()
+
+    response.close()
+    assert timeouts == pytest.approx([2.0, 1.25, 0.5])
+
+
+def test_pinned_https_response_headers_parse_before_deadline():
+    response_bytes = b"HTTP/1.1 204 No Content\r\nX-Test: ok\r\n\r\n"
+
+    class ImmediateFile:
+        def __init__(self):
+            self.offset = 0
+
+        def read(self, size: int = -1) -> bytes:
+            chunk = response_bytes[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            return chunk
+
+        def close(self) -> None:
+            return None
+
+    class FakeSocket:
+        def makefile(self, mode: str):
+            assert mode == "rb"
+            return ImmediateFile()
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout > 0
+
+    response = notifications._DeadlineHTTPResponse(
+        FakeSocket(),
+        method="POST",
+        header_timeout=5.0,
+    )
+    response.begin()
+    try:
+        assert response.status == 204
+        assert response.getheader("X-Test") == "ok"
+    finally:
+        response.close()
+
