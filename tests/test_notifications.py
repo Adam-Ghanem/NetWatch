@@ -750,3 +750,87 @@ def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeyp
     ]
     assert attempts == 3
 
+
+def test_public_https_transport_shares_connection_deadline_across_addresses(monkeypatch):
+    now = [0.0]
+    timeouts: list[float] = []
+    addresses = ["93.184.216.34", "1.1.1.1", "8.8.8.8"]
+    monkeypatch.setattr(notifications, "_public_https_addresses", lambda *_: addresses)
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+
+    class FailingConnection:
+        def __init__(self, host, port, address, *, timeout: float):
+            self.timeout = timeout
+            timeouts.append(timeout)
+
+        def connect(self):
+            now[0] += min(self.timeout, 2.0)
+            raise OSError("synthetic connection timeout")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FailingConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch",
+        data=b"{}",
+        method="POST",
+    )
+
+    with pytest.raises(TimeoutError, match="shared connection deadline"):
+        notifications.open_public_https_without_redirects(request, timeout=5)
+
+    assert timeouts == pytest.approx([5.0, 3.0, 1.0])
+
+
+def test_public_https_transport_restores_request_timeout_after_fallback_connect(monkeypatch):
+    now = [0.0]
+    connect_timeouts: list[float] = []
+    request_timeouts: list[tuple[float, float]] = []
+    addresses = ["93.184.216.34", "1.1.1.1"]
+    monkeypatch.setattr(notifications, "_public_https_addresses", lambda *_: addresses)
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+
+    class FakeSocket:
+        def settimeout(self, timeout: float) -> None:
+            self.timeout = timeout
+
+    class FakeResponse:
+        status = 204
+
+        def close(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout: float):
+            self.timeout = timeout
+            self.sock = FakeSocket()
+            connect_timeouts.append(timeout)
+
+        def connect(self):
+            if len(connect_timeouts) == 1:
+                now[0] += 4.0
+                raise OSError("synthetic first-address failure")
+            now[0] += 0.5
+
+        def request(self, method, selector, *, body, headers):
+            request_timeouts.append((self.timeout, self.sock.timeout))
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch",
+        data=b"{}",
+        method="POST",
+    )
+
+    with notifications.open_public_https_without_redirects(request, timeout=5) as response:
+        assert response.status == 204
+
+    assert connect_timeouts == pytest.approx([5.0, 1.0])
+    assert request_timeouts == [(5, 5)]
