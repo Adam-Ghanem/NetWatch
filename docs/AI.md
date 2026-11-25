@@ -57,6 +57,17 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   enabling external AI on company networks.
 - Failed/disabled AI does not interrupt core monitoring and the local Risk Advisor.
 
+### Legacy adapter disabled
+
+The old `ai_client.analyze_with_ai` helper accepted arbitrary asset and finding
+mappings and sent them directly to OpenAI. It bypassed the supported
+de-identification and provider safety pipeline. The repository contains no
+application call sites for this helper, so it now fails closed while retaining
+its import and argument signature for a clear migration error. Do not use it
+for new integrations; use the authenticated NetWatch Intelligence path, which
+builds a de-identified snapshot and applies the configured privacy, audit,
+budget, timeout, and structured-response controls.
+
 ## Continuous evidence-only analysis (opt-in)
 
 NetWatch can periodically use the selected GPT or Claude provider to analyze
