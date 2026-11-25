@@ -1076,8 +1076,8 @@ def test_pinned_https_interim_100_and_final_headers_share_delivery_deadline(monk
     now = [0.0]
     timeouts: list[float] = []
     response_bytes = (
-        b"HTTP/1.1 100 Continue\\r\\nX-Interim: accepted\\r\\n\\r\\n"
-        b"HTTP/1.1 204 No Content\\r\\nX-Test: ok\\r\\n\\r\\n"
+        b"HTTP/1.1 100 Continue\r\nX-Interim: accepted\r\n\r\n"
+        b"HTTP/1.1 204 No Content\r\nX-Test: ok\r\n\r\n"
     )
 
     class SlowFile:
