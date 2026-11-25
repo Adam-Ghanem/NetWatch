@@ -419,12 +419,17 @@ class _DeadlineHTTPResponse(http.client.HTTPResponse):
         method: str | None = None,
         url: str | None = None,
         *,
-        header_timeout: float,
+        header_timeout: float | None = None,
+        header_deadline: float | None = None,
     ) -> None:
-        if header_timeout <= 0:
-            raise ValueError("Response header timeout must be positive.")
+        if header_deadline is None:
+            if header_timeout is None or header_timeout <= 0:
+                raise ValueError("Response header timeout must be positive.")
+            header_deadline = time.monotonic() + header_timeout
+        elif header_deadline <= time.monotonic():
+            raise TimeoutError("HTTPS response exceeded its shared delivery deadline.")
         self._header_socket = sock
-        self._header_deadline = time.monotonic() + header_timeout
+        self._header_deadline = header_deadline
         super().__init__(sock, debuglevel=debuglevel, method=method, url=url)
 
     def begin(self) -> None:
@@ -446,6 +451,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         self._tls_context = ssl.create_default_context()
         super().__init__(host, port=port, timeout=timeout, context=self._tls_context)
         self._resolved_address = address
+        self._delivery_deadline: float | None = None
 
     def connect(self) -> None:
         sock = socket.create_connection(
@@ -458,6 +464,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         header_timeout = (
             self.timeout if self.timeout is not None else NOTIFICATION_TIMEOUT_SECONDS
         )
+        header_deadline = getattr(self, "_delivery_deadline", None)
 
         class _BoundedHeaderResponse(_DeadlineHTTPResponse):
             def __init__(
@@ -473,6 +480,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
                     method=method,
                     url=url,
                     header_timeout=header_timeout,
+                    header_deadline=header_deadline,
                 )
 
         original_response_class = self.response_class
@@ -490,9 +498,13 @@ class _PinnedHTTPResponse:
         self,
         connection: _PinnedHTTPSConnection,
         response: http.client.HTTPResponse,
+        *,
+        deadline: float | None = None,
     ) -> None:
         self._connection = connection
         self._response = response
+        if deadline is not None:
+            setattr(response, "_netwatch_delivery_deadline", deadline)
 
     def __enter__(self) -> http.client.HTTPResponse:
         return self._response
@@ -558,9 +570,15 @@ class _BoundedDNSResolver:
                     break
                 self._workers_started += 1
 
-    def resolve(self, host: str, port: int) -> list[tuple[Any, ...]]:
-        """Return resolver records or fail closed within the configured deadline."""
+    def resolve(
+        self, host: str, port: int, deadline: float | None = None
+    ) -> list[tuple[Any, ...]]:
+        """Return resolver records within both resolver and delivery deadlines."""
+        if deadline is not None and deadline <= time.monotonic():
+            raise TimeoutError("DNS resolution timed out.")
         self._ensure_workers()
+        if deadline is not None and deadline <= time.monotonic():
+            raise TimeoutError("DNS resolution timed out.")
         completed = threading.Event()
         cancelled = threading.Event()
         result: dict[str, Any] = {}
@@ -568,7 +586,10 @@ class _BoundedDNSResolver:
             self._jobs.put_nowait((host, port, completed, cancelled, result))
         except queue.Full as exc:
             raise TimeoutError("DNS resolver queue is full.") from exc
-        if not completed.wait(self._timeout):
+        wait_timeout = self._timeout
+        if deadline is not None:
+            wait_timeout = min(wait_timeout, deadline - time.monotonic())
+        if wait_timeout <= 0 or not completed.wait(wait_timeout):
             cancelled.set()
             raise TimeoutError("DNS resolution timed out.")
         error = result.get("error")
@@ -583,9 +604,11 @@ class _BoundedDNSResolver:
 _DNS_RESOLVER = _BoundedDNSResolver()
 
 
-def _public_https_addresses(host: str, port: int) -> list[str]:
+def _public_https_addresses(
+    host: str, port: int, deadline: float | None = None
+) -> list[str]:
     """Resolve once and reject the whole hostname if any answer is non-public."""
-    records = _DNS_RESOLVER.resolve(host, port)
+    records = _DNS_RESOLVER.resolve(host, port, deadline)
     addresses: list[str] = []
     for family, _, _, _, sockaddr in records:
         if family not in {socket.AF_INET, socket.AF_INET6}:
@@ -616,7 +639,7 @@ def _public_https_addresses(host: str, port: int) -> list[str]:
 def open_public_https_without_redirects(
     request: urllib.request.Request, timeout: float
 ) -> _PinnedHTTPResponse:
-    """Connect to a validated public IP within one shared address-fallback deadline."""
+    """Connect to a validated public IP within one shared per-attempt deadline."""
     parsed = urlparse(request.full_url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise NotificationConfigurationError("Outbound destination must use HTTPS.")
@@ -624,14 +647,16 @@ def open_public_https_without_redirects(
         port = parsed.port or 443
     except ValueError as exc:
         raise NotificationConfigurationError("Outbound destination port is invalid.") from exc
-    addresses = _public_https_addresses(parsed.hostname, port)
-    connection_deadline = time.monotonic() + timeout
+    if timeout <= 0:
+        raise ValueError("Outbound HTTPS delivery timeout must be positive.")
+    delivery_deadline = time.monotonic() + timeout
+    addresses = _public_https_addresses(parsed.hostname, port, delivery_deadline)
     last_error: Exception | None = None
     for address in addresses:
-        remaining = connection_deadline - time.monotonic()
+        remaining = delivery_deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError(
-                "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+                "Outbound HTTPS delivery exceeded its shared delivery deadline."
             ) from last_error
         connection = _PinnedHTTPSConnection(
             parsed.hostname, port, address, timeout=remaining
@@ -641,34 +666,46 @@ def open_public_https_without_redirects(
         except (http.client.HTTPException, OSError) as exc:
             connection.close()
             last_error = exc
-            if time.monotonic() >= connection_deadline:
+            if time.monotonic() >= delivery_deadline:
                 raise TimeoutError(
-                    "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+                    "Outbound HTTPS delivery exceeded its shared delivery deadline."
                 ) from exc
             continue
-        if time.monotonic() >= connection_deadline:
+        if time.monotonic() >= delivery_deadline:
             connection.close()
             raise TimeoutError(
-                "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+                "Outbound HTTPS delivery exceeded its shared delivery deadline."
             )
         try:
-            # The shared deadline applies to TCP/TLS fallback only. Preserve the
-            # existing per-operation timeout once a connection is established.
-            connection.timeout = timeout
+            connection._delivery_deadline = delivery_deadline
+            remaining = delivery_deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    "Outbound HTTPS delivery exceeded its shared delivery deadline."
+                )
+            connection.timeout = remaining
             connected_socket = getattr(connection, "sock", None)
             if connected_socket is not None:
-                connected_socket.settimeout(timeout)
+                connected_socket.settimeout(remaining)
             connection.request(
                 request.get_method(),
                 request.selector,
                 body=request.data,
                 headers=dict(request.header_items()),
             )
+            remaining = delivery_deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    "Outbound HTTPS delivery exceeded its shared delivery deadline."
+                )
+            connection.timeout = remaining
+            if connected_socket is not None:
+                connected_socket.settimeout(remaining)
             response = connection.getresponse()
         except (http.client.HTTPException, OSError):
             connection.close()
             raise
-        return _PinnedHTTPResponse(connection, response)
+        return _PinnedHTTPResponse(connection, response, deadline=delivery_deadline)
     if last_error is not None:
         raise last_error
     raise OSError("Notification destination could not be reached.")
@@ -702,8 +739,9 @@ def read_bounded_response(
     *,
     max_bytes: int,
     timeout: float,
+    deadline: float | None = None,
 ) -> bytes:
-    """Read an HTTPS response incrementally under one monotonic body deadline."""
+    """Read incrementally under a body deadline capped by the delivery attempt deadline."""
     if max_bytes < 0 or timeout <= 0:
         raise ValueError("Response byte and time limits must be positive.")
 
@@ -712,21 +750,33 @@ def read_bounded_response(
     if response_socket is None or not callable(reader):
         raise TimeoutError("HTTPS response lacks bounded incremental-read support.")
 
-    deadline = time.monotonic() + timeout
+    body_deadline = time.monotonic() + timeout
+    if deadline is not None:
+        body_deadline = min(body_deadline, deadline)
     chunks: list[bytes] = []
     total = 0
     while total <= max_bytes:
-        remaining = deadline - time.monotonic()
+        remaining = body_deadline - time.monotonic()
         if remaining <= 0:
-            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+            message = (
+                "HTTPS response exceeded its shared delivery deadline."
+                if deadline is not None
+                else "HTTPS response exceeded its total body-read deadline."
+            )
+            raise TimeoutError(message)
         try:
             response_socket.settimeout(remaining)
         except (OSError, ValueError) as exc:
             raise TimeoutError("HTTPS response socket is unavailable.") from exc
 
         chunk = reader(min(_RESPONSE_READ_CHUNK_BYTES, max_bytes + 1 - total))
-        if time.monotonic() >= deadline:
-            raise TimeoutError("HTTPS response exceeded its total body-read deadline.")
+        if time.monotonic() >= body_deadline:
+            message = (
+                "HTTPS response exceeded its shared delivery deadline."
+                if deadline is not None
+                else "HTTPS response exceeded its total body-read deadline."
+            )
+            raise TimeoutError(message)
         if not chunk:
             break
         chunks.append(chunk)
@@ -775,6 +825,7 @@ def _send_once(channel: NotificationChannel, payload: dict[str, Any]) -> None:
                 response,
                 max_bytes=NOTIFICATION_RESPONSE_MAX_BYTES,
                 timeout=NOTIFICATION_TIMEOUT_SECONDS,
+                deadline=getattr(response, "_netwatch_delivery_deadline", None),
             )
     except NotificationConfigurationError:
         raise _DeliveryFailure(retryable=False) from None
