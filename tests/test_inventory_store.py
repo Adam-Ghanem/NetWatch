@@ -756,3 +756,43 @@ def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
     assert "mode=ro" in database_uri
     assert "PRAGMA query_only = ON" in connection.statements
     assert connection.closed is True
+
+def test_database_readiness_handles_live_wal_database_without_writes(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    writer = sqlite3.connect(inventory_store.DB_FILE, timeout=5.0)
+    try:
+        journal_mode = writer.execute("PRAGMA journal_mode = WAL").fetchone()
+        assert journal_mode is not None
+        assert journal_mode[0].lower() == "wal"
+        writer.execute("CREATE TABLE assets (id INTEGER PRIMARY KEY)")
+        writer.commit()
+        writer.execute("INSERT INTO assets DEFAULT VALUES")
+        writer.commit()
+
+        wal_file = Path(f"{inventory_store.DB_FILE}-wal")
+        assert wal_file.is_file()
+        assert wal_file.stat().st_size > 0
+        before = (
+            inventory_store.DB_FILE.stat().st_size,
+            inventory_store.DB_FILE.stat().st_mtime_ns,
+            wal_file.stat().st_size,
+            wal_file.stat().st_mtime_ns,
+        )
+
+        assert inventory_store.database_is_ready() is True
+        assert inventory_store.database_is_ready() is True
+
+        after = (
+            inventory_store.DB_FILE.stat().st_size,
+            inventory_store.DB_FILE.stat().st_mtime_ns,
+            wal_file.stat().st_size,
+            wal_file.stat().st_mtime_ns,
+        )
+        assert after == before
+
+        writer.execute("INSERT INTO assets DEFAULT VALUES")
+        writer.commit()
+        assert writer.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 2
+    finally:
+        writer.close()
+
