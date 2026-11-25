@@ -1,8 +1,6 @@
 from pathlib import Path
 
-SCRIPT = (
-    Path(__file__).resolve().parents[1] / "scripts" / "smoke_docker_volume_restore.sh"
-)
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "smoke_docker_volume_restore.sh"
 
 
 def test_docker_restore_smoke_is_network_isolated_and_provider_free() -> None:
