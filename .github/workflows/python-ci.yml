@@ -33,6 +33,7 @@ jobs:
 
       - name: Check formatting and imports
         run: |
+          black --diff scripts/encrypt_backup_age.py tests/test_backup_age_encryption.py
           black --check .
           isort --check-only .
 
