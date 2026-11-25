@@ -51,6 +51,9 @@ command. The helper:
 - requires the streamed bytes to match the separately trusted SHA-256;
 - invokes `age` without a shell, passes only a minimal environment, and
   suppresses child stderr to avoid accidental path or environment disclosure;
+- enforces a 30-second no-progress deadline while streaming and a 30-second
+  completion deadline after closing stdin; a stalled child is killed and its
+  partial ciphertext is removed;
 - writes ciphertext to a mode-`0600` temporary file in the destination
   directory, fsyncs it, and publishes it atomically without overwriting an
   existing destination.
