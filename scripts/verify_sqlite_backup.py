@@ -81,7 +81,7 @@ def _snapshot_backup(path: Path) -> Iterator[tuple[Path, str, int]]:
         raise ValueError("Backup file is missing or unavailable.") from exc
 
     if not stat.S_ISREG(path_state.st_mode) or path_state.st_size == 0:
-        raise ValueError("Backup file is missing, empty, or not a regular file.")
+        raise ValueError("Backup file is missing or empty, or not a regular file.")
 
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
     flags |= getattr(os, "O_CLOEXEC", 0)
