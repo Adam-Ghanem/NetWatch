@@ -243,9 +243,7 @@ class _FailAfterAcknowledgementConnection(_TrackedConnection):
         return cursor
 
 
-def test_receipt_claim_rolls_back_and_closes_connection_on_exception(
-    monkeypatch, tmp_path
-):
+def test_receipt_claim_rolls_back_and_closes_connection_on_exception(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
     with inventory_store._connect() as conn:
@@ -291,11 +289,7 @@ def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(
     connections = []
 
     def connect():
-        factory = (
-            _TrackedConnection
-            if not connections
-            else _FailAfterAcknowledgementConnection
-        )
+        factory = _TrackedConnection if not connections else _FailAfterAcknowledgementConnection
         connection = sqlite3.connect(
             inventory_store.DB_FILE, timeout=5.0, factory=factory
         )
@@ -314,9 +308,7 @@ def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(
 
     monkeypatch.setattr(outbox, "deliver_stored_notification", mock_delivery)
 
-    with pytest.raises(
-        sqlite3.OperationalError, match="synthetic acknowledgement failure"
-    ):
+    with pytest.raises(sqlite3.OperationalError, match="synthetic acknowledgement failure"):
         outbox.process_notification_receipts_once()
 
     assert len(connections) == 2
