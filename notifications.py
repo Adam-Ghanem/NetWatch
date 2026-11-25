@@ -131,6 +131,7 @@ _circuit_state: dict[NotificationKind, _CircuitState] = {
 _notification_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=512)
 _worker_lock = threading.Lock()
 _NOTIFICATION_WORKER_COUNT = 2
+_notification_workers: dict[int, threading.Thread] = {}
 _notification_workers_started = 0
 
 
@@ -521,11 +522,15 @@ def _notification_worker() -> None:
 
 
 def _ensure_notification_workers() -> bool:
-    """Keep the bounded worker pool usable after partial thread-start failures."""
+    """Keep two worker slots available, replacing threads that exited unexpectedly."""
     global _notification_workers_started
     with _worker_lock:
-        while _notification_workers_started < _NOTIFICATION_WORKER_COUNT:
-            worker_index = _notification_workers_started + 1
+        active_workers = 0
+        for worker_index in range(1, _NOTIFICATION_WORKER_COUNT + 1):
+            current = _notification_workers.get(worker_index)
+            if current is not None and current.is_alive():
+                active_workers += 1
+                continue
             try:
                 worker = threading.Thread(
                     target=_notification_worker,
@@ -534,14 +539,17 @@ def _ensure_notification_workers() -> bool:
                 )
                 worker.start()
             except (OSError, RuntimeError) as exc:
+                _notification_workers.pop(worker_index, None)
                 LOGGER.warning(
                     "notification_worker_start_failed worker=%s reason=%s",
                     worker_index,
                     type(exc).__name__,
                 )
-                return _notification_workers_started > 0
-            _notification_workers_started += 1
-    return _notification_workers_started > 0
+                continue
+            _notification_workers[worker_index] = worker
+            active_workers += 1
+        _notification_workers_started = active_workers
+    return active_workers > 0
 
 
 def enqueue_alert_notification(alert: dict[str, Any]) -> bool:
