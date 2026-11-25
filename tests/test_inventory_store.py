@@ -799,4 +799,3 @@ def test_database_readiness_handles_live_wal_database_without_writes(
         assert writer.execute("SELECT COUNT(*) FROM assets").fetchone()[0] == 2
     finally:
         writer.close()
-
