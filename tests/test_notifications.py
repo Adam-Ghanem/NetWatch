@@ -452,4 +452,3 @@ def test_notification_worker_pool_replaces_exited_worker(monkeypatch):
         "netwatch-notification-delivery-2",
         "netwatch-notification-delivery-1",
     ]
-
