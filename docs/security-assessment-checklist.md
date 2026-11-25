@@ -36,6 +36,7 @@ This checklist is a staging/manual assessment plan. It is not a claim that an in
 | Report generation with maximum retained row counts | Bounded PDF/HTML/Markdown output and predictable latency | Benchmark report |
 | Retention cleanup above the configured row cap | No more than the cap is deleted; audit rows remain | Before/after row counts and integrity check |
 | Database unavailable, read-only, locked, or partially migrated | Safe readiness/error; no false success; audit behavior documented | Failure-injection record |
+| Durable notification claim or acknowledgement fails after a write | Roll back the failed transaction, close its SQLite handle, retain the claim fence after a post-delivery acknowledgement failure, then recover after lease expiry with the same stable event ID | Exception-injection regressions plus repeated-cycle staging observation |
 | Scan timeout, partial host failure, and worker exception | Partial evidence is explicit; scan does not fabricate identity or downtime | Test output and database diff |
 
 ## Secrets and supply chain
