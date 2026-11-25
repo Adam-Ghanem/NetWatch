@@ -736,3 +736,103 @@ def test_enterprise_event_sink_normalizes_truncated_http_response_without_body_l
         sink.publish({"kind": "synthetic-test"})
 
     assert "private-response-fragment" not in str(captured.value)
+
+
+def test_bounded_dns_resolver_retries_after_all_worker_starts_fail(monkeypatch):
+    real_thread = threading.Thread
+    attempts = 0
+
+    class FailedThread:
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    def thread_factory(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return FailedThread()
+        return real_thread(*args, **kwargs)
+
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.2)
+    monkeypatch.setattr(notifications.threading, "Thread", thread_factory)
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("93.184.216.34")],
+    )
+
+    with pytest.raises(OSError, match="DNS resolver worker startup failed"):
+        resolver.resolve("first.example.test", 443)
+
+    assert resolver._jobs.empty()
+    assert resolver.resolve("retry.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
+    assert attempts == 2
+
+
+def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeypatch):
+    real_thread = threading.Thread
+    attempts = 0
+
+    class FailedThread:
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    def thread_factory(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 2:
+            return FailedThread()
+        return real_thread(*args, **kwargs)
+
+    resolver = notifications._BoundedDNSResolver(workers=2, queue_size=2, timeout=0.2)
+    monkeypatch.setattr(notifications.threading, "Thread", thread_factory)
+    monkeypatch.setattr(
+        notifications.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [_dns_record("93.184.216.34")],
+    )
+
+    assert resolver.resolve("partial.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
+    assert attempts == 2
+    assert resolver.resolve("recovered.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
+    assert attempts == 3
+
+
+
+def test_bounded_dns_resolver_restarts_worker_after_unexpected_exit(monkeypatch):
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.2)
+    calls = 0
+
+    def exit_worker_once(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise SystemExit("synthetic resolver worker exit")
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications.socket, "getaddrinfo", exit_worker_once)
+    monkeypatch.setattr(threading, "excepthook", lambda _args: None)
+
+    with pytest.raises(OSError, match="no usable records"):
+        resolver.resolve("first.example.test", 443)
+
+    failed_worker = resolver._worker_threads[0]
+    assert failed_worker is not None
+    failed_worker.join(timeout=1)
+    assert not failed_worker.is_alive()
+
+    assert resolver.resolve("retry.example.test", 443) == [
+        _dns_record("93.184.216.34")
+    ]
+    replacement_worker = resolver._worker_threads[0]
+    assert replacement_worker is not None
+    assert replacement_worker is not failed_worker
+    assert replacement_worker.is_alive()
+    assert calls == 2
+    resolver._jobs.join()
