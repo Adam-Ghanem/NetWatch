@@ -782,6 +782,7 @@ def test_public_https_transport_shares_connection_deadline_across_addresses(monk
 
     assert timeouts == pytest.approx([5.0, 3.0, 1.0])
 
+
 def test_public_https_transport_restores_request_timeout_after_fallback_connect(monkeypatch):
     now = [0.0]
     connect_timeouts: list[float] = []
