@@ -77,6 +77,9 @@ jobs:
       - name: Build production container
         run: docker build -t netwatch-ci .
 
+      - name: Exercise isolated Docker named-volume restore
+        run: bash scripts/smoke_docker_volume_restore.sh netwatch-ci
+
       - name: Verify container privilege boundary and ping capability
         run: |
           test "$(docker run --rm --entrypoint id netwatch-ci -u)" != "0"
