@@ -198,9 +198,7 @@ def test_receipt_processing_closes_claim_and_ack_connections(monkeypatch, tmp_pa
     monkeypatch.setattr(
         outbox,
         "deliver_stored_notification",
-        lambda kind, payload: notifications.ChannelNotificationResult(
-            "webhook", "delivered", 1
-        ),
+        lambda kind, payload: notifications.ChannelNotificationResult("webhook", "delivered", 1),
     )
 
     result = outbox.process_notification_receipts_once()
