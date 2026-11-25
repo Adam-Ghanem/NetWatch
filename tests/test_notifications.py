@@ -416,8 +416,7 @@ def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
 
 
 def test_notification_worker_pool_replaces_exited_worker(monkeypatch):
-    workers = {}
-    started_names = []
+    started_names: list[str] = []
 
     class _FakeThread:
         def __init__(self, *, target, name, daemon):
@@ -433,6 +432,7 @@ def test_notification_worker_pool_replaces_exited_worker(monkeypatch):
         def is_alive(self):
             return self.alive
 
+    workers: dict[int, _FakeThread] = {}
     monkeypatch.setattr(notifications, "_notification_workers", workers)
     monkeypatch.setattr(notifications, "_notification_workers_started", 0)
     monkeypatch.setattr(notifications, "threading", SimpleNamespace(Thread=_FakeThread))
