@@ -8,6 +8,7 @@ import os
 import sqlite3
 import threading
 import time
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,14 +101,18 @@ def _connect() -> sqlite3.Connection:
 
 
 def database_is_ready() -> bool:
-    """Run a bounded local database readiness check without exposing internals."""
+    """Check the existing database read-only without creating files or leaking a handle."""
     try:
-        with _connect() as conn:
+        if not DB_FILE.is_file():
+            return False
+        database_uri = f"{DB_FILE.absolute().as_uri()}?mode=ro"
+        with closing(sqlite3.connect(database_uri, uri=True, timeout=5.0)) as conn:
+            conn.execute("PRAGMA query_only = ON")
             row = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'assets'"
             ).fetchone()
         return row is not None
-    except (OSError, sqlite3.Error):
+    except (OSError, sqlite3.Error, ValueError):
         return False
 
 
