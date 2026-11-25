@@ -2,6 +2,7 @@ import os
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -862,3 +863,52 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
         exposure_level="Low",
     )
     assert inventory_store.recent_service_findings() == []
+
+
+def test_file_backed_audit_key_verifies_after_snapshot_restore(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    key = "independent-file-backed-audit-key-for-snapshot-recovery"
+    key_file = tmp_path / "audit-hmac.key"
+    key_file.write_text(key, encoding="utf-8")
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    inventory_store.record_audit_event(
+        "admin",
+        "backup_restore_verified",
+        "synthetic-snapshot",
+        "completed",
+        "File-backed audit key remains external to the SQLite snapshot.",
+    )
+
+    restored_dir = tmp_path / "restored"
+    restored_dir.mkdir()
+    restored_db = restored_dir / "netwatch.db"
+    with closing(sqlite3.connect(inventory_store.DB_FILE)) as source:
+        with closing(sqlite3.connect(restored_db)) as destination:
+            source.backup(destination)
+
+    monkeypatch.setattr(inventory_store, "DATA_DIR", restored_dir)
+    monkeypatch.setattr(inventory_store, "DB_FILE", restored_db)
+
+    assert key.encode("utf-8") not in restored_db.read_bytes()
+    assert inventory_store.verify_audit_integrity()["status"] == "valid"
+
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY_FILE",
+        str(tmp_path / "missing-audit-hmac.key"),
+    )
+    assert inventory_store.verify_audit_integrity()["status"] == "unavailable"
+
+    wrong_key_file = tmp_path / "wrong-audit-hmac.key"
+    wrong_key_file.write_text(
+        "different-independent-audit-key-with-more-than-32-characters",
+        encoding="utf-8",
+    )
+    wrong_key_file.chmod(0o400)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(wrong_key_file))
+    assert inventory_store.verify_audit_integrity()["status"] == "invalid"
+
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+    assert inventory_store.verify_audit_integrity()["status"] == "valid"
