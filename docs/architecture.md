@@ -159,7 +159,7 @@ NetWatch is intended for approved local environments and applies these controls:
 - Individual audit identities are Admin-only; reports use identity-redacted audit rows
 - Separate-key HMAC audit integrity with a keyed head checkpoint, a five-second maximum public readiness cache, and fresh fail-closed verification for privileged operations
 - Generated response request IDs and safe route-template correlation logs
-- Separate liveness and readiness probes; readiness opens the existing SQLite database read-only, never initializes missing storage, and closes its connection after each check
+- Separate liveness and readiness probes; readiness opens the existing SQLite database read-only, never initializes missing storage, and closes its connection after each check; a live WAL-mode regression confirms the probe leaves database and WAL file metadata unchanged
 - Bounded simultaneous scans
 - One metadata capture by default, with hard 15-second and 1,000-matching-frame request limits
 - Exact interface allowlisting and IP/port/protocol filters; packet payload bytes are immediately discarded and never persisted
