@@ -47,6 +47,11 @@ now. Existing in-memory alerts are not backfilled. Pending receipts persist
 across restarts but depend on the single local SQLite volume; protect it with
 backups and disk encryption. Do not scale the SQLite worker across replicas.
 
+
+The enqueue helper participates in the caller's case transaction: it does not
+commit, roll back, or close the caller-owned SQLite connection. The caller
+retains responsibility for the transaction outcome and connection lifecycle.
+
 ## Incident response
 
 When readiness fails, keep liveness separate from dependency health and stop automated promotion. When audit integrity fails, pause privileged mutations and preserve the database and audit key for forensic review. When the queue grows or dead-letter counts increase, stop increasing worker concurrency, inspect the sink or dependency, replay only idempotent events, and record the operator decision. When a scan scope or authorization issue is suspected, disable the affected policy, preserve approval evidence, and do not broaden the target to restore apparent coverage.

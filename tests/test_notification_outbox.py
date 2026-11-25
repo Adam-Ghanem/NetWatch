@@ -331,3 +331,25 @@ def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(monke
     assert status["receipts"][0]["attempts"] == 2
     assert len(sent) == 2
     assert sent[0]["event_id"] == sent[1]["event_id"]
+
+
+def test_enqueue_uses_caller_connection_and_respects_transaction_rollback(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    conn = inventory_store._connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        assert outbox.enqueue_notification_receipts(conn, _alert()) == 1
+        assert conn.execute(
+            "SELECT COUNT(*) FROM notification_deliveries"
+        ).fetchone()[0] == 1
+
+        # Enqueue must neither close nor commit a connection owned by its caller.
+        conn.rollback()
+        assert conn.execute("SELECT 1").fetchone()[0] == 1
+        with inventory_store._connect() as observer:
+            assert observer.execute(
+                "SELECT COUNT(*) FROM notification_deliveries"
+            ).fetchone()[0] == 0
+    finally:
+        conn.close()
