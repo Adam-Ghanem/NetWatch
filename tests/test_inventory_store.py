@@ -706,6 +706,7 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
     )
     assert inventory_store.recent_service_findings() == []
 
+
 def test_database_readiness_does_not_create_missing_storage(monkeypatch, tmp_path):
     missing_data_dir = tmp_path / "missing-data"
     monkeypatch.setattr(inventory_store, "DATA_DIR", missing_data_dir)
@@ -737,7 +738,7 @@ def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
             self.closed = True
 
     connection = FakeConnection()
-    opened = {}
+    opened: dict[str, object] = {}
 
     def fake_connect(database, *, uri, timeout):
         opened["database"] = database
@@ -750,6 +751,8 @@ def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
     assert inventory_store.database_is_ready() is True
     assert opened["uri"] is True
     assert opened["timeout"] == 5.0
-    assert "mode=ro" in opened["database"]
+    database_uri = opened["database"]
+    assert isinstance(database_uri, str)
+    assert "mode=ro" in database_uri
     assert "PRAGMA query_only = ON" in connection.statements
     assert connection.closed is True
