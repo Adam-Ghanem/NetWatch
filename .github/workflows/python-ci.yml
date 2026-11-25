@@ -36,7 +36,6 @@ jobs:
           black --check .
           isort --check-only .
 
-
       - name: Lint and type-check
         run: |
           flake8 .
