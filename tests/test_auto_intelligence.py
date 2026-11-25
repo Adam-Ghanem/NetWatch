@@ -407,14 +407,14 @@ def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db
 
 def test_auto_analysis_closes_database_connections_on_all_paths(monkeypatch, isolated_db):
     opened: list[sqlite3.Connection] = []
-    original_database = auto_intelligence._database
+    original_connect = inventory_store._connect
 
-    def tracked_database() -> sqlite3.Connection:
-        connection = original_database()
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
         opened.append(connection)
         return connection
 
-    monkeypatch.setattr(auto_intelligence, "_database", tracked_database)
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
     start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
     first_digest = _digest("connection-close-first")
     second_digest = _digest("connection-close-second")
