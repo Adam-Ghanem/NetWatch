@@ -33,7 +33,7 @@ This checklist is a staging/manual assessment plan. It is not a claim that an in
 | Test | Expected result | Evidence |
 |---|---|---|
 | Concurrent scan/capture requests above configured semaphore | Bounded rejection without unbounded worker growth | p95/p99, process memory, logs |
-| Notification worker thread startup fails before or after partial startup | Preserve started workers, retry only missing slots, and reject enqueue when no worker is available | Synthetic thread-start failure regression and bounded worker-count assertions |
+| Notification worker startup fails or a worker exits between enqueue cycles | Preserve live workers, replace dead slots on the next enqueue, and reject enqueue when no worker is available | Synthetic partial-start and dead-worker replacement regressions; bounded worker-count assertions |
 | Report generation with maximum retained row counts | Bounded PDF/HTML/Markdown output and predictable latency | Benchmark report |
 | Retention cleanup above the configured row cap | No more than the cap is deleted; audit rows remain | Before/after row counts and integrity check |
 | Database unavailable, read-only, locked, or partially migrated | Safe readiness/error; no false success; audit behavior documented | Failure-injection record |
