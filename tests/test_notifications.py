@@ -1070,3 +1070,51 @@ def test_pinned_https_connection_passes_absolute_deadline_to_header_parser(monke
         connection.getresponse()
 
     connection.close()
+
+
+def test_pinned_https_interim_100_and_final_headers_share_delivery_deadline(monkeypatch):
+    now = [0.0]
+    timeouts: list[float] = []
+    response_bytes = (
+        b"HTTP/1.1 100 Continue\\r\\nX-Interim: accepted\\r\\n\\r\\n"
+        b"HTTP/1.1 204 No Content\\r\\nX-Test: ok\\r\\n\\r\\n"
+    )
+
+    class SlowFile:
+        def __init__(self):
+            self.offset = 0
+
+        def read(self, size: int = -1) -> bytes:
+            now[0] += 0.03
+            chunk = response_bytes[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            return chunk
+
+        def flush(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    class FakeSocket:
+        def makefile(self, mode: str):
+            assert mode == "rb"
+            return SlowFile()
+
+        def settimeout(self, timeout: float) -> None:
+            timeouts.append(timeout)
+
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+    response = notifications._DeadlineHTTPResponse(
+        FakeSocket(),
+        method="POST",
+        header_deadline=2.0,
+    )
+
+    with pytest.raises(TimeoutError, match="total header-read deadline"):
+        response.begin()
+
+    response.close()
+    assert now[0] >= 2.0
+    assert timeouts[0] == pytest.approx(2.0)
+    assert 0 < timeouts[-1] < timeouts[0]
