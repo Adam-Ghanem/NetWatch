@@ -7,9 +7,10 @@ Shared-service / multi-replica mode remains unsupported.
 
 from __future__ import annotations
 
-from contextlib import closing
 import re
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -22,10 +23,14 @@ def _now(value: datetime | None) -> datetime:
     return (value or datetime.now(timezone.utc)).astimezone(timezone.utc)
 
 
-def _database() -> sqlite3.Connection:
+@contextmanager
+def _database() -> Iterator[sqlite3.Connection]:
+    """Commit or roll back each state operation, then always close its SQLite handle."""
     import inventory_store
 
-    return inventory_store._connect()
+    with closing(inventory_store._connect()) as conn:
+        with conn:
+            yield conn
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
@@ -65,7 +70,7 @@ def claim_auto_analysis(
         raise ValueError("Invalid AI analysis claim ID.")
     interval = max(3600, min(int(interval_seconds), 86400))
     moment = _now(now)
-    with closing(_database()) as conn, conn:
+    with _database() as conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         row = conn.execute("""
@@ -128,7 +133,7 @@ def finish_auto_analysis(
         raise ValueError("Invalid AI evidence digest.")
     if not _CLAIM_ID.fullmatch(claim_id):
         raise ValueError("Invalid AI analysis claim ID.")
-    with closing(_database()) as conn, conn:
+    with _database() as conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         cursor = conn.execute(
@@ -156,7 +161,7 @@ def finish_auto_analysis(
 
 def auto_analysis_status() -> dict[str, str]:
     """Return only operational state, never private evidence hashes or claim tokens."""
-    with closing(_database()) as conn, conn:
+    with _database() as conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         row = conn.execute(
