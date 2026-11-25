@@ -283,7 +283,7 @@ def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(monke
         outbox.enqueue_notification_receipts(conn, _alert())
 
     original_connect = outbox._connect
-    connections = []
+    connections: list[_TrackedConnection] = []
 
     def connect():
         factory = _TrackedConnection if not connections else _FailAfterAcknowledgementConnection
