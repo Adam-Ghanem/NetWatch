@@ -571,8 +571,9 @@ def open_public_https_without_redirects(
             # The shared deadline applies to TCP/TLS fallback only. Preserve the
             # existing per-operation timeout once a connection is established.
             connection.timeout = timeout
-            if connection.sock is not None:
-                connection.sock.settimeout(timeout)
+            connected_socket = getattr(connection, "sock", None)
+            if connected_socket is not None:
+                connected_socket.settimeout(timeout)
             connection.request(
                 request.get_method(),
                 request.selector,
