@@ -236,7 +236,6 @@ def test_rejects_output_path_that_aliases_the_input(tmp_path, monkeypatch):
     assert source.read_bytes() == original
 
 
-
 def _fake_age_that_stalls(tmp_path: Path, monkeypatch, *, consume_input: bool) -> None:
     binary_dir = tmp_path / "bin"
     binary_dir.mkdir(exist_ok=True)
