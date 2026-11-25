@@ -386,7 +386,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 class _PinnedHTTPSConnection(http.client.HTTPSConnection):
     """Connect to a vetted IP while retaining hostname-based TLS verification."""
 
-    def __init__(self, host: str, port: int, address: str, *, timeout: int) -> None:
+    def __init__(self, host: str, port: int, address: str, *, timeout: float) -> None:
         self._tls_context = ssl.create_default_context()
         super().__init__(host, port=port, timeout=timeout, context=self._tls_context)
         self._resolved_address = address
@@ -530,9 +530,9 @@ def _public_https_addresses(host: str, port: int) -> list[str]:
 
 
 def open_public_https_without_redirects(
-    request: urllib.request.Request, timeout: int
+    request: urllib.request.Request, timeout: float
 ) -> _PinnedHTTPResponse:
-    """Send directly to a public, DNS-pinned IP without following redirects or proxies."""
+    """Connect to a validated public IP within one shared address-fallback deadline."""
     parsed = urlparse(request.full_url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise NotificationConfigurationError("Outbound destination must use HTTPS.")
@@ -541,15 +541,32 @@ def open_public_https_without_redirects(
     except ValueError as exc:
         raise NotificationConfigurationError("Outbound destination port is invalid.") from exc
     addresses = _public_https_addresses(parsed.hostname, port)
+    connection_deadline = time.monotonic() + timeout
     last_error: Exception | None = None
     for address in addresses:
-        connection = _PinnedHTTPSConnection(parsed.hostname, port, address, timeout=timeout)
+        remaining = connection_deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(
+                "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+            ) from last_error
+        connection = _PinnedHTTPSConnection(
+            parsed.hostname, port, address, timeout=remaining
+        )
         try:
             connection.connect()
         except (http.client.HTTPException, OSError) as exc:
             connection.close()
             last_error = exc
+            if time.monotonic() >= connection_deadline:
+                raise TimeoutError(
+                    "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+                ) from exc
             continue
+        if time.monotonic() >= connection_deadline:
+            connection.close()
+            raise TimeoutError(
+                "Outbound HTTPS connection attempts exceeded their shared connection deadline."
+            )
         try:
             connection.request(
                 request.get_method(),
