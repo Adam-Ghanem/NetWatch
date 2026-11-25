@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import socket
@@ -777,7 +778,7 @@ def test_public_https_transport_shares_connection_deadline_across_addresses(monk
         method="POST",
     )
 
-    with pytest.raises(TimeoutError, match="shared connection deadline"):
+    with pytest.raises(TimeoutError, match="shared delivery deadline"):
         notifications.open_public_https_without_redirects(request, timeout=5)
 
     assert timeouts == pytest.approx([5.0, 3.0, 1.0])
@@ -833,7 +834,7 @@ def test_public_https_transport_restores_request_timeout_after_fallback_connect(
         assert response.status == 204
 
     assert connect_timeouts == pytest.approx([5.0, 1.0])
-    assert request_timeouts == [(5, 5)]
+    assert request_timeouts == pytest.approx([(0.5, 0.5)])
 
 
 def test_pinned_https_response_headers_share_one_monotonic_deadline(monkeypatch):
@@ -871,7 +872,7 @@ def test_pinned_https_response_headers_share_one_monotonic_deadline(monkeypatch)
     response = notifications._DeadlineHTTPResponse(
         FakeSocket(),
         method="POST",
-        header_timeout=2.0,
+        header_deadline=2.0,
     )
 
     with pytest.raises(TimeoutError, match="total header-read deadline"):
@@ -919,3 +920,153 @@ def test_pinned_https_response_headers_parse_before_deadline():
     finally:
         response.close()
 
+
+def test_bounded_dns_resolver_uses_remaining_delivery_deadline(monkeypatch):
+    now = [0.0]
+    wait_timeouts: list[float] = []
+
+    class FakeEvent:
+        def set(self):
+            return None
+
+        def wait(self, timeout: float) -> bool:
+            wait_timeouts.append(timeout)
+            return False
+
+    resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=5)
+    monkeypatch.setattr(resolver, "_ensure_workers", lambda: None)
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(notifications.threading, "Event", FakeEvent)
+
+    with pytest.raises(TimeoutError, match="DNS resolution timed out"):
+        resolver.resolve("hooks.example.test", 443, deadline=2.0)
+
+    assert wait_timeouts == [2.0]
+
+
+def test_public_https_transport_shares_attempt_deadline_across_dns_and_body(monkeypatch):
+    now = [0.0]
+    observed: dict[str, float] = {}
+
+    def resolve(host, port, deadline):
+        assert host == "hooks.example.test"
+        assert port == 443
+        observed["dns_deadline"] = deadline
+        now[0] += 2.0
+        return [_dns_record("93.184.216.34")]
+
+    monkeypatch.setattr(notifications, "_public_https_addresses", resolve)
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+
+    class FakeSocket:
+        def settimeout(self, timeout: float) -> None:
+            self.timeout = timeout
+
+    class FakeResponse:
+        status = 204
+
+        def __init__(self):
+            self._sock = FakeSocket()
+            self._netwatch_delivery_deadline: float = 0.0
+
+        def read1(self, _size: int) -> bytes:
+            now[0] += 1.0
+            return b"x"
+
+        def close(self):
+            return None
+
+    class FakeConnection:
+        def __init__(self, host, port, address, *, timeout: float):
+            self.timeout = timeout
+            self.sock = FakeSocket()
+            self._delivery_deadline: float = 0.0
+            observed["connect_timeout"] = timeout
+
+        def connect(self):
+            now[0] += 1.0
+
+        def request(self, method, selector, *, body, headers):
+            observed["request_timeout"] = self.sock.timeout
+            now[0] += 0.5
+
+        def getresponse(self):
+            observed["response_deadline"] = self._delivery_deadline
+            return FakeResponse()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(notifications, "_PinnedHTTPSConnection", FakeConnection)
+    request = urllib.request.Request(
+        "https://hooks.example.test/netwatch",
+        data=b"{}",
+        method="POST",
+    )
+
+    with notifications.open_public_https_without_redirects(request, timeout=5) as response:
+        assert observed["dns_deadline"] == 5.0
+        assert observed["connect_timeout"] == 3.0
+        assert observed["request_timeout"] == 2.0
+        assert observed["response_deadline"] == 5.0
+        assert response._netwatch_delivery_deadline == 5.0
+        with pytest.raises(TimeoutError, match="shared delivery deadline"):
+            notifications.read_bounded_response(
+                response,
+                max_bytes=10,
+                timeout=5,
+                deadline=response._netwatch_delivery_deadline,
+            )
+
+
+def test_pinned_https_connection_passes_absolute_deadline_to_header_parser(monkeypatch):
+    now = [0.0]
+    response_bytes = b"HTTP/1.1 204 No Content\\r\\nX-Test: ok\\r\\n\\r\\n"
+
+    class SlowFile:
+        def __init__(self):
+            self.offset = 0
+
+        def read(self, size: int = -1) -> bytes:
+            now[0] += 0.75
+            chunk = response_bytes[self.offset : self.offset + size]
+            self.offset += len(chunk)
+            return chunk
+
+        def flush(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    class FakeSocket:
+        def makefile(self, mode: str):
+            assert mode == "rb"
+            return SlowFile()
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout > 0
+
+        def close(self) -> None:
+            return None
+
+    def begin_response(connection):
+        response = connection.response_class(connection.sock, method="POST")
+        response.begin()
+        return response
+
+    monkeypatch.setattr(notifications.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(http.client.HTTPConnection, "getresponse", begin_response)
+    connection = notifications._PinnedHTTPSConnection(
+        "hooks.example.test",
+        443,
+        "93.184.216.34",
+        timeout=5,
+    )
+    setattr(connection, "sock", FakeSocket())
+    connection._delivery_deadline = 1.0
+
+    with pytest.raises(TimeoutError, match="total header-read deadline"):
+        connection.getresponse()
+
+    connection.close()
