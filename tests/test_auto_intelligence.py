@@ -404,7 +404,6 @@ def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db
     assert intelligence_store.intelligence_metrics()["failed"] == 1
 
 
-
 def test_auto_analysis_closes_database_connections_on_all_paths(monkeypatch, isolated_db):
     opened: list[sqlite3.Connection] = []
     original_connect = inventory_store._connect
