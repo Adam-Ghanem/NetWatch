@@ -568,6 +568,11 @@ def open_public_https_without_redirects(
                 "Outbound HTTPS connection attempts exceeded their shared connection deadline."
             )
         try:
+            # The shared deadline applies to TCP/TLS fallback only. Preserve the
+            # existing per-operation timeout once a connection is established.
+            connection.timeout = timeout
+            if connection.sock is not None:
+                connection.sock.settimeout(timeout)
             connection.request(
                 request.get_method(),
                 request.selector,
