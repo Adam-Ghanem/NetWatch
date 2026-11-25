@@ -93,7 +93,8 @@ analyzed successfully is skipped**; failures are eligible for retry only after
 the interval. This prevents sending periodic duplicate provider requests just
 to generate activity.
 
-SQLite connections used for claim, completion and status operations are closed deterministically after their transactions, including early-return paths.
+SQLite connections used for claim, completion and status operations are closed
+deterministically after their transactions, including early-return paths.
 
 Every actual provider request still passes the existing key separation,
 audit-integrity gate, bounded concurrency, rate limits, daily request
