@@ -11,6 +11,7 @@ import json
 import logging
 import secrets
 import sqlite3
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -100,7 +101,7 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
     now = _now()
     token = secrets.token_hex(16)
     claimed: list[dict[str, Any]] = []
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             """
@@ -159,7 +160,7 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
             if state == "delivered"
             else 300 if deferred else min(3600, 30 * 2 ** min(attempts - 1, 7))
         )
-        with _connect() as conn:
+        with closing(_connect()) as conn, conn:
             cursor = conn.execute(
                 """
                 UPDATE notification_deliveries SET
@@ -190,7 +191,7 @@ def process_notification_receipts_once(*, limit: int = MAX_BATCH) -> dict[str, i
 
 def notification_delivery_status(*, limit: int = 30) -> dict[str, Any]:
     """Return status-only receipts, never webhook URLs, payloads, or raw IP data."""
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         counts = conn.execute(
             "SELECT status, COUNT(*) AS count FROM notification_deliveries GROUP BY status"
         ).fetchall()

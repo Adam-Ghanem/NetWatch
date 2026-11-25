@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 from fastapi.testclient import TestClient
 
@@ -35,6 +36,33 @@ def _alert(alert_id=42, severity="Critical"):
         "target": "secret.internal (10.0.0.5)",
         "occurrence_count": 1,
     }
+
+
+class _TrackedConnection(sqlite3.Connection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.closed_for_test = False
+
+    def close(self):
+        self.closed_for_test = True
+        super().close()
+
+
+def _track_outbox_connections(monkeypatch):
+    connections: list[_TrackedConnection] = []
+
+    def connect():
+        connection = sqlite3.connect(
+            inventory_store.DB_FILE, timeout=5.0, factory=_TrackedConnection
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(outbox, "_connect", connect)
+    return connections
 
 
 def test_queue_is_idempotent_and_stores_no_urls_or_raw_targets(monkeypatch, tmp_path):
@@ -158,3 +186,40 @@ def test_admin_status_has_no_raw_payloads_and_viewer_is_denied(monkeypatch, tmp_
     assert admin.json()["delivery"]["counts"]["pending"] == 1
     assert "private-token" not in admin.text
     assert "10.0.0.5" not in admin.text
+
+
+
+def test_receipt_processing_closes_claim_and_ack_connections(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+
+    connections = _track_outbox_connections(monkeypatch)
+    monkeypatch.setattr(
+        outbox,
+        "deliver_stored_notification",
+        lambda kind, payload: notifications.ChannelNotificationResult(
+            "webhook", "delivered", 1
+        ),
+    )
+
+    result = outbox.process_notification_receipts_once()
+
+    assert result["delivered"] == 1
+    assert len(connections) == 2
+    assert all(connection.closed_for_test for connection in connections)
+
+
+def test_notification_status_closes_read_connection(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+
+    connections = _track_outbox_connections(monkeypatch)
+    status = outbox.notification_delivery_status()
+
+    assert status["counts"]["pending"] == 1
+    assert len(connections) == 1
+    assert all(connection.closed_for_test for connection in connections)

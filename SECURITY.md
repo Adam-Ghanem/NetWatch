@@ -85,7 +85,7 @@ Outbound alert delivery is disabled until `NETWATCH_WEBHOOK_URL` or `NETWATCH_SL
 
 Notification payloads are de-identified by default and contain only an alert reference, severity, status, category, occurrence count, and SLA state. Raw targets are excluded unless an administrator explicitly sets `NETWATCH_NOTIFY_INCLUDE_RAW_TARGETS=true`. Free-text evidence, owners, assignment details, and resolution notes are never included in outbound payloads.
 
-Webhook URLs, including secret-bearing Slack paths, are never logged or returned by the API. The Admin-only notification status endpoint exposes only each channel kind and whether it is safely enabled. Store webhook URLs in managed secret storage, rotate them after suspected exposure, and keep the default 15-minute debounce unless a reviewed operational need requires a bounded change.
+Webhook URLs, including secret-bearing Slack paths, are never logged or returned by the API. The Admin-only notification status endpoint exposes only each channel kind and whether it is safely enabled. Store webhook URLs in managed secret storage, rotate them after suspected exposure, and keep the default 15-minute debounce unless a reviewed operational need requires a bounded change. Durable receipt claim and acknowledgement writes retain SQLite commit/rollback semantics and close their connections deterministically; status-only reads also close their database handle after use.
 
 ## Local data
 
