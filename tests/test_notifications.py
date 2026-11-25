@@ -1072,7 +1072,7 @@ def test_pinned_https_connection_passes_absolute_deadline_to_header_parser(monke
     connection.close()
 
 
-def test_pinned_https_interim_100_and_final_headers_share_delivery_deadline(monkeypatch):
+def test_interim_100_and_final_headers_share_delivery_deadline(monkeypatch):
     now = [0.0]
     timeouts: list[float] = []
     response_bytes = (
