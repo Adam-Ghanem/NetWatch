@@ -7,6 +7,7 @@ Shared-service / multi-replica mode remains unsupported.
 
 from __future__ import annotations
 
+from contextlib import closing
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -64,7 +65,7 @@ def claim_auto_analysis(
         raise ValueError("Invalid AI analysis claim ID.")
     interval = max(3600, min(int(interval_seconds), 86400))
     moment = _now(now)
-    with _database() as conn:
+    with closing(_database()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         row = conn.execute("""
@@ -127,7 +128,7 @@ def finish_auto_analysis(
         raise ValueError("Invalid AI evidence digest.")
     if not _CLAIM_ID.fullmatch(claim_id):
         raise ValueError("Invalid AI analysis claim ID.")
-    with _database() as conn:
+    with closing(_database()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         cursor = conn.execute(
@@ -155,7 +156,7 @@ def finish_auto_analysis(
 
 def auto_analysis_status() -> dict[str, str]:
     """Return only operational state, never private evidence hashes or claim tokens."""
-    with _database() as conn:
+    with closing(_database()) as conn, conn:
         conn.execute("BEGIN IMMEDIATE")
         _create_schema(conn)
         row = conn.execute(
