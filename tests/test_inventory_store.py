@@ -759,7 +759,8 @@ def test_database_readiness_closes_read_only_connection(monkeypatch, tmp_path):
 
 
 def test_database_readiness_handles_live_wal_database_without_writes(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ):
     _use_temporary_database(monkeypatch, tmp_path)
     writer = sqlite3.connect(inventory_store.DB_FILE, timeout=5.0)
