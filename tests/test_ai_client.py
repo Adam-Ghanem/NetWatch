@@ -14,9 +14,7 @@ def test_legacy_raw_evidence_adapter_fails_closed_without_provider_call(monkeypa
     }
     sensitive_findings = [{"details": "private incident details"}]
 
-    with pytest.raises(
-        AIConfigurationError, match="legacy raw-evidence AI adapter is disabled"
-    ):
+    with pytest.raises(AIConfigurationError, match="legacy raw-evidence AI adapter is disabled"):
         analyze_with_ai(asset=sensitive_asset, findings=sensitive_findings)
 
     # The failure message is static and never reflects supplied evidence or keys.
