@@ -362,6 +362,7 @@ def test_notification_worker_startup_retries_only_missing_worker(monkeypatch):
             assert target is notifications._notification_worker
             assert daemon is True
             self.name = name
+            self.alive = False
 
         def start(self):
             nonlocal fail_second_start
@@ -369,7 +370,12 @@ def test_notification_worker_startup_retries_only_missing_worker(monkeypatch):
             if self.name.endswith("-2") and fail_second_start:
                 fail_second_start = False
                 raise RuntimeError("simulated thread limit")
+            self.alive = True
 
+        def is_alive(self):
+            return self.alive
+
+    monkeypatch.setattr(notifications, "_notification_workers", {})
     monkeypatch.setattr(notifications, "_notification_workers_started", 0)
     monkeypatch.setattr(notifications, "threading", SimpleNamespace(Thread=_FakeThread))
 
@@ -390,6 +396,7 @@ def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
     monkeypatch.setenv("NETWATCH_WEBHOOK_URL", "https://hooks.example.test/netwatch-secret")
     monkeypatch.delenv("NETWATCH_SLACK_WEBHOOK_URL", raising=False)
     monkeypatch.setenv("NETWATCH_NOTIFY_MIN_SEVERITY", "High")
+    monkeypatch.setattr(notifications, "_notification_workers", {})
     monkeypatch.setattr(notifications, "_notification_workers_started", 0)
 
     class _FailingThread:
@@ -406,3 +413,42 @@ def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
     assert notifications.enqueue_alert_notification(_alert()) is False
     assert notifications._notification_workers_started == 0
     assert notifications._notification_queue.qsize() == queued_before
+
+def test_notification_worker_pool_replaces_exited_worker(monkeypatch):
+    workers = {}
+    started_names = []
+
+    class _FakeThread:
+        def __init__(self, *, target, name, daemon):
+            assert target is notifications._notification_worker
+            assert daemon is True
+            self.name = name
+            self.alive = False
+
+        def start(self):
+            started_names.append(self.name)
+            self.alive = True
+
+        def is_alive(self):
+            return self.alive
+
+    monkeypatch.setattr(notifications, "_notification_workers", workers)
+    monkeypatch.setattr(notifications, "_notification_workers_started", 0)
+    monkeypatch.setattr(notifications, "threading", SimpleNamespace(Thread=_FakeThread))
+
+    assert notifications._ensure_notification_workers() is True
+    first_worker = workers[1]
+    second_worker = workers[2]
+    first_worker.alive = False
+
+    assert notifications._ensure_notification_workers() is True
+    assert workers[1] is not first_worker
+    assert workers[1].name == "netwatch-notification-delivery-1"
+    assert workers[2] is second_worker
+    assert notifications._notification_workers_started == 2
+    assert started_names == [
+        "netwatch-notification-delivery-1",
+        "netwatch-notification-delivery-2",
+        "netwatch-notification-delivery-1",
+    ]
+
