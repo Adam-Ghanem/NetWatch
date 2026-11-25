@@ -243,7 +243,9 @@ class _FailAfterAcknowledgementConnection(_TrackedConnection):
         return cursor
 
 
-def test_receipt_claim_rolls_back_and_closes_connection_on_exception(monkeypatch, tmp_path):
+def test_receipt_claim_rolls_back_and_closes_connection_on_exception(
+    monkeypatch, tmp_path
+):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
     with inventory_store._connect() as conn:
