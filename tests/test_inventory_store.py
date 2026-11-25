@@ -958,3 +958,27 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
         exposure_level="Low",
     )
     assert inventory_store.recent_service_findings() == []
+
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"), reason="Linux POSIX ACL xattrs are required."
+)
+def test_audit_hmac_key_file_fails_closed_on_unexpected_acl_inspection_error(
+    monkeypatch, tmp_path
+):
+    key_file = tmp_path / "uninspectable-acl.key"
+    key_file.write_text(
+        "independent-file-backed-audit-key-with-32-plus-characters",
+        encoding="utf-8",
+    )
+    key_file.chmod(0o400)
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+
+    def inaccessible_acl(descriptor, attribute):
+        assert isinstance(descriptor, int)
+        assert attribute == "system.posix_acl_access"
+        raise OSError(errno.EIO, "synthetic ACL inspection failure")
+
+    monkeypatch.setattr(inventory_store.os, "getxattr", inaccessible_acl)
+
+    assert inventory_store._audit_hmac_key() is None
