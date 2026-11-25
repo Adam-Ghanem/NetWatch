@@ -188,7 +188,6 @@ def test_admin_status_has_no_raw_payloads_and_viewer_is_denied(monkeypatch, tmp_
     assert "10.0.0.5" not in admin.text
 
 
-
 def test_receipt_processing_closes_claim_and_ack_connections(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
