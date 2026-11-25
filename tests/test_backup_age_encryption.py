@@ -74,9 +74,7 @@ def test_rejects_digest_mismatch_and_removes_partial_ciphertext(tmp_path, monkey
     output = tmp_path / "backup.age"
 
     with pytest.raises(encryptor.BackupEncryptionError, match="trusted SHA-256"):
-        encryptor.encrypt_backup(
-            source, output, recipients=recipients, expected_sha256="0" * 64
-        )
+        encryptor.encrypt_backup(source, output, recipients=recipients, expected_sha256="0" * 64)
 
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-age-*")) == []

@@ -88,9 +88,7 @@ def _open_source(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
     return path, descriptor, opened
 
 
-def _ensure_source_unchanged(
-    path: Path, descriptor: int, original: os.stat_result
-) -> None:
+def _ensure_source_unchanged(path: Path, descriptor: int, original: os.stat_result) -> None:
     try:
         descriptor_state = os.fstat(descriptor)
         path_state = path.lstat()
@@ -263,9 +261,7 @@ def encrypt_backup(
 
         if os.name == "posix":
             try:
-                directory_fd = os.open(
-                    output_parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-                )
+                directory_fd = os.open(output_parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
                 try:
                     os.fsync(directory_fd)
                 finally:
