@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 import backend.main as api
@@ -220,3 +222,123 @@ def test_notification_status_closes_read_connection(monkeypatch, tmp_path):
     assert status["counts"]["pending"] == 1
     assert len(connections) == 1
     assert all(connection.closed_for_test for connection in connections)
+
+
+
+class _FailAfterClaimConnection(_TrackedConnection):
+    def execute(self, sql, parameters=()):
+        cursor = super().execute(sql, parameters)
+        normalized = " ".join(sql.lower().split())
+        if normalized.startswith("update notification_deliveries set claimed_at"):
+            raise sqlite3.OperationalError("synthetic claim failure")
+        return cursor
+
+
+class _FailAfterAcknowledgementConnection(_TrackedConnection):
+    def execute(self, sql, parameters=()):
+        cursor = super().execute(sql, parameters)
+        normalized = " ".join(sql.lower().split())
+        if normalized.startswith("update notification_deliveries set status ="):
+            raise sqlite3.OperationalError("synthetic acknowledgement failure")
+        return cursor
+
+
+def test_receipt_claim_rolls_back_and_closes_connection_on_exception(monkeypatch, tmp_path):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+
+    connections = []
+
+    def connect():
+        connection = sqlite3.connect(
+            inventory_store.DB_FILE, timeout=5.0, factory=_FailAfterClaimConnection
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(outbox, "_connect", connect)
+
+    with pytest.raises(sqlite3.OperationalError, match="synthetic claim failure"):
+        outbox.process_notification_receipts_once()
+
+    assert len(connections) == 1
+    assert connections[0].closed_for_test is True
+    with inventory_store._connect() as conn:
+        receipt = conn.execute(
+            "SELECT attempts, claimed_at, claim_token FROM notification_deliveries"
+        ).fetchone()
+    assert receipt["attempts"] == 0
+    assert receipt["claimed_at"] == ""
+    assert receipt["claim_token"] == ""
+
+
+def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(
+    monkeypatch, tmp_path
+):
+    _db(monkeypatch, tmp_path)
+    _enabled(monkeypatch)
+    with inventory_store._connect() as conn:
+        outbox.enqueue_notification_receipts(conn, _alert())
+
+    original_connect = outbox._connect
+    connections = []
+
+    def connect():
+        factory = (
+            _TrackedConnection
+            if not connections
+            else _FailAfterAcknowledgementConnection
+        )
+        connection = sqlite3.connect(
+            inventory_store.DB_FILE, timeout=5.0, factory=factory
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(outbox, "_connect", connect)
+    sent = []
+
+    def mock_delivery(kind, payload):
+        sent.append(payload)
+        return notifications.ChannelNotificationResult("webhook", "delivered", 1)
+
+    monkeypatch.setattr(outbox, "deliver_stored_notification", mock_delivery)
+
+    with pytest.raises(
+        sqlite3.OperationalError, match="synthetic acknowledgement failure"
+    ):
+        outbox.process_notification_receipts_once()
+
+    assert len(connections) == 2
+    assert all(connection.closed_for_test for connection in connections)
+    with inventory_store._connect() as conn:
+        receipt = conn.execute(
+            "SELECT status, attempts, claimed_at, claim_token, delivered_at "
+            "FROM notification_deliveries"
+        ).fetchone()
+    assert receipt["status"] == "pending"
+    assert receipt["attempts"] == 1
+    assert receipt["claimed_at"]
+    assert receipt["claim_token"]
+    assert receipt["delivered_at"] == ""
+
+    monkeypatch.setattr(outbox, "_connect", original_connect)
+    retry_now = outbox._now() + timedelta(seconds=outbox.CLAIM_STALE_SECONDS + 1)
+    monkeypatch.setattr(outbox, "_now", lambda: retry_now)
+
+    result = outbox.process_notification_receipts_once()
+    status = outbox.notification_delivery_status()
+
+    assert result["delivered"] == 1
+    assert status["counts"]["delivered"] == 1
+    assert status["receipts"][0]["attempts"] == 2
+    assert len(sent) == 2
+    assert sent[0]["event_id"] == sent[1]["event_id"]
