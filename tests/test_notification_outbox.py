@@ -224,7 +224,6 @@ def test_notification_status_closes_read_connection(monkeypatch, tmp_path):
     assert all(connection.closed_for_test for connection in connections)
 
 
-
 class _FailAfterClaimConnection(_TrackedConnection):
     def execute(self, sql, parameters=()):
         cursor = super().execute(sql, parameters)
@@ -288,9 +287,7 @@ def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(monke
 
     def connect():
         factory = _TrackedConnection if not connections else _FailAfterAcknowledgementConnection
-        connection = sqlite3.connect(
-            inventory_store.DB_FILE, timeout=5.0, factory=factory
-        )
+        connection = sqlite3.connect(inventory_store.DB_FILE, timeout=5.0, factory=factory)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
