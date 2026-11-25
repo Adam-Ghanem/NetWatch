@@ -1,9 +1,7 @@
 from pathlib import Path
 
 SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "smoke_docker_volume_restore.sh"
+    Path(__file__).resolve().parents[1] / "scripts" / "smoke_docker_volume_restore.sh"
 )
 
 
