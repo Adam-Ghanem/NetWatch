@@ -340,16 +340,14 @@ def test_enqueue_uses_caller_connection_and_respects_transaction_rollback(monkey
     try:
         conn.execute("BEGIN IMMEDIATE")
         assert outbox.enqueue_notification_receipts(conn, _alert()) == 1
-        assert conn.execute(
-            "SELECT COUNT(*) FROM notification_deliveries"
-        ).fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM notification_deliveries").fetchone()[0] == 1
 
         # Enqueue must neither close nor commit a connection owned by its caller.
         conn.rollback()
         assert conn.execute("SELECT 1").fetchone()[0] == 1
         with inventory_store._connect() as observer:
-            assert observer.execute(
-                "SELECT COUNT(*) FROM notification_deliveries"
-            ).fetchone()[0] == 0
+            assert (
+                observer.execute("SELECT COUNT(*) FROM notification_deliveries").fetchone()[0] == 0
+            )
     finally:
         conn.close()
