@@ -414,6 +414,7 @@ def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
     assert notifications._notification_workers_started == 0
     assert notifications._notification_queue.qsize() == queued_before
 
+
 def test_notification_worker_pool_replaces_exited_worker(monkeypatch):
     workers = {}
     started_names = []
