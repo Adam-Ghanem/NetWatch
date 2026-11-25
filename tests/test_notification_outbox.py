@@ -277,9 +277,7 @@ def test_receipt_claim_rolls_back_and_closes_connection_on_exception(monkeypatch
     assert receipt["claim_token"] == ""
 
 
-def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(
-    monkeypatch, tmp_path
-):
+def test_acknowledgement_failure_rolls_back_closes_and_replays_after_lease(monkeypatch, tmp_path):
     _db(monkeypatch, tmp_path)
     _enabled(monkeypatch)
     with inventory_store._connect() as conn:
