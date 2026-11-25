@@ -750,6 +750,7 @@ def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeyp
     ]
     assert attempts == 3
 
+
 def test_public_https_transport_shares_connection_deadline_across_addresses(monkeypatch):
     now = [0.0]
     timeouts: list[float] = []
