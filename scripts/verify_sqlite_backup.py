@@ -132,17 +132,20 @@ def _snapshot_backup(path: Path) -> Iterator[tuple[Path, str, int]]:
 
             snapshot_digest = digest.hexdigest()
             if not hmac.compare_digest(initial_digest, snapshot_digest):
-                raise ValueError("Backup content changed while snapshotting; use an offline snapshot.")
+                raise ValueError(
+                    "Backup content changed while snapshotting; use an offline snapshot."
+                )
             _ensure_source_unchanged(path, source_fd, original)
 
             yield Path(snapshot_name), snapshot_digest, copied
 
-            # SQLite inspected the private copy. Recheck the source descriptor and
-            # path before accepting the result, then compare the final path digest.
-            _ensure_source_unchanged(path, source_fd, original)
+            # Hash the source path after SQLite inspection, then check descriptor
+            # and path identity so mutations/replacements during that hash fail closed.
             final_digest = _file_sha256(path)
             if not hmac.compare_digest(snapshot_digest, final_digest):
-                raise ValueError("Backup content changed during verification; use an offline snapshot.")
+                raise ValueError(
+                    "Backup content changed during verification; use an offline snapshot."
+                )
             _ensure_source_unchanged(path, source_fd, original)
     finally:
         os.close(source_fd)
