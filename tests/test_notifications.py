@@ -752,10 +752,8 @@ def test_bounded_dns_resolver_retries_missing_worker_after_partial_start(monkeyp
 
 
 
-
 def test_bounded_dns_resolver_restarts_worker_after_unexpected_exit(monkeypatch):
     resolver = notifications._BoundedDNSResolver(workers=1, queue_size=1, timeout=0.2)
-    real_getaddrinfo = notifications.socket.getaddrinfo
     calls = 0
 
     def exit_worker_once(*args, **kwargs):
