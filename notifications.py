@@ -438,7 +438,7 @@ class _BoundedDNSResolver:
             tuple[str, int, threading.Event, threading.Event, dict[str, Any]]
         ] = queue.Queue(maxsize=queue_size)
         self._start_lock = threading.Lock()
-        self._workers_started = 0
+        self._worker_threads: list[threading.Thread | None] = [None] * self._worker_count
 
     def _worker(self) -> None:
         while True:
@@ -457,8 +457,11 @@ class _BoundedDNSResolver:
 
     def _ensure_workers(self) -> None:
         with self._start_lock:
-            while self._workers_started < self._worker_count:
-                index = self._workers_started
+            active_workers = 0
+            for index, existing in enumerate(self._worker_threads):
+                if existing is not None and existing.is_alive():
+                    active_workers += 1
+                    continue
                 worker = threading.Thread(
                     target=self._worker,
                     name=f"netwatch-webhook-dns-{index + 1}",
@@ -467,12 +470,12 @@ class _BoundedDNSResolver:
                 try:
                     worker.start()
                 except RuntimeError as exc:
-                    if self._workers_started == 0:
+                    if active_workers == 0:
                         raise OSError("DNS resolver worker startup failed.") from exc
-                    # Keep the workers that did start; retry the missing slots
-                    # on a later delivery instead of marking a partial pool complete.
+                    # Keep live capacity; retry this dead or missing slot later.
                     break
-                self._workers_started += 1
+                self._worker_threads[index] = worker
+                active_workers += 1
 
     def resolve(self, host: str, port: int) -> list[tuple[Any, ...]]:
         """Return resolver records or fail closed within the configured deadline."""
