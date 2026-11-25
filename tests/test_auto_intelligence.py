@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -401,3 +402,85 @@ def test_superseded_auto_analysis_claim_cannot_persist_failure_event(isolated_db
         now=start + timedelta(seconds=183),
     )
     assert intelligence_store.intelligence_metrics()["failed"] == 1
+
+
+def test_auto_analysis_closes_database_connections_on_all_paths(monkeypatch, isolated_db):
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+    start = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
+    first_digest = _digest("connection-close-first")
+    second_digest = _digest("connection-close-second")
+    claim_id = "a" * 32
+
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            first_digest,
+            interval_seconds=3600,
+            claim_id=claim_id,
+            now=start,
+        )
+        == "claimed"
+    )
+    assert (
+        auto_intelligence.claim_auto_analysis(
+            second_digest,
+            interval_seconds=3600,
+            claim_id="b" * 32,
+            now=start + timedelta(seconds=30),
+        )
+        == "in_progress"
+    )
+    assert auto_intelligence.finish_auto_analysis(
+        first_digest,
+        claim_id=claim_id,
+        success=True,
+        now=start + timedelta(minutes=1),
+    )
+    assert auto_intelligence.auto_analysis_status()["last_outcome"] == "completed"
+
+    assert len(opened) == 4
+    for connection in opened:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
+
+ 
+ 
+def test_auto_analysis_closes_connection_after_exception(monkeypatch, isolated_db):
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+
+    with pytest.raises(RuntimeError, match="synthetic transaction failure"):
+        with auto_intelligence._database() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "CREATE TABLE connection_close_rollback_probe (id INTEGER PRIMARY KEY)"
+            )
+            raise RuntimeError("synthetic transaction failure")
+
+    assert len(opened) == 1
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        opened[0].execute("SELECT 1")
+
+    check = original_connect()
+    try:
+        probe = check.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            ("connection_close_rollback_probe",),
+        ).fetchone()
+    finally:
+        check.close()
+    assert probe is None

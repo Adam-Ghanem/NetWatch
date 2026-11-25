@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
@@ -21,10 +23,14 @@ def _now(value: datetime | None) -> datetime:
     return (value or datetime.now(timezone.utc)).astimezone(timezone.utc)
 
 
-def _database() -> sqlite3.Connection:
+@contextmanager
+def _database() -> Iterator[sqlite3.Connection]:
+    """Commit or roll back each state operation, then always close its SQLite handle."""
     import inventory_store
 
-    return inventory_store._connect()
+    with closing(inventory_store._connect()) as conn:
+        with conn:
+            yield conn
 
 
 def _create_schema(conn: sqlite3.Connection) -> None:
