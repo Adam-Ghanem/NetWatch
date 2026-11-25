@@ -9,15 +9,19 @@ import hmac
 import json
 import os
 import re
+import selectors
 import shutil
 import stat
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import Sequence
 
 _CHUNK_BYTES = 1024 * 1024
 _MAX_RECIPIENTS = 8
+_AGE_INPUT_STALL_TIMEOUT_SECONDS = 30.0
+_AGE_EXIT_TIMEOUT_SECONDS = 30.0
 _AGE_RECIPIENT = re.compile(r"^age1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}$")
 
 
@@ -210,13 +214,45 @@ def encrypt_backup(
                     raise BackupEncryptionError("The age process did not accept input.")
 
                 try:
-                    with os.fdopen(os.dup(source_fd), "rb") as source_stream:
-                        for chunk in iter(lambda: source_stream.read(_CHUNK_BYTES), b""):
-                            digest.update(chunk)
-                            copied += len(chunk)
-                            process_stdin.write(chunk)
+                    process_stdin_fd = process_stdin.fileno()
+                    os.set_blocking(process_stdin_fd, False)
+                    with selectors.DefaultSelector() as writer:
+                        writer.register(process_stdin_fd, selectors.EVENT_WRITE)
+                        with os.fdopen(os.dup(source_fd), "rb") as source_stream:
+                            for chunk in iter(lambda: source_stream.read(_CHUNK_BYTES), b""):
+                                digest.update(chunk)
+                                copied += len(chunk)
+                                pending = memoryview(chunk)
+                                last_progress = time.monotonic()
+                                while pending:
+                                    remaining = _AGE_INPUT_STALL_TIMEOUT_SECONDS - (
+                                        time.monotonic() - last_progress
+                                    )
+                                    if remaining <= 0 or not writer.select(remaining):
+                                        raise BackupEncryptionError(
+                                            "age stopped accepting input; encryption timed out."
+                                        )
+                                    try:
+                                        written = os.write(process_stdin_fd, pending)
+                                    except BlockingIOError:
+                                        continue
+                                    except BrokenPipeError as exc:
+                                        raise BackupEncryptionError(
+                                            "age exited before consuming the complete backup."
+                                        ) from exc
+                                    if written <= 0:
+                                        raise BackupEncryptionError(
+                                            "age stopped accepting input; encryption timed out."
+                                        )
+                                    pending = pending[written:]
+                                    last_progress = time.monotonic()
                     process_stdin.close()
-                    return_code = process.wait()
+                    try:
+                        return_code = process.wait(timeout=_AGE_EXIT_TIMEOUT_SECONDS)
+                    except subprocess.TimeoutExpired as exc:
+                        raise BackupEncryptionError(
+                            "age did not finish after input closed; encryption timed out."
+                        ) from exc
                 except BaseException:
                     _terminate(process)
                     raise
