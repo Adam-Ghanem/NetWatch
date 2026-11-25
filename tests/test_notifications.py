@@ -406,4 +406,3 @@ def test_enqueue_drops_notification_when_no_worker_can_start(monkeypatch):
     assert notifications.enqueue_alert_notification(_alert()) is False
     assert notifications._notification_workers_started == 0
     assert notifications._notification_queue.qsize() == queued_before
-
