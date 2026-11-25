@@ -1382,3 +1382,62 @@ def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path)
     assert status.json()["available"] is False
     assert brief.status_code == 503
     assert local.status_code == 200
+
+
+def test_file_backed_audit_key_gates_application_readiness(monkeypatch, tmp_path):
+    key_file = tmp_path / "audit-hmac.key"
+    original_key = "independent-file-backed-audit-key-for-readiness-test"
+    wrong_key = "different-file-backed-audit-key-for-readiness-test"
+    key_file.write_text(original_key, encoding="utf-8")
+    key_file.chmod(0o400)
+
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY_FILE", str(key_file))
+    monkeypatch.setenv("NETWATCH_API_KEY", TEST_API_KEY)
+    monkeypatch.delenv("NETWATCH_OPERATOR_KEY", raising=False)
+    monkeypatch.delenv("NETWATCH_VIEWER_KEY", raising=False)
+    monkeypatch.setenv("NETWATCH_OIDC_ENABLED", "false")
+    monkeypatch.setenv("NETWATCH_AI_SAFETY_SECRET", AI_SAFETY_SECRET)
+    monkeypatch.setenv("NETWATCH_AI_SUBJECT_ID", AI_SUBJECT_ID)
+    monkeypatch.setenv("NETWATCH_AI_ENABLED", "false")
+    monkeypatch.setenv("NETWATCH_AI_AUTO_ANALYSIS_ENABLED", "false")
+    monkeypatch.setenv("NETWATCH_SCHEDULER_ENABLED", "false")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("NETWATCH_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("NETWATCH_SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.setattr(inventory_store, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(inventory_store, "DB_FILE", tmp_path / "netwatch.db")
+    api._rate_events.clear()
+    api._intelligence_rate_events.clear()
+
+    with TestClient(api.app, base_url="http://127.0.0.1") as client:
+        inventory_store.record_audit_event(
+            "admin",
+            "file_key_readiness_test",
+            "backup",
+            "completed",
+            "Synthetic file-backed key readiness test.",
+        )
+        ready = client.get("/api/health/ready")
+
+    assert ready.status_code == 200
+    assert ready.json()["audit_integrity"] == "ready"
+
+    key_file.chmod(0o600)
+    key_file.write_text(wrong_key, encoding="utf-8")
+    key_file.chmod(0o400)
+    with TestClient(api.app, base_url="http://127.0.0.1") as client:
+        rejected = client.get("/api/health/ready")
+
+    assert rejected.status_code == 503
+    assert rejected.json()["audit_integrity"] == "invalid_or_disabled"
+
+    key_file.chmod(0o600)
+    key_file.write_text(original_key, encoding="utf-8")
+    key_file.chmod(0o400)
+    with TestClient(api.app, base_url="http://127.0.0.1") as client:
+        restored = client.get("/api/health/ready")
+
+    assert restored.status_code == 200
+    assert restored.json()["audit_integrity"] == "ready"
