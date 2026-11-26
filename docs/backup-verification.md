@@ -14,10 +14,9 @@ can download a consistent snapshot. The verifier below works **offline** and
 - Row counts for those tables
 - SHA-256 fingerprint; optionally match a digest supplied through a separately
   trusted channel
-- Whether the file changed during verification (size, modification time, and a
-  second SHA-256 after SQLite reads). The second digest detects same-size
-  replacements even when modification time is restored; verification still
-  requires an offline, immutable snapshot and cannot eliminate all file races.
+- Exact-byte verification: copy from one open source descriptor into a private
+  temporary snapshot, hash that copy, and run SQLite checks against the same
+  bytes; recheck source descriptor/path identity and metadata before and after
 
 A missing required table, broken reference, failed integrity check, unexpected
 version, or mismatched digest returns a nonzero process exit code.
@@ -47,6 +46,13 @@ Replace the example digest with the actual one printed by your first check.
 Exit code 0 means these local checks passed. Exit code 2 means verification
 failed. **Do not restore** if any check fails.
 
+## Temporary storage
+
+The verifier creates a private temporary copy while checking the database.
+Allow free disk space approximately equal to the backup size. The temporary
+copy is removed when verification finishes; the original snapshot is never
+modified.
+
 ## Restore drill
 
 1. Keep the original database and the downloaded snapshot in protected storage.
@@ -70,12 +76,20 @@ who created the backup, and cannot detect a malicious replacement accompanied
 by an altered digest. These checks do not verify the NetWatch audit HMAC chain;
 that requires the application and the original signing key.
 
-The verifier also does **not** encrypt backups, upload/rotate them off-host,
-provide RTO/RPO guarantees, or establish multi-tenant/multi-replica readiness.
-Use approved encrypted backup storage and exercise a real recovery procedure
-before making production resilience claims.
+Running SQLite against the private copy closes the path-to-open mismatch for
+the bytes inspected by SQLite. It is not a filesystem-level atomic snapshot:
+source identity checks are defense in depth, so keep the source stopped and
+access-controlled. This verifier does **not** encrypt backups, upload/rotate
+them off-host, provide RTO/RPO guarantees, or establish multi-tenant/multi-
+replica readiness. Use approved encrypted backup storage and exercise a real
+recovery procedure before making production resilience claims.
 
-The regression suite also mutates actual snapshot bytes while restoring the original
-file size and modification time before the final hash. This tests detection of a
-concrete content change, not only a mocked digest mismatch. It is not a concurrency
-or immutable-snapshot guarantee.
+## Real-byte mutation regression
+
+The regression suite mutates the source snapshot's actual bytes after the
+private verification copy has been created, restores the original file size
+and modification time, and confirms the final source digest check fails
+closed. A separate path-swap test confirms SQLite opens only the private
+copy. These tests cover the specific replacement scenarios described; they
+are not a filesystem-level immutable snapshot or a substitute for keeping
+the source stopped and access-controlled.

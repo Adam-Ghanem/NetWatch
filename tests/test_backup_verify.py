@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
+from scripts import verify_sqlite_backup as backup_verifier
 from scripts.verify_sqlite_backup import TABLES, verify
 
 
@@ -128,10 +132,62 @@ def test_backup_verification_detects_content_change_without_metadata_change(
         calls.append(_path)
         return original_hash if len(calls) == 1 else "f" * 64
 
-    monkeypatch.setattr("scripts.verify_sqlite_backup._file_sha256", changing_digest)
+    monkeypatch.setattr(backup_verifier, "_file_sha256", changing_digest)
     with pytest.raises(ValueError, match="content changed during verification"):
         verify(path, expected_sha256=original_hash)
     assert calls == [path, path]
+
+
+def test_backup_verification_uses_hashed_private_snapshot_during_path_swap(
+    tmp_path, monkeypatch
+):
+    """SQLite must never open the mutable source path after it has been hashed."""
+    path = tmp_path / "backup.sqlite3"
+    replacement = tmp_path / "replacement.sqlite3"
+    _backup(path)
+    _backup(replacement)
+    with sqlite3.connect(replacement) as connection:
+        connection.execute("INSERT INTO assets DEFAULT VALUES")
+
+    original_bytes = path.read_bytes()
+    replacement_bytes = replacement.read_bytes()
+    assert len(original_bytes) == len(replacement_bytes)
+    original_hash = hashlib.sha256(original_bytes).hexdigest()
+    real_connect = sqlite3.connect
+    opened_paths = []
+    swaps = []
+
+    def connect_with_path_swap(database, *args, **kwargs):
+        uri = str(database)
+        target = Path(unquote(urlsplit(uri).path)) if uri.startswith("file:") else Path(uri)
+        opened_paths.append(target)
+        if target == path.resolve():
+            saved_original = tmp_path / "original-held.sqlite3"
+            saved_replacement = tmp_path / "replacement-held.sqlite3"
+            os.replace(path, saved_original)
+            os.replace(replacement, path)
+            try:
+                connection = real_connect(database, *args, **kwargs)
+            finally:
+                os.replace(path, saved_replacement)
+                os.replace(saved_original, path)
+                os.replace(saved_replacement, replacement)
+            swaps.append(target)
+            return connection
+        return real_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(backup_verifier.sqlite3, "connect", connect_with_path_swap)
+
+    report = verify(path, expected_schema=10, expected_sha256=original_hash)
+
+    counts = report["counts"]
+    assert isinstance(counts, dict)
+    assert path.resolve() not in opened_paths
+    assert swaps == []
+    assert counts["assets"] == 1
+    assert report["sha256"] == original_hash
+    assert path.read_bytes() == original_bytes
+    assert replacement.read_bytes() == replacement_bytes
 
 
 def test_backup_verification_detects_real_byte_mutation_with_restored_metadata(
