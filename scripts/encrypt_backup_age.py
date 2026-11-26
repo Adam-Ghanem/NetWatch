@@ -32,10 +32,10 @@ class BackupEncryptionError(ValueError):
     """Raised when a backup cannot be encrypted safely."""
 
 
-def _normalize_digest(value: str) -> str:
+def _normalize_digest(value: str, *, label: str = "Expected SHA-256") -> str:
     normalized = value.strip().lower()
     if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
-        raise BackupEncryptionError("Expected SHA-256 must be exactly 64 hexadecimal characters.")
+        raise BackupEncryptionError(f"{label} must be exactly 64 hexadecimal characters.")
     return normalized
 
 
@@ -171,6 +171,66 @@ def _resolve_age_binary() -> str:
     return str(resolved)
 
 
+def _verify_age_binary_digest(path: str, expected_sha256: str | None) -> str | None:
+    if expected_sha256 is None:
+        return None
+    expected = _normalize_digest(
+        expected_sha256, label="Expected age binary SHA-256"
+    )
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise BackupEncryptionError(
+            "The age executable cannot be opened for digest verification."
+        ) from exc
+
+    try:
+        before = os.fstat(descriptor)
+        try:
+            path_before = Path(path).lstat()
+        except OSError as exc:
+            raise BackupEncryptionError(
+                "The age executable changed before digest verification."
+            ) from exc
+        if not stat.S_ISREG(before.st_mode) or not _same_file_state(before, path_before):
+            raise BackupEncryptionError(
+                "The age executable changed before digest verification."
+            )
+
+        digest = hashlib.sha256()
+        while True:
+            chunk = os.read(descriptor, _CHUNK_BYTES)
+            if not chunk:
+                break
+            digest.update(chunk)
+
+        after = os.fstat(descriptor)
+        try:
+            path_after = Path(path).lstat()
+        except OSError as exc:
+            raise BackupEncryptionError(
+                "The age executable changed during digest verification."
+            ) from exc
+        if not _same_file_state(before, after) or not _same_file_state(after, path_after):
+            raise BackupEncryptionError(
+                "The age executable changed during digest verification."
+            )
+
+        actual = digest.hexdigest()
+        if not hmac.compare_digest(actual, expected):
+            raise BackupEncryptionError(
+                "The age executable SHA-256 does not match the trusted digest."
+            )
+        return actual
+    except OSError as exc:
+        raise BackupEncryptionError(
+            "The age executable could not be verified safely."
+        ) from exc
+    finally:
+        os.close(descriptor)
+
+
 def _terminate(process: subprocess.Popen[bytes]) -> None:
     for stream in (process.stdin, process.stdout):
         if stream is not None and not stream.closed:
@@ -199,6 +259,7 @@ def encrypt_backup(
     *,
     recipients: Sequence[str],
     expected_sha256: str,
+    expected_age_sha256: str | None = None,
 ) -> dict[str, object]:
     """Stream a digest-pinned input to age and publish ciphertext without overwrite."""
     expected = _normalize_digest(expected_sha256)
@@ -231,6 +292,9 @@ def encrypt_backup(
             raise BackupEncryptionError("Encrypted output already exists; refusing to overwrite.")
 
         age_binary = _resolve_age_binary()
+        age_binary_digest = _verify_age_binary_digest(
+            age_binary, expected_age_sha256
+        )
 
         try:
             temporary_fd, temporary_name = tempfile.mkstemp(
@@ -425,7 +489,7 @@ def encrypt_backup(
                 # Some filesystems do not support directory fsync; ciphertext is already fsynced.
                 pass
 
-        return {
+        report: dict[str, object] = {
             "encrypted": True,
             "input_name": source_path.name,
             "output_name": target.name,
@@ -435,6 +499,9 @@ def encrypt_backup(
             "output_mode": "0600",
             "overwrite": False,
         }
+        if age_binary_digest is not None:
+            report["age_binary_sha256"] = age_binary_digest
+        return report
     finally:
         os.close(source_fd)
         if temporary_path is not None:
@@ -459,6 +526,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Digest from a separately trusted channel.",
     )
+    parser.add_argument(
+        "--age-binary-sha256",
+        help="Optional age executable digest from a separately trusted release record.",
+    )
     args = parser.parse_args(argv)
     try:
         report = encrypt_backup(
@@ -466,6 +537,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.encrypted_output,
             recipients=args.recipient,
             expected_sha256=args.expected_sha256,
+            expected_age_sha256=args.age_binary_sha256,
         )
     except BackupEncryptionError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
