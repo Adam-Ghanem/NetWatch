@@ -54,6 +54,9 @@ command. The helper:
 - enforces a 30-second no-progress deadline while streaming and a 30-second
   completion deadline after closing stdin; a stalled child is killed and its
   partial ciphertext is removed;
+- drains child output through a bounded pipe and caps ciphertext at the input
+  size plus the larger of 1 MiB or 6.25% of the input size; an over-producing
+  child is killed and its partial ciphertext is removed;
 - writes ciphertext to a mode-`0600` temporary file in the destination
   directory, fsyncs it, and publishes it atomically without overwriting an
   existing destination.

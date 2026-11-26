@@ -290,3 +290,59 @@ def test_times_out_when_age_does_not_exit_after_input_closes(tmp_path, monkeypat
 
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-age-*")) == []
+
+
+def _fake_age_that_expands_output(
+    tmp_path: Path, monkeypatch, *, output_bytes: int
+) -> None:
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir(exist_ok=True)
+    executable = binary_dir / "age"
+    executable.write_text(
+        f"""#!{sys.executable}
+import sys
+
+sys.stdin.buffer.read()
+sys.stdout.buffer.write(b"x" * {output_bytes})
+""",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+
+def test_rejects_age_output_above_bounded_ciphertext_envelope(tmp_path, monkeypatch):
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"x")
+    source_size = source.stat().st_size
+    output_limit = source_size + max(
+        encryptor._AGE_OUTPUT_OVERHEAD_BYTES,
+        source_size // encryptor._AGE_OUTPUT_OVERHEAD_RATIO_DIVISOR,
+    )
+    _fake_age_that_expands_output(
+        tmp_path, monkeypatch, output_bytes=output_limit + 1
+    )
+    output = tmp_path / "backup.age"
+    processes = []
+    real_popen = encryptor.subprocess.Popen
+
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(encryptor.subprocess, "Popen", capture_process)
+    with pytest.raises(
+        encryptor.BackupEncryptionError, match="safe ciphertext size limit"
+    ):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=[_recipient()],
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+
+    assert len(processes) == 1
+    assert processes[0].poll() is not None
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
