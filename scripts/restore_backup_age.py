@@ -90,7 +90,9 @@ def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
 
     nofollow_flag = getattr(os, "O_NOFOLLOW", None)
     if nofollow_flag is None:
-        raise BackupRestoreError("This host cannot safely open the recovery identity without O_NOFOLLOW.")
+        raise BackupRestoreError(
+            "This host cannot safely open the recovery identity without O_NOFOLLOW."
+        )
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | nofollow_flag
     try:
         descriptor = os.open(path, flags)
@@ -138,7 +140,9 @@ def restore_backup(
 ) -> dict[str, object]:
     """Decrypt to a private temporary file and publish only after digest verification."""
     if os.name != "posix":
-        raise BackupRestoreError("Run this helper on a POSIX host with restrictive file permissions.")
+        raise BackupRestoreError(
+            "Run this helper on a POSIX host with restrictive file permissions."
+        )
     try:
         expected = _normalize_digest(expected_sha256)
     except BackupEncryptionError as exc:
@@ -158,7 +162,9 @@ def restore_backup(
             if os.path.samefile(identity, source_path):
                 raise BackupRestoreError("The encrypted input and recovery identity must differ.")
         except OSError as exc:
-            raise BackupRestoreError("The encrypted input and identity cannot be compared.") from exc
+            raise BackupRestoreError(
+                "The encrypted input and identity cannot be compared."
+            ) from exc
 
         output_value = Path(output_path).expanduser()
         if output_value.name in {"", ".", ".."}:
@@ -183,7 +189,9 @@ def restore_backup(
             age_binary = _resolve_age_binary()
             age_binary_digest = _verify_age_binary_digest(age_binary, expected_age_sha256)
         except BackupEncryptionError as exc:
-            raise BackupRestoreError("The age executable could not be trusted or verified.") from exc
+            raise BackupRestoreError(
+                "The age executable could not be trusted or verified."
+            ) from exc
 
         identity_fd_reference = _identity_descriptor_path(opened_identity_fd)
 
@@ -219,7 +227,9 @@ def restore_backup(
                         start_new_session=True,
                     )
                 except OSError as exc:
-                    raise BackupRestoreError("The age decryption process could not be started.") from exc
+                    raise BackupRestoreError(
+                        "The age decryption process could not be started."
+                    ) from exc
 
                 stdout = process.stdout
                 if stdout is None:
@@ -237,7 +247,9 @@ def restore_backup(
                                 time.monotonic() - last_progress
                             )
                             if remaining <= 0:
-                                raise BackupRestoreError("age stopped producing plaintext; restore timed out.")
+                                raise BackupRestoreError(
+                                    "age stopped producing plaintext; restore timed out."
+                                )
                             events = reader.select(remaining)
                             if not events:
                                 raise BackupRestoreError("age stopped producing plaintext; restore timed out.")
@@ -285,12 +297,16 @@ def restore_backup(
         _ensure_identity_unchanged(identity, opened_identity_fd, identity_state)
         actual_digest = digest.hexdigest()
         if restored_bytes <= 0 or not hmac.compare_digest(actual_digest, expected):
-            raise BackupRestoreError("Restored plaintext does not match the trusted SHA-256 digest.")
+            raise BackupRestoreError(
+                "Restored plaintext does not match the trusted SHA-256 digest."
+            )
 
         try:
             os.link(temporary_path, target)
         except FileExistsError as exc:
-            raise BackupRestoreError("Restored output already exists; refusing to overwrite.") from exc
+            raise BackupRestoreError(
+                "Restored output already exists; refusing to overwrite."
+            ) from exc
         except OSError as exc:
             raise BackupRestoreError(
                 "Destination filesystem does not support safe no-overwrite publication."
@@ -302,7 +318,9 @@ def restore_backup(
                 target.unlink()
             except OSError:
                 pass
-            raise BackupRestoreError("Could not safely finalize the restored plaintext file.") from exc
+            raise BackupRestoreError(
+                "Could not safely finalize the restored plaintext file."
+            ) from exc
         temporary_path = None
 
         directory_fsync = _fsync_output_directory(output_parent)
@@ -340,7 +358,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("encrypted_backup", type=Path, help="Encrypted .age backup file.")
     parser.add_argument("restored_output", type=Path, help="New plaintext output path.")
-    parser.add_argument("--identity", required=True, type=Path, help="Private identity file outside NetWatch.")
+    parser.add_argument(
+        "--identity",
+        required=True,
+        type=Path,
+        help="Private identity file outside NetWatch.",
+    )
     parser.add_argument(
         "--expected-sha256",
         required=True,
