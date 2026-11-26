@@ -32,7 +32,7 @@ def test_public_ipv6_target_blocked():
 
 @pytest.mark.parametrize(
     "target",
-    ["169.254.169.254", "fd00:ec2::254", "fd20:ce::254"],
+    ["169.254.169.254", "169.254.170.2", "fd00:ec2::254", "fd20:ce::254"],
 )
 def test_cloud_metadata_endpoints_are_not_scan_targets(target):
     result = validate_target_ip(target)
@@ -59,7 +59,15 @@ def test_private_cidr_allowed():
     assert result.ok
 
 
-@pytest.mark.parametrize("cidr", ["169.254.169.0/24", "169.254.169.254/32"])
+@pytest.mark.parametrize(
+    "cidr",
+    [
+        "169.254.169.0/24",
+        "169.254.169.254/32",
+        "169.254.170.0/24",
+        "169.254.170.2/32",
+    ],
+)
 def test_cidr_containing_cloud_metadata_endpoint_is_blocked(cidr):
     result = validate_cidr(cidr)
 
