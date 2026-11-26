@@ -97,6 +97,11 @@ SQLite connections used for claim, completion and status operations are closed
 deterministically after their transactions, including early-return and
 exception/rollback paths.
 
+AI event/cache, daily-budget, metrics and TLS-history operations also use
+short-lived SQLite connections. Successful transactions commit, exceptions
+roll back, and each handle is closed before the operation returns. The schema
+initializer used by these operations closes its own connection as well.
+
 Every actual provider request still passes the existing key separation,
 audit-integrity gate, bounded concurrency, rate limits, daily request
 budget, redacted fixed prompt, schema validation, and cached brief storage.

@@ -4,6 +4,8 @@ import ipaddress
 import json
 import re
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -55,6 +57,18 @@ def _database_modules() -> tuple[Any, Any]:
 
     inventory_store.init_db()
     return inventory_store, inventory_store._connect
+
+@contextmanager
+def _database_connection() -> Iterator[sqlite3.Connection]:
+    """Commit or roll back one intelligence-store operation and close its handle."""
+    _, connect = _database_modules()
+    connection = connect()
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
 
 
 def create_intelligence_schema(conn: sqlite3.Connection) -> None:
@@ -218,8 +232,7 @@ def save_intelligence_brief(
     encoded = json.dumps(response, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
     if len(encoded) > 32_000:
         raise ValueError("Intelligence brief exceeds the storage limit.")
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         if auto_claim_id is not None:
             # Hold SQLite's write reservation across the ownership check and insert.
             # A reclaimed claim cannot race this result into the cache.
@@ -257,8 +270,7 @@ def record_intelligence_failure(
     now: datetime | None = None,
 ) -> None:
     digest = _validated_hash(snapshot_hash)
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         if auto_claim_id is not None:
             # Serialize the claim check with the failure-event insert as well.
             conn.execute("BEGIN IMMEDIATE")
@@ -287,8 +299,7 @@ def cached_intelligence_brief(
 ) -> dict[str, Any] | None:
     digest = _validated_hash(snapshot_hash)
     current = _utc_now(now)
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         row = conn.execute(
             """
             SELECT created_at, expires_at, model, response_json
@@ -318,8 +329,7 @@ def cached_intelligence_brief(
 def daily_provider_request_count(*, now: datetime | None = None) -> int:
     moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     day_utc = moment.date().isoformat()
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         row = conn.execute(
             "SELECT request_count FROM intelligence_daily_usage WHERE day_utc = ?",
             (day_utc,),
@@ -340,8 +350,7 @@ def reserve_intelligence_request(
     day_utc = moment.date().isoformat()
     updated_at = _utc_now(moment)
     retention_cutoff = (moment - timedelta(days=31)).date().isoformat()
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute(
             "DELETE FROM intelligence_daily_usage WHERE day_utc < ?",
@@ -378,8 +387,7 @@ def recent_tls_service_history(
         except ValueError as exc:
             raise ValueError("A valid IPv4 or IPv6 address is required.") from exc
 
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         if normalized_ip is None:
             rows = conn.execute(
                 """
@@ -414,8 +422,7 @@ def recent_tls_service_history(
 
 def intelligence_metrics(*, now: datetime | None = None) -> dict[str, int]:
     current = _utc_now(now)
-    _, connect = _database_modules()
-    with connect() as conn:
+    with _database_connection() as conn:
         total = int(conn.execute("SELECT COUNT(*) FROM intelligence_events").fetchone()[0])
         completed = int(
             conn.execute(
