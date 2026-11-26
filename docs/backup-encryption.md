@@ -52,8 +52,10 @@ command. The helper:
 - invokes `age` without a shell, passes only a minimal environment, and
   suppresses child stderr to avoid accidental path or environment disclosure;
 - enforces a 30-second no-progress deadline while streaming and a 30-second
-  completion deadline after closing stdin; a stalled child is killed and its
-  partial ciphertext is removed;
+  completion deadline after closing stdin; timeout cleanup kills the dedicated
+  POSIX process group, including descendants that keep inherited pipes open;
+- does not sandbox a deliberately hostile executable that detaches into a new
+  session, so install only a verified age release from the approved channel;
 - drains child output through a bounded pipe and caps ciphertext at the input
   size plus the larger of 1 MiB or 6.25% of the input size; an over-producing
   child is killed and its partial ciphertext is removed;
