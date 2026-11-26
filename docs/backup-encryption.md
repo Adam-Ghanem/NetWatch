@@ -45,6 +45,7 @@ python scripts/encrypt_backup_age.py \
 The example recipient values are placeholders, not valid keys. Replace them
 with actual public recipients. Do not put private identity material in the
 command. The helper:
+
 - accepts only age X25519 public-recipient syntax and one to eight recipients;
 - opens a regular, non-symlink source file and streams it without loading the
   whole backup into memory or creating a plaintext temporary copy;

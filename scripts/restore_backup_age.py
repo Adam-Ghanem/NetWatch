@@ -60,6 +60,7 @@ def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
         path_state.st_uid not in {0, os.geteuid()}
         or mode & 0o077
         or mode & 0o111
+        or mode & (stat.S_ISUID | stat.S_ISGID | stat.S_ISVTX)
         or not mode & stat.S_IRUSR
     ):
         raise BackupRestoreError(
@@ -184,6 +185,8 @@ def restore_backup(
         except BackupEncryptionError as exc:
             raise BackupRestoreError("The age executable could not be trusted or verified.") from exc
 
+        identity_fd_reference = _identity_descriptor_path(opened_identity_fd)
+
         try:
             temporary_fd, temporary_name = tempfile.mkstemp(
                 prefix=".netwatch-restore-", suffix=".tmp", dir=output_parent
@@ -197,7 +200,7 @@ def restore_backup(
             os.close(temporary_fd)
             raise BackupRestoreError("Cannot restrict temporary restore permissions.") from exc
 
-        command = [age_binary, "-d", "-i", _identity_descriptor_path(opened_identity_fd)]
+        command = [age_binary, "-d", "-i", identity_fd_reference]
         digest = hashlib.sha256()
         restored_bytes = 0
         max_plaintext_bytes = source_state.st_size
