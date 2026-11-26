@@ -139,6 +139,29 @@ def test_rejects_group_or_world_accessible_identity_before_launch(tmp_path, monk
     assert not output.exists()
 
 
+def test_rejects_special_mode_bits_on_identity(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    identity.chmod(0o4600)
+    if not identity.stat().st_mode & stat.S_ISUID:
+        pytest.skip("filesystem does not preserve the setuid bit")
+    output = tmp_path / "restored.sqlite3"
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start with special mode bits on the recovery identity")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="owner-readable only"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+
+
 def test_rejects_symlink_identity(tmp_path, monkeypatch):
     encrypted, identity, _ = _inputs(tmp_path)
     _fake_age(tmp_path, monkeypatch)
