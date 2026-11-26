@@ -122,12 +122,16 @@ The restore helper:
   failure cleanup terminates the dedicated POSIX process group;
 - caps plaintext output at the encrypted input size, writes to a mode-`0600`
   temporary file, and verifies the complete plaintext SHA-256 before publication;
-- requires the destination directory and every ancestor to be owned by
-  root or the current user; rejects group/world-writable directories unless
-  the sticky bit protects shared-directory entry ownership (for example `/tmp`);
-- refuses to overwrite an existing destination, publishes by same-directory
-  hard link, fsyncs the plaintext file, and reports whether destination-directory
-  fsync was confirmed.
+- opens every destination directory component from the filesystem root
+  with directory descriptors and `O_NOFOLLOW`, requiring root/current-user
+  ownership and rejecting group/world-writable directories unless the sticky
+  bit protects shared-directory entry ownership (for example `/tmp`);
+- creates the private temporary file, checks for an existing destination,
+  publishes with a same-directory no-overwrite hard link, removes temporary
+  entries, and fsyncs the directory through the same open descriptor; it
+  reopens and compares the directory identity before process launch and
+  publication so a path rename or symlink swap cannot redirect writes to a
+  replacement directory.
 
 A nonzero exit, timeout, output-limit violation, identity/input mutation, or
 digest mismatch leaves no final restored file. If directory fsync is unsupported
@@ -155,7 +159,10 @@ verifier or a kernel-enforced immutable executable handle, so protected
 ownership/permissions and a trusted host remain required. The restore helper
 checks POSIX mode bits for the identity file and destination directory but does
 not independently inspect extended filesystem ACLs; administrators must verify
-both effective access policies.
+both effective access policies. Directory-descriptor anchoring prevents a
+pathname swap from redirecting publication, but it does not defend against
+root or hostile same-UID processes, malicious mount changes, or filesystem
+implementations with weaker-than-expected descriptor semantics.
 
 These helpers do **not** provide key escrow, key rotation, off-host upload,
 retention automation, a production restore drill, audit-HMAC validation, or
