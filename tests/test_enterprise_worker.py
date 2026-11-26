@@ -127,7 +127,14 @@ def test_job_failure_does_not_persist_exception_message():
 
 def test_outbox_failure_does_not_persist_exception_message():
     conn = _connection()
-    enqueue_outbox_event(conn, topic="x", event_type="x", aggregate_id="x", dedupe_key="x", payload={})
+    enqueue_outbox_event(
+        conn,
+        topic="x",
+        event_type="x",
+        aggregate_id="x",
+        dedupe_key="x",
+        payload={},
+    )
     conn.commit()
     sensitive = "https://hooks.example.test/private-token 10.23.4.5"
 
