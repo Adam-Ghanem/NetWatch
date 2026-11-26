@@ -5,7 +5,8 @@ This document records the defensive controls used in NetWatch.
 ## Target safety
 
 - Public Internet targets are blocked by validation logic.
-- The app accepts only private, loopback, or link-local addresses.
+- The app accepts only private, loopback, or link-local addresses, except reserved cloud instance metadata endpoints.
+- Host validation blocks AWS and Google Cloud metadata service addresses: `169.254.169.254`, `fd00:ec2::254`, and `fd20:ce::254`. IPv4 CIDRs containing `169.254.169.254` are rejected as a whole, while other link-local targets remain available when explicitly authorized. See the [AWS EC2 metadata endpoint documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-new-instances.html) and [Google Cloud metadata endpoint documentation](https://docs.cloud.google.com/compute/docs/metadata/overview).
 - CIDR scans have a maximum host limit.
 - Scan actions require a permission checkbox.
 - API rate, concurrency, inventory, worker, and timeout inputs have upper bounds.

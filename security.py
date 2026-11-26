@@ -21,6 +21,21 @@ ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
     ipaddress.IPv6Network(cidr) for cidr in ("fc00::/7", "fe80::/10", "::1/128")
 )
 
+# Cloud metadata endpoints are link-local/ULA addresses and must never be scan targets.
+# AWS documents 169.254.169.254 and fd00:ec2::254; Google Cloud documents
+# 169.254.169.254 and fd20:ce::254.
+CLOUD_METADATA_IPV4_ADDRESSES = (ipaddress.IPv4Address("169.254.169.254"),)
+CLOUD_METADATA_IPV6_ADDRESSES = (
+    ipaddress.IPv6Address("fd00:ec2::254"),
+    ipaddress.IPv6Address("fd20:ce::254"),
+)
+
+
+def _is_cloud_metadata_address(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> bool:
+    return ip in CLOUD_METADATA_IPV4_ADDRESSES or ip in CLOUD_METADATA_IPV6_ADDRESSES
+
 
 @dataclass(frozen=True)
 class ValidationResult:
@@ -53,6 +68,12 @@ def validate_target_ip(target: str) -> ValidationResult:
             error=(
                 "Use a valid literal IPv4 or IPv6 address, for example " "192.168.1.1 or fd00::1"
             ),
+        )
+
+    if _is_cloud_metadata_address(ip):
+        return ValidationResult(
+            False,
+            error="Cloud instance metadata service addresses cannot be scan targets.",
         )
 
     if isinstance(ip, ipaddress.IPv4Address):
@@ -112,6 +133,11 @@ def validate_cidr(cidr: str) -> ValidationResult:
     if not isinstance(network, ipaddress.IPv4Network):
         return ValidationResult(
             False, error="IPv6 network scanning is not supported in this version."
+        )
+
+    if any(address in network for address in CLOUD_METADATA_IPV4_ADDRESSES):
+        return ValidationResult(
+            False, error="CIDR includes a reserved cloud metadata service address."
         )
 
     if not _is_allowed_ipv4_network(network):
