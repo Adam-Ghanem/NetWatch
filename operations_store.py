@@ -87,13 +87,13 @@ def _clean(value: object, max_length: int) -> str:
     return " ".join(str(value).split())[:max_length]
 
 
-def _database_modules() -> tuple[Any, Any]:
+def _database_modules() -> tuple[Any, Any, Any]:
     # Imported lazily so inventory_store can initialize this module's schema
     # without creating an import cycle.
     import inventory_store
 
     inventory_store.init_db()
-    return inventory_store, inventory_store._connect
+    return inventory_store, inventory_store._connect, inventory_store._managed_connection
 
 
 def _create_alert_table(conn: sqlite3.Connection) -> None:
@@ -264,7 +264,7 @@ def create_scan_policy(
     enabled: bool,
     authorized_by: str,
 ) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     policy_name = _clean(name, 120)
     if len(policy_name) < 3:
         raise ValueError("Policy name must contain at least 3 characters.")
@@ -272,7 +272,7 @@ def create_scan_policy(
     now = _utc_now()
     next_run_at = _after_minutes(interval) if enabled else ""
 
-    with connect() as conn:
+    with managed_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM scan_policies").fetchone()[0]
         if count >= MAX_SCAN_POLICIES:
             raise ValueError(f"At most {MAX_SCAN_POLICIES} scan policies can be stored.")
@@ -308,9 +308,9 @@ def create_scan_policy(
 
 
 def scan_policies(limit: int = MAX_SCAN_POLICIES) -> list[dict[str, Any]]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     safe_limit = max(1, min(int(limit), MAX_SCAN_POLICIES))
-    with connect() as conn:
+    with managed_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM scan_policies ORDER BY enabled DESC, name ASC LIMIT ?",
             (safe_limit,),
@@ -319,8 +319,8 @@ def scan_policies(limit: int = MAX_SCAN_POLICIES) -> list[dict[str, Any]]:
 
 
 def get_scan_policy(policy_id: int) -> dict[str, Any]:
-    _, connect = _database_modules()
-    with connect() as conn:
+    _, connect, managed_connection = _database_modules()
+    with managed_connection() as conn:
         row = conn.execute("SELECT * FROM scan_policies WHERE id = ?", (policy_id,)).fetchone()
     if row is None:
         raise KeyError(policy_id)
@@ -334,8 +334,8 @@ def update_scan_policy(
     interval_minutes: int | None = None,
     enabled: bool | None = None,
 ) -> dict[str, Any]:
-    _, connect = _database_modules()
-    with connect() as conn:
+    _, connect, managed_connection = _database_modules()
+    with managed_connection() as conn:
         current = conn.execute("SELECT * FROM scan_policies WHERE id = ?", (policy_id,)).fetchone()
         if current is None:
             raise KeyError(policy_id)
@@ -402,7 +402,7 @@ def create_maintenance_window(
     enabled: bool,
     created_by: str,
 ) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     window_name = _clean(name, 120)
     if len(window_name) < 3:
         raise ValueError("Maintenance window name must contain at least 3 characters.")
@@ -416,7 +416,7 @@ def create_maintenance_window(
     normalized_end = end.isoformat(timespec="seconds")
     now = _utc_now()
 
-    with connect() as conn:
+    with managed_connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM maintenance_windows").fetchone()[0]
         if count >= MAX_MAINTENANCE_WINDOWS:
             raise ValueError(
@@ -470,10 +470,10 @@ def maintenance_windows(
     now: str | None = None,
     limit: int = MAX_MAINTENANCE_WINDOWS,
 ) -> list[dict[str, Any]]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     current = _iso_utc(now, field="Current time") if now else _utc_now()
     safe_limit = max(1, min(int(limit), MAX_MAINTENANCE_WINDOWS))
-    with connect() as conn:
+    with managed_connection() as conn:
         if active_only:
             rows = conn.execute(
                 """
@@ -518,9 +518,9 @@ def set_maintenance_window_enabled(
     *,
     enabled: bool,
 ) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         cursor = conn.execute(
             "UPDATE maintenance_windows SET updated_at = ?, enabled = ? WHERE id = ?",
             (now, int(enabled), window_id),
@@ -566,9 +566,9 @@ def _mark_policy_started(conn: sqlite3.Connection, policy_id: int, started_at: s
 
 
 def start_scan_policy(policy_id: int) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         saved = conn.execute("SELECT id FROM scan_policies WHERE id = ?", (policy_id,)).fetchone()
         if saved is None:
             raise KeyError(policy_id)
@@ -596,7 +596,7 @@ def claim_due_scan_policies(
     now: str | None = None,
     limit: int = 1,
 ) -> list[dict[str, Any]]:
-    _, connect = _database_modules()
+    _, connect, _ = _database_modules()
     claimed_at = now or _utc_now()
     safe_limit = max(1, min(int(limit), 5))
     conn = connect()
@@ -633,10 +633,10 @@ def claim_due_scan_policies(
 
 
 def complete_scan_policy(policy_id: int, *, status: str, summary: str) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     normalized_status = _clean(status, 40)
     normalized_summary = _clean(summary, 1_000)
-    with connect() as conn:
+    with managed_connection() as conn:
         cursor = conn.execute(
             """
             UPDATE scan_policies
@@ -776,8 +776,8 @@ def _record_alert_outbox_event(conn: sqlite3.Connection, alert: dict[str, Any]) 
 
 
 def enterprise_queue_metrics() -> dict[str, int]:
-    _, connect = _database_modules()
-    with connect() as conn:
+    _, connect, managed_connection = _database_modules()
+    with managed_connection() as conn:
         return enterprise_queue_status(conn)
 
 
@@ -811,9 +811,9 @@ def notify_overdue_alert_transitions(*, now: str | None = None) -> int:
     """Attempt one notification when an unresolved alert first crosses its SLA."""
     if not notifications_enabled():
         return 0
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     current_time = _iso_utc(now, field="SLA check time") if now is not None else _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT * FROM operation_alerts
@@ -873,11 +873,11 @@ def _prune_alerts(conn: sqlite3.Connection) -> None:
 
 
 def create_alerts_for_changes(changes: NetworkChangeSummary) -> AlertChangeSummary:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     created = 0
     refreshed = 0
     pending_notifications: list[dict[str, Any]] = []
-    with connect() as conn:
+    with managed_connection() as conn:
         for ip_address in changes.new_assets:
             was_created, alert = _upsert_alert(
                 conn,
@@ -972,10 +972,10 @@ def recent_alerts(
     if severity is not None and severity not in ALERT_SEVERITIES:
         raise ValueError("Unsupported alert severity.")
     notify_overdue_alert_transitions()
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     safe_limit = max(1, min(int(limit), 1_000))
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT *
@@ -1009,7 +1009,7 @@ def recent_alerts(
 
 def alert_counts() -> dict[str, int]:
     notify_overdue_alert_transitions()
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     counts = {
         "open": 0,
         "acknowledged": 0,
@@ -1019,7 +1019,7 @@ def alert_counts() -> dict[str, int]:
         "total": 0,
     }
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         rows = conn.execute(
             "SELECT status, COUNT(*) AS count FROM operation_alerts GROUP BY status"
         ).fetchall()
@@ -1051,13 +1051,13 @@ def update_operation_alert(
     assigned_to: str | None = None,
     resolution_note: str | None = None,
 ) -> dict[str, Any]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     if status is not None and status not in ALERT_STATUSES:
         raise ValueError("Alert status must be open, acknowledged, or resolved.")
     if status is None and assigned_to is None and resolution_note is None:
         raise ValueError("Provide an alert status, assignee, or resolution note.")
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         current = conn.execute(
             "SELECT * FROM operation_alerts WHERE id = ?", (alert_id,)
         ).fetchone()
@@ -1124,10 +1124,10 @@ def set_alert_status(alert_id: int, *, status: str, actor_role: str) -> dict[str
 
 
 def operations_metrics() -> dict[str, int]:
-    _, connect = _database_modules()
+    _, connect, managed_connection = _database_modules()
     counts = alert_counts()
     now = _utc_now()
-    with connect() as conn:
+    with managed_connection() as conn:
         assets = int(conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0])
         policies = int(conn.execute("SELECT COUNT(*) FROM scan_policies").fetchone()[0])
         enabled_policies = int(
@@ -1152,7 +1152,7 @@ def operations_metrics() -> dict[str, int]:
 
 
 def database_backup_bytes() -> bytes:
-    _, connect = _database_modules()
+    _, connect, _ = _database_modules()
     with tempfile.TemporaryDirectory(prefix="netwatch-backup-") as temp_dir:
         backup_path = Path(temp_dir) / "netwatch.sqlite3"
         source = connect()
