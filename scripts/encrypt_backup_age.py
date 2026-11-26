@@ -11,6 +11,7 @@ import os
 import re
 import selectors
 import shutil
+import signal
 import stat
 import subprocess
 import tempfile
@@ -129,11 +130,18 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
                 stream.close()
             except OSError:
                 pass
-    if process.poll() is None:
-        try:
-            process.kill()
-        except OSError:
-            pass
+    try:
+        # The child runs in a dedicated session; kill descendants that inherited
+        # its pipes even when the direct age process has already exited.
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass
     process.wait()
 
 
@@ -211,6 +219,7 @@ def encrypt_backup(
                         stderr=subprocess.DEVNULL,
                         env=_child_environment(),
                         close_fds=True,
+                        start_new_session=True,
                     )
                 except OSError as exc:
                     raise BackupEncryptionError("The age executable could not be started.") from exc
