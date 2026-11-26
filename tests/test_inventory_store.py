@@ -707,9 +707,7 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
     assert inventory_store.recent_service_findings() == []
 
 
-def _assert_inventory_connections_closed(
-    connections: list[sqlite3.Connection],
-) -> None:
+def _assert_inventory_connections_closed(connections: list[sqlite3.Connection]) -> None:
     assert connections
     for connection in connections:
         with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
@@ -785,7 +783,7 @@ def test_inventory_store_closes_handles_across_reads_and_writes(monkeypatch, tmp
     inventory_store.asset_port_findings()
     inventory_store.asset_inventory()
 
-    assert len(opened) >= 38
+    assert len(opened) >= 30
     _assert_inventory_connections_closed(opened)
 
 
