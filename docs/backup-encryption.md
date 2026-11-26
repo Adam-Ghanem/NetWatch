@@ -122,6 +122,9 @@ The restore helper:
   failure cleanup terminates the dedicated POSIX process group;
 - caps plaintext output at the encrypted input size, writes to a mode-`0600`
   temporary file, and verifies the complete plaintext SHA-256 before publication;
+- requires the destination directory and every ancestor to be owned by
+  root or the current user; rejects group/world-writable directories unless
+  the sticky bit protects shared-directory entry ownership (for example `/tmp`);
 - refuses to overwrite an existing destination, publishes by same-directory
   hard link, fsyncs the plaintext file, and reports whether destination-directory
   fsync was confirmed.
@@ -150,8 +153,9 @@ optional for backward compatibility; when enabled, its expected digest must
 come from an independently trusted release record. The pin is not a signature
 verifier or a kernel-enforced immutable executable handle, so protected
 ownership/permissions and a trusted host remain required. The restore helper
-checks POSIX mode bits but does not independently inspect extended filesystem
-ACLs; administrators must verify the identity file's effective access policy.
+checks POSIX mode bits for the identity file and destination directory but does
+not independently inspect extended filesystem ACLs; administrators must verify
+both effective access policies.
 
 These helpers do **not** provide key escrow, key rotation, off-host upload,
 retention automation, a production restore drill, audit-HMAC validation, or
