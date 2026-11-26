@@ -307,3 +307,103 @@ def test_v3_alert_schema_migrates_to_case_workflow(monkeypatch, tmp_path):
         resolution_note="Legacy alert reviewed and closed.",
     )
     assert resolved["status"] == "resolved"
+
+
+def _assert_operations_connections_closed(connections: list[sqlite3.Connection]) -> None:
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
+
+
+def test_operations_store_closes_managed_connections_on_success_and_failure(
+    monkeypatch, tmp_path
+):
+    _use_temporary_database(monkeypatch, tmp_path)
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+
+    policy = operations_store.create_scan_policy(
+        name="HQ approved baseline",
+        cidr="10.80.0.0/24",
+        interval_minutes=60,
+        enabled=True,
+        authorized_by="admin",
+    )
+    with pytest.raises(ValueError, match="already exists"):
+        operations_store.create_scan_policy(
+            name="Duplicate approved baseline",
+            cidr="10.80.0.0/24",
+            interval_minutes=60,
+            enabled=True,
+            authorized_by="admin",
+        )
+
+    assert len(operations_store.scan_policies()) == 1
+    assert operations_store.get_scan_policy(policy["id"])["id"] == policy["id"]
+    operations_store.update_scan_policy(policy["id"], name="HQ baseline updated")
+
+    window = operations_store.create_maintenance_window(
+        name="Planned firewall maintenance",
+        starts_at="2099-01-01T10:00:00+00:00",
+        ends_at="2099-01-01T11:00:00+00:00",
+        reason="Approved change window",
+        policy_id=policy["id"],
+        enabled=False,
+        created_by="admin",
+    )
+    assert operations_store.maintenance_windows()
+    operations_store.set_maintenance_window_enabled(window["id"], enabled=False)
+    operations_store.start_scan_policy(policy["id"])
+    operations_store.complete_scan_policy(
+        policy["id"], status="completed", summary="Synthetic lifecycle test"
+    )
+    assert isinstance(operations_store.enterprise_queue_metrics(), dict)
+
+    scan_run_id = inventory_store.add_scan_run(
+        "network", "10.80.0.0/24", "SQLite lifecycle regression"
+    )
+    monkeypatch.setattr(
+        operations_store, "_utc_now", lambda: "2026-01-01T00:00:00+00:00"
+    )
+    monkeypatch.setattr(operations_store, "notifications_enabled", lambda: True)
+    monkeypatch.setattr(
+        operations_store, "_queue_alert_notification_safely", lambda alert, event: None
+    )
+    monkeypatch.setattr(
+        operations_store, "_send_alert_notification_safely", lambda alert, event: None
+    )
+    changes = inventory_store.NetworkChangeSummary(
+        scan_run_id=scan_run_id,
+        observed_assets=("10.80.0.10",),
+        new_assets=("10.80.0.10",),
+        returned_assets=(),
+        not_observed_assets=(),
+    )
+    assert operations_store.create_alerts_for_changes(changes).created == 1
+    assert operations_store.notify_overdue_alert_transitions(
+        now="2026-01-05T00:00:00+00:00"
+    ) == 0
+
+    alerts = operations_store.recent_alerts()
+    assert alerts
+    operations_store.alert_counts()
+    operations_store.update_operation_alert(
+        alerts[0]["id"], actor_role="operator", status="acknowledged"
+    )
+    operations_store.operations_metrics()
+
+    # These two paths intentionally use explicit try/finally closure rather than
+    # the managed context helper and must remain leak-free as well.
+    operations_store.claim_due_scan_policies(now="2099-01-01T00:00:00+00:00")
+    assert operations_store.database_backup_bytes()
+
+    _assert_operations_connections_closed(opened)
+
