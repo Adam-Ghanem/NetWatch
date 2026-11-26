@@ -148,9 +148,13 @@ def _resolve_age_binary() -> str:
         try:
             directory_state = directory.lstat()
         except OSError as exc:
-            raise BackupEncryptionError("The age executable path cannot be verified safely.") from exc
+            raise BackupEncryptionError(
+                "The age executable path cannot be verified safely."
+            ) from exc
         if not stat.S_ISDIR(directory_state.st_mode):
-            raise BackupEncryptionError("The age executable path contains a non-directory component.")
+            raise BackupEncryptionError(
+                "The age executable path contains a non-directory component."
+            )
         if directory_state.st_uid not in {0, effective_uid}:
             raise BackupEncryptionError("The age executable path has an untrusted directory owner.")
         writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
