@@ -284,6 +284,7 @@ def _fsync_output_directory(path: Path) -> str:
             pass
     return "confirmed"
 
+
 def encrypt_backup(
     input_path: str | Path,
     output_path: str | Path,
