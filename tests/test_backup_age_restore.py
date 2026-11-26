@@ -507,24 +507,32 @@ def test_rejects_identity_ancestor_acl_added_during_restore_before_publication(
     output = tmp_path / "restored.sqlite3"
     ancestor_state = identity.parent.stat()
     no_acl_error = getattr(errno, "ENODATA", errno.EIO)
-    ancestor_checks = 0
+    process_started = False
+    original_popen = restorer.subprocess.Popen
 
     def fake_getxattr(descriptor, attribute):
-        nonlocal ancestor_checks
         current = os.fstat(descriptor)
         if (
-            (current.st_dev, current.st_ino)
+            process_started
+            and (current.st_dev, current.st_ino)
             == (ancestor_state.st_dev, ancestor_state.st_ino)
             and attribute == "system.posix_acl_access"
         ):
-            ancestor_checks += 1
-            if ancestor_checks >= 3:
-                return b"extended-acl"
+            return b"extended-acl"
         raise OSError(no_acl_error, "no ACL")
+
+    def tracked_popen(*args, **kwargs):
+        nonlocal process_started
+        process = original_popen(*args, **kwargs)
+        process_started = True
+        return process
 
     monkeypatch.setattr(restorer.sys, "platform", "linux")
     monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
-    with pytest.raises(restorer.BackupRestoreError, match="Recovery identity directory"):
+    monkeypatch.setattr(restorer.subprocess, "Popen", tracked_popen)
+    with pytest.raises(
+        restorer.BackupRestoreError, match="Recovery identity directory"
+    ):
         restorer.restore_backup(
             encrypted,
             output,
@@ -532,5 +540,6 @@ def test_rejects_identity_ancestor_acl_added_during_restore_before_publication(
             expected_sha256=hashlib.sha256(plaintext).hexdigest(),
         )
 
+    assert process_started
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-restore-*")) == []
