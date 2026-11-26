@@ -272,7 +272,6 @@ def test_retention_cleanup_invalidates_readiness_only_after_commit(monkeypatch, 
 
 
 
-
 class _TrackedConnection(sqlite3.Connection):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -303,7 +302,9 @@ def _track_retention_connections(monkeypatch):
     return connections
 
 
-def _assert_retention_connections_closed(connections: list[_TrackedConnection]) -> None:
+def _assert_retention_connections_closed(
+    connections: list[_TrackedConnection],
+) -> None:
     assert connections
     for connection in connections:
         assert connection.closed_for_test is True
