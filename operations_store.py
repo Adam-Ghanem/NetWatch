@@ -596,7 +596,7 @@ def claim_due_scan_policies(
     now: str | None = None,
     limit: int = 1,
 ) -> list[dict[str, Any]]:
-    _, connect, managed_connection = _database_modules()
+    _, connect, _ = _database_modules()
     claimed_at = now or _utc_now()
     safe_limit = max(1, min(int(limit), 5))
     conn = connect()
@@ -1152,7 +1152,7 @@ def operations_metrics() -> dict[str, int]:
 
 
 def database_backup_bytes() -> bytes:
-    _, connect, managed_connection = _database_modules()
+    _, connect, _ = _database_modules()
     with tempfile.TemporaryDirectory(prefix="netwatch-backup-") as temp_dir:
         backup_path = Path(temp_dir) / "netwatch.sqlite3"
         source = connect()
