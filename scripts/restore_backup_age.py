@@ -130,6 +130,36 @@ def _identity_descriptor_path(descriptor: int) -> str:
     raise BackupRestoreError("This host does not expose inherited file descriptors to child tools.")
 
 
+def _validate_output_directory(path: Path) -> None:
+    """Require a trusted directory chain for no-overwrite plaintext publication."""
+    directory = path
+    while True:
+        try:
+            directory_state = directory.lstat()
+        except OSError as exc:
+            raise BackupRestoreError(
+                "Restored output directory path is unavailable."
+            ) from exc
+        if not stat.S_ISDIR(directory_state.st_mode):
+            raise BackupRestoreError(
+                "Restored output directory path contains a non-directory component."
+            )
+        if directory_state.st_uid not in {0, os.geteuid()}:
+            raise BackupRestoreError(
+                "Restored output directory path has an untrusted owner."
+            )
+        writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        sticky = directory_state.st_mode & stat.S_ISVTX
+        if writable and not sticky:
+            raise BackupRestoreError(
+                "Restored output directory path contains an untrusted writable directory."
+            )
+        parent = directory.parent
+        if parent == directory:
+            break
+        directory = parent
+
+
 def restore_backup(
     encrypted_path: str | Path,
     output_path: str | Path,
@@ -175,6 +205,7 @@ def restore_backup(
             raise BackupRestoreError("Restored output directory must already exist.") from exc
         if not output_parent.is_dir():
             raise BackupRestoreError("Restored output directory must already exist.")
+        _validate_output_directory(output_parent)
         target = output_parent / output_value.name
         try:
             resolved_source = source_path.resolve(strict=True)
