@@ -86,6 +86,31 @@ def audit_database(path: Path) -> dict[str, object]:
     except (OSError, sqlite3.Error, ValueError):
         raise AuditFailure("database_unreadable") from None
 
+    try:
+        final_stat = path.lstat()
+    except OSError:
+        raise AuditFailure("database_changed_during_audit") from None
+    initial_identity = (
+        file_stat.st_dev,
+        file_stat.st_ino,
+        file_stat.st_mode,
+        file_stat.st_size,
+        file_stat.st_mtime_ns,
+    )
+    final_identity = (
+        final_stat.st_dev,
+        final_stat.st_ino,
+        final_stat.st_mode,
+        final_stat.st_size,
+        final_stat.st_mtime_ns,
+    )
+    if initial_identity != final_identity:
+        raise AuditFailure("database_changed_during_audit")
+    for suffix in _SIDECAR_SUFFIXES:
+        sidecar = Path(f"{path}{suffix}")
+        if sidecar.exists() or sidecar.is_symlink():
+            raise AuditFailure("sqlite_sidecar_present")
+
     legacy_total = sum(item["legacy_error_rows"] for item in report.values())
     return {
         "ok": legacy_total == 0,
