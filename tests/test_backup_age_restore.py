@@ -617,3 +617,39 @@ def test_fails_closed_when_destination_acl_xattr_is_unsupported(tmp_path, monkey
 
     assert not output.exists()
     assert list(output_directory.iterdir()) == []
+
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
+def test_unimplemented_platform_acl_probe_never_claims_absence(monkeypatch, platform):
+    monkeypatch.setattr(restorer.sys, "platform", platform)
+
+    assert not restorer._descriptor_has_no_extended_acl(-1)
+
+
+@pytest.mark.parametrize("platform", ["darwin", "freebsd"])
+def test_restore_refuses_platform_without_native_acl_inspection(
+    tmp_path, monkeypatch, platform
+):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output = tmp_path / "restored.sqlite3"
+    process_started = False
+
+    def unexpected_popen(*args, **kwargs):
+        nonlocal process_started
+        process_started = True
+        pytest.fail("age must not start when native ACL inspection is unavailable")
+
+    monkeypatch.setattr(restorer.sys, "platform", platform)
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+
+    with pytest.raises(restorer.BackupRestoreError, match="Run this helper on Linux"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+        )
+
+    assert not process_started
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-restore-*")) == []
