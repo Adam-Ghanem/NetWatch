@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import hmac
 import json
@@ -253,6 +254,36 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
     process.wait()
 
 
+
+def _fsync_output_directory(path: Path) -> str:
+    """Return whether the published directory entry was durably synced."""
+    unsupported_errors = {
+        errno.EINVAL,
+        errno.ENOSYS,
+        getattr(errno, "ENOTSUP", errno.EINVAL),
+        getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+    }
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if directory_flag is None:
+        return "unsupported"
+
+    try:
+        descriptor = os.open(path, os.O_RDONLY | directory_flag)
+    except OSError as exc:
+        return "unsupported" if exc.errno in unsupported_errors else "failed"
+
+    try:
+        try:
+            os.fsync(descriptor)
+        except OSError as exc:
+            return "unsupported" if exc.errno in unsupported_errors else "failed"
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+    return "confirmed"
+
 def encrypt_backup(
     input_path: str | Path,
     output_path: str | Path,
@@ -478,16 +509,7 @@ def encrypt_backup(
             pass
         temporary_path = None
 
-        if os.name == "posix":
-            try:
-                directory_fd = os.open(output_parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-                try:
-                    os.fsync(directory_fd)
-                finally:
-                    os.close(directory_fd)
-            except OSError:
-                # Some filesystems do not support directory fsync; ciphertext is already fsynced.
-                pass
+        directory_fsync = _fsync_output_directory(output_parent)
 
         report: dict[str, object] = {
             "encrypted": True,
@@ -498,7 +520,14 @@ def encrypt_backup(
             "recipient_count": len(normalized_recipients),
             "output_mode": "0600",
             "overwrite": False,
+            "directory_fsync": directory_fsync,
+            "durability_confirmed": directory_fsync == "confirmed",
         }
+        if directory_fsync != "confirmed":
+            report["durability_warning"] = (
+                "Ciphertext was fsynced and atomically published, but destination-directory "
+                "fsync was not confirmed."
+            )
         if age_binary_digest is not None:
             report["age_binary_sha256"] = age_binary_digest
         return report
