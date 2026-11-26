@@ -272,3 +272,59 @@ def test_cli_forwards_identity_and_binary_digest(tmp_path, monkeypatch, capsys):
     assert captured["identity_path"] == Path("/secure/recovery/identity.txt")
     assert captured["expected_age_sha256"] == "b" * 64
     assert '"ok": true' in capsys.readouterr().out
+
+
+def test_rejects_symlinked_output_directory_component(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    real_directory = tmp_path / "real-output"
+    real_directory.mkdir()
+    alias = tmp_path / "output-alias"
+    alias.symlink_to(real_directory, target_is_directory=True)
+    output = alias / "restored.sqlite3"
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start through a symlinked output directory")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="cannot be opened safely"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert list(real_directory.iterdir()) == []
+
+
+def test_directory_swap_during_decryption_never_publishes_to_replacement(
+    tmp_path, monkeypatch
+):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output_directory = tmp_path / "output"
+    replacement_directory = tmp_path / "replacement"
+    moved_directory = tmp_path / "original-output"
+    output_directory.mkdir()
+    replacement_directory.mkdir()
+    output = output_directory / "restored.sqlite3"
+    original_popen = restorer.subprocess.Popen
+
+    def swap_directory_after_launch(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        output_directory.rename(moved_directory)
+        replacement_directory.rename(output_directory)
+        return process
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", swap_directory_after_launch)
+    with pytest.raises(restorer.BackupRestoreError, match="changed during restoration"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+        )
+
+    assert list(moved_directory.iterdir()) == []
+    assert list(output_directory.iterdir()) == []

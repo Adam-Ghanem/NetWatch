@@ -4,14 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import hmac
 import json
 import os
+import secrets
 import selectors
 import stat
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 from typing import Sequence
@@ -130,35 +131,131 @@ def _identity_descriptor_path(descriptor: int) -> str:
     raise BackupRestoreError("This host does not expose inherited file descriptors to child tools.")
 
 
-def _validate_output_directory(path: Path) -> None:
-    """Require a trusted directory chain for no-overwrite plaintext publication."""
-    directory = path
-    while True:
+def _validate_output_directory_state(directory_state: os.stat_result) -> None:
+    if not stat.S_ISDIR(directory_state.st_mode):
+        raise BackupRestoreError(
+            "Restored output directory path contains a non-directory component."
+        )
+    if directory_state.st_uid not in {0, os.geteuid()}:
+        raise BackupRestoreError(
+            "Restored output directory path has an untrusted owner."
+        )
+    writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+    sticky = directory_state.st_mode & stat.S_ISVTX
+    if writable and not sticky:
+        raise BackupRestoreError(
+            "Restored output directory path contains an untrusted writable directory."
+        )
+
+
+def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
+    """Open each trusted directory component without following symlinks."""
+    nofollow_flag = getattr(os, "O_NOFOLLOW", None)
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if (
+        nofollow_flag is None
+        or directory_flag is None
+        or os.open not in os.supports_dir_fd
+        or os.stat not in os.supports_dir_fd
+        or os.link not in os.supports_dir_fd
+        or os.unlink not in os.supports_dir_fd
+        or os.stat not in os.supports_follow_symlinks
+    ):
+        raise BackupRestoreError(
+            "This host cannot safely anchor restore output to a directory descriptor."
+        )
+
+    flags = os.O_RDONLY | directory_flag | nofollow_flag | getattr(os, "O_CLOEXEC", 0)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path.anchor, flags)
+        _validate_output_directory_state(os.fstat(descriptor))
+        for component in path.parts[1:]:
+            if component in {"", ".", ".."}:
+                raise BackupRestoreError("Restored output directory path is invalid.")
+            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+            _validate_output_directory_state(os.fstat(descriptor))
+        state = os.fstat(descriptor)
+        return descriptor, state
+    except BackupRestoreError:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        raise BackupRestoreError(
+            "Restored output directory path cannot be opened safely."
+        ) from exc
+
+
+def _ensure_output_directory_unchanged(
+    path: Path, descriptor: int, original: os.stat_result
+) -> None:
+    try:
+        current_descriptor, current = _open_output_directory(path)
+    except BackupRestoreError as exc:
+        raise BackupRestoreError(
+            "Restored output directory changed during restoration."
+        ) from exc
+    try:
+        opened = os.fstat(descriptor)
+        original_identity = (original.st_dev, original.st_ino)
+        if (
+            (opened.st_dev, opened.st_ino) != original_identity
+            or (current.st_dev, current.st_ino) != original_identity
+        ):
+            raise BackupRestoreError(
+                "Restored output directory changed during restoration."
+            )
+    finally:
+        os.close(current_descriptor)
+
+
+def _create_private_temporary(directory_descriptor: int) -> tuple[int, str]:
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    for _ in range(10):
+        name = f".netwatch-restore-{secrets.token_hex(16)}.tmp"
         try:
-            directory_state = directory.lstat()
+            descriptor = os.open(name, flags, 0o600, dir_fd=directory_descriptor)
+        except FileExistsError:
+            continue
         except OSError as exc:
             raise BackupRestoreError(
-                "Restored output directory path is unavailable."
+                "Cannot create a private temporary restore output."
             ) from exc
-        if not stat.S_ISDIR(directory_state.st_mode):
+        try:
+            os.fchmod(descriptor, 0o600)
+        except OSError as exc:
+            os.close(descriptor)
+            try:
+                os.unlink(name, dir_fd=directory_descriptor)
+            except OSError:
+                pass
             raise BackupRestoreError(
-                "Restored output directory path contains a non-directory component."
-            )
-        if directory_state.st_uid not in {0, os.geteuid()}:
-            raise BackupRestoreError(
-                "Restored output directory path has an untrusted owner."
-            )
-        writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
-        sticky = directory_state.st_mode & stat.S_ISVTX
-        if writable and not sticky:
-            raise BackupRestoreError(
-                "Restored output directory path contains an untrusted writable directory."
-            )
-        parent = directory.parent
-        if parent == directory:
-            break
-        directory = parent
+                "Cannot restrict temporary restore permissions."
+            ) from exc
+        return descriptor, name
+    raise BackupRestoreError("Cannot allocate a unique temporary restore output.")
 
+
+def _fsync_output_directory_descriptor(descriptor: int) -> str:
+    try:
+        os.fsync(descriptor)
+    except OSError as exc:
+        unsupported_errors = {errno.EINVAL, errno.ENOTSUP}
+        if hasattr(errno, "EOPNOTSUPP"):
+            unsupported_errors.add(errno.EOPNOTSUPP)
+        return "unsupported" if exc.errno in unsupported_errors else "failed"
+    return "confirmed"
 
 def restore_backup(
     encrypted_path: str | Path,
@@ -184,7 +281,9 @@ def restore_backup(
         raise BackupRestoreError("Encrypted input must be a non-empty regular file.") from exc
 
     identity_fd: int | None = None
-    temporary_path: Path | None = None
+    output_directory_fd: int | None = None
+    output_directory_state: os.stat_result | None = None
+    temporary_name: str | None = None
     try:
         identity, opened_identity_fd, identity_state = _open_identity(identity_path)
         identity_fd = opened_identity_fd
@@ -197,23 +296,30 @@ def restore_backup(
             ) from exc
 
         output_value = Path(output_path).expanduser()
-        if output_value.name in {"", ".", ".."}:
+        output_name = output_value.name
+        if output_name in {"", ".", ".."}:
             raise BackupRestoreError("Restored output path is invalid.")
+        output_parent = Path(os.path.abspath(output_value.parent))
         try:
-            output_parent = output_value.parent.resolve(strict=True)
-        except OSError as exc:
-            raise BackupRestoreError("Restored output directory must already exist.") from exc
-        if not output_parent.is_dir():
-            raise BackupRestoreError("Restored output directory must already exist.")
-        _validate_output_directory(output_parent)
-        target = output_parent / output_value.name
+            output_directory_fd, output_directory_state = _open_output_directory(
+                output_parent
+            )
+        except BackupRestoreError:
+            raise
+        target = output_parent / output_name
         try:
             resolved_source = source_path.resolve(strict=True)
         except OSError as exc:
             raise BackupRestoreError("Encrypted input changed before restoration.") from exc
         if target == resolved_source or target == identity:
             raise BackupRestoreError("Restored output must be a new file.")
-        if os.path.lexists(target):
+        try:
+            os.stat(output_name, dir_fd=output_directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            raise BackupRestoreError("Restored output path cannot be checked safely.") from exc
+        else:
             raise BackupRestoreError("Restored output already exists; refusing to overwrite.")
 
         try:
@@ -226,18 +332,7 @@ def restore_backup(
 
         identity_fd_reference = _identity_descriptor_path(opened_identity_fd)
 
-        try:
-            temporary_fd, temporary_name = tempfile.mkstemp(
-                prefix=".netwatch-restore-", suffix=".tmp", dir=output_parent
-            )
-        except OSError as exc:
-            raise BackupRestoreError("Cannot create a private temporary restore output.") from exc
-        temporary_path = Path(temporary_name)
-        try:
-            os.fchmod(temporary_fd, 0o600)
-        except OSError as exc:
-            os.close(temporary_fd)
-            raise BackupRestoreError("Cannot restrict temporary restore permissions.") from exc
+        temporary_fd, temporary_name = _create_private_temporary(output_directory_fd)
 
         command = [age_binary, "-d", "-i", identity_fd_reference]
         digest = hashlib.sha256()
@@ -246,6 +341,9 @@ def restore_backup(
 
         try:
             with os.fdopen(temporary_fd, "wb") as restored_stream:
+                _ensure_output_directory_unchanged(
+                    output_parent, output_directory_fd, output_directory_state
+                )
                 try:
                     process = subprocess.Popen(
                         command,
@@ -334,8 +432,16 @@ def restore_backup(
                 "Restored plaintext does not match the trusted SHA-256 digest."
             )
 
+        _ensure_output_directory_unchanged(
+            output_parent, output_directory_fd, output_directory_state
+        )
         try:
-            os.link(temporary_path, target)
+            os.link(
+                temporary_name,
+                output_name,
+                src_dir_fd=output_directory_fd,
+                dst_dir_fd=output_directory_fd,
+            )
         except FileExistsError as exc:
             raise BackupRestoreError(
                 "Restored output already exists; refusing to overwrite."
@@ -345,18 +451,28 @@ def restore_backup(
                 "Destination filesystem does not support safe no-overwrite publication."
             ) from exc
         try:
-            temporary_path.unlink()
+            _ensure_output_directory_unchanged(
+                output_parent, output_directory_fd, output_directory_state
+            )
+        except BackupRestoreError:
+            try:
+                os.unlink(output_name, dir_fd=output_directory_fd)
+            except OSError:
+                pass
+            raise
+        try:
+            os.unlink(temporary_name, dir_fd=output_directory_fd)
         except OSError as exc:
             try:
-                target.unlink()
+                os.unlink(output_name, dir_fd=output_directory_fd)
             except OSError:
                 pass
             raise BackupRestoreError(
                 "Could not safely finalize the restored plaintext file."
             ) from exc
-        temporary_path = None
+        temporary_name = None
 
-        directory_fsync = _fsync_output_directory(output_parent)
+        directory_fsync = _fsync_output_directory_descriptor(output_directory_fd)
         report: dict[str, object] = {
             "restored": True,
             "input_name": source_path.name,
@@ -380,11 +496,13 @@ def restore_backup(
         os.close(source_fd)
         if identity_fd is not None:
             os.close(identity_fd)
-        if temporary_path is not None:
+        if temporary_name is not None and output_directory_fd is not None:
             try:
-                temporary_path.unlink()
+                os.unlink(temporary_name, dir_fd=output_directory_fd)
             except OSError:
                 pass
+        if output_directory_fd is not None:
+            os.close(output_directory_fd)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
