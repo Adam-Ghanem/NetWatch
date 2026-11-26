@@ -352,6 +352,7 @@ def restore_backup(
     identity_path: str | Path,
     expected_sha256: str,
     expected_age_sha256: str | None = None,
+    max_plaintext_bytes: int | None = None,
 ) -> dict[str, object]:
     """Decrypt to a private temporary file and publish only after digest verification."""
     if os.name != "posix":
@@ -362,6 +363,11 @@ def restore_backup(
         raise BackupRestoreError(
             "Run this helper on Linux; native ACL inspection is required for safe restoration."
         )
+    if max_plaintext_bytes is not None and (
+        type(max_plaintext_bytes) is not int or max_plaintext_bytes <= 0
+    ):
+        raise BackupRestoreError("Maximum plaintext size must be a positive integer.")
+
     try:
         expected = _normalize_digest(expected_sha256)
     except BackupEncryptionError as exc:
@@ -437,7 +443,9 @@ def restore_backup(
         command = [age_binary, "-d", "-i", identity_fd_reference]
         digest = hashlib.sha256()
         restored_bytes = 0
-        max_plaintext_bytes = source_state.st_size
+        plaintext_limit = source_state.st_size
+        if max_plaintext_bytes is not None:
+            plaintext_limit = min(plaintext_limit, max_plaintext_bytes)
 
         try:
             with os.fdopen(temporary_fd, "wb") as restored_stream:
@@ -494,9 +502,9 @@ def restore_backup(
                                 break
                             last_progress = time.monotonic()
                             restored_bytes += len(chunk)
-                            if restored_bytes > max_plaintext_bytes:
+                            if restored_bytes > plaintext_limit:
                                 raise BackupRestoreError(
-                                    "age plaintext exceeded the encrypted input size limit."
+                                    "age plaintext exceeded the restore size limit."
                                 )
                             digest.update(chunk)
                             restored_stream.write(chunk)
@@ -632,6 +640,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--age-binary-sha256",
         help="Optional age executable digest from a separately trusted release record.",
     )
+    parser.add_argument(
+        "--max-plaintext-bytes",
+        type=int,
+        help="Optional positive upper bound for restored plaintext bytes.",
+    )
     args = parser.parse_args(argv)
     try:
         report = restore_backup(
@@ -640,6 +653,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             identity_path=args.identity,
             expected_sha256=args.expected_sha256,
             expected_age_sha256=args.age_binary_sha256,
+            max_plaintext_bytes=args.max_plaintext_bytes,
         )
     except BackupRestoreError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2))

@@ -396,12 +396,15 @@ def test_cli_forwards_identity_and_binary_digest(tmp_path, monkeypatch, capsys):
             "a" * 64,
             "--age-binary-sha256",
             "b" * 64,
+            "--max-plaintext-bytes",
+            "1048576",
         ]
     )
 
     assert result == 0
     assert captured["identity_path"] == Path("/secure/recovery/identity.txt")
     assert captured["expected_age_sha256"] == "b" * 64
+    assert captured["max_plaintext_bytes"] == 1048576
     assert '"ok": true' in capsys.readouterr().out
 
 
@@ -651,5 +654,46 @@ def test_restore_refuses_platform_without_native_acl_inspection(
         )
 
     assert not process_started
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-restore-*")) == []
+
+
+def test_rejects_plaintext_above_operator_restore_limit(tmp_path, monkeypatch):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output = tmp_path / "restored.sqlite3"
+
+    with pytest.raises(restorer.BackupRestoreError, match="restore size limit"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+            max_plaintext_bytes=len(plaintext) - 1,
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-restore-*")) == []
+
+
+@pytest.mark.parametrize("limit", [0, -1, True])
+def test_rejects_invalid_operator_restore_size_limit(tmp_path, monkeypatch, limit):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output = tmp_path / "restored.sqlite3"
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start with an invalid restore size limit")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="positive integer"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+            max_plaintext_bytes=limit,
+        )
+
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-restore-*")) == []
