@@ -83,3 +83,13 @@ access-controlled. This verifier does **not** encrypt backups, upload/rotate
 them off-host, provide RTO/RPO guarantees, or establish multi-tenant/multi-
 replica readiness. Use approved encrypted backup storage and exercise a real
 recovery procedure before making production resilience claims.
+
+## Real-byte mutation regression
+
+The regression suite mutates the source snapshot's actual bytes after the
+private verification copy has been created, restores the original file size
+and modification time, and confirms the final source digest check fails
+closed. A separate path-swap test confirms SQLite opens only the private
+copy. These tests cover the specific replacement scenarios described; they
+are not a filesystem-level immutable snapshot or a substitute for keeping
+the source stopped and access-controlled.

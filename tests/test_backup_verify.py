@@ -188,3 +188,40 @@ def test_backup_verification_uses_hashed_private_snapshot_during_path_swap(
     assert report["sha256"] == original_hash
     assert path.read_bytes() == original_bytes
     assert replacement.read_bytes() == replacement_bytes
+
+
+def test_backup_verification_detects_real_byte_mutation_with_restored_metadata(
+    tmp_path, monkeypatch
+):
+    """The second digest must read bytes, not trust unchanged stat metadata."""
+    import os
+
+    from scripts import verify_sqlite_backup
+
+    path = tmp_path / "backup.sqlite3"
+    _backup(path)
+    original = path.read_bytes()
+    before = path.stat()
+    original_hash = hashlib.sha256(original).hexdigest()
+    real_hash = verify_sqlite_backup._file_sha256
+    calls = 0
+
+    def mutate_before_final_hash(snapshot):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            changed = bytearray(original)
+            changed[-1] ^= 1
+            path.write_bytes(changed)
+            os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+            assert (path.stat().st_size, path.stat().st_mtime_ns) == (
+                before.st_size,
+                before.st_mtime_ns,
+            )
+        return real_hash(snapshot)
+
+    monkeypatch.setattr(verify_sqlite_backup, "_file_sha256", mutate_before_final_hash)
+    with pytest.raises(ValueError, match="content changed during verification"):
+        verify(path, expected_sha256=original_hash)
+    assert calls == 2
+    assert path.read_bytes() != original
