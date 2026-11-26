@@ -349,7 +349,7 @@ def test_rejects_age_output_above_bounded_ciphertext_envelope(tmp_path, monkeypa
     assert list(tmp_path.glob(".netwatch-age-*")) == []
 
 
-
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires POSIX process groups")
 def test_timeout_kills_age_descendants_that_keep_stdout_open(tmp_path, monkeypatch):
     binary_dir = tmp_path / "bin"
     binary_dir.mkdir()
@@ -365,7 +365,7 @@ import time
 sys.stdin.buffer.read()
 child_pid = os.fork()
 if child_pid == 0:
-    time.sleep(0.3)
+    time.sleep(1.0)
     with open({str(survivor_marker)!r}, "w", encoding="utf-8") as stream:
         stream.write("survived")
     os._exit(0)
@@ -376,7 +376,7 @@ with open({str(child_pid_file)!r}, "w", encoding="utf-8") as stream:
     )
     executable.chmod(0o755)
     monkeypatch.setenv("PATH", str(binary_dir) + os.pathsep + os.environ.get("PATH", ""))
-    monkeypatch.setattr(encryptor, "_AGE_EXIT_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(encryptor, "_AGE_EXIT_TIMEOUT_SECONDS", 0.5)
 
     source = tmp_path / "backup.sqlite3"
     source.write_bytes(b"small backup")
@@ -392,8 +392,11 @@ with open({str(child_pid_file)!r}, "w", encoding="utf-8") as stream:
             expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         )
 
+    deadline = time.monotonic() + 1.0
+    while not child_pid_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert child_pid_file.exists()
-    time.sleep(0.4)
+    time.sleep(1.1)
     assert not survivor_marker.exists()
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-age-*")) == []
