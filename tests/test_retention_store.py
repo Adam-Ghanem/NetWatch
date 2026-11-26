@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -269,3 +270,104 @@ def test_retention_cleanup_invalidates_readiness_only_after_commit(monkeypatch, 
 
     assert invalidation_observations == [(0, "retention_cleanup", 1)]
 
+
+
+
+class _TrackedConnection(sqlite3.Connection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.closed_for_test = False
+
+    def close(self):
+        self.closed_for_test = True
+        super().close()
+
+
+def _track_retention_connections(monkeypatch):
+    connections: list[_TrackedConnection] = []
+
+    def connect():
+        connection = sqlite3.connect(
+            inventory_store.DB_FILE,
+            timeout=5.0,
+            factory=_TrackedConnection,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 5000")
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", connect)
+    monkeypatch.setattr(inventory_store, "init_db", lambda: None)
+    return connections
+
+
+def _assert_retention_connections_closed(connections: list[_TrackedConnection]) -> None:
+    assert connections
+    for connection in connections:
+        assert connection.closed_for_test is True
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
+
+
+def test_retention_status_closes_read_connection(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    inventory_store.init_db()
+    connections = _track_retention_connections(monkeypatch)
+
+    result = retention_store.retention_status()
+
+    assert result["tables"]
+    assert len(connections) == 1
+    _assert_retention_connections_closed(connections)
+
+
+def test_retention_cleanup_closes_connection_after_commit(monkeypatch, tmp_path):
+    _insert_old_asset_event(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-retention-audit-key-with-enough-characters",
+    )
+    connections = _track_retention_connections(monkeypatch)
+
+    result = retention_store.cleanup_retention(
+        older_than_days=90,
+        dry_run=False,
+        max_rows=100,
+        audit_context={"actor_role": "admin"},
+    )
+
+    assert result["deleted"]["asset_events"] == 1
+    assert len(connections) == 1
+    _assert_retention_connections_closed(connections)
+
+
+def test_retention_cleanup_closes_connection_and_rolls_back_on_audit_failure(
+    monkeypatch, tmp_path
+):
+    _insert_old_asset_event(monkeypatch, tmp_path)
+    connections = _track_retention_connections(monkeypatch)
+
+    def fail_audit_append(conn, *args, **kwargs):
+        raise RuntimeError("synthetic audit append failure")
+
+    monkeypatch.setattr(
+        inventory_store,
+        "record_audit_event_in_transaction",
+        fail_audit_append,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic audit append failure"):
+        retention_store.cleanup_retention(
+            older_than_days=90,
+            dry_run=False,
+            max_rows=100,
+            audit_context={"actor_role": "admin"},
+        )
+
+    assert len(connections) == 1
+    _assert_retention_connections_closed(connections)
+    with sqlite3.connect(inventory_store.DB_FILE) as conn:
+        remaining = conn.execute("SELECT COUNT(*) FROM asset_events").fetchone()[0]
+    assert remaining == 1
