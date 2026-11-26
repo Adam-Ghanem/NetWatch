@@ -45,8 +45,8 @@ def _descriptor_has_no_extended_acl(
 ) -> bool:
     """Reject Linux POSIX ACLs on recovery identities and restore directories."""
     if not sys.platform.startswith("linux"):
-        # Other POSIX ACL implementations require platform-specific inspection.
-        return True
+        # An unimplemented native ACL API cannot prove that the object is private.
+        return False
 
     getxattr = getattr(os, "getxattr", None)
     if getxattr is None:
@@ -357,6 +357,10 @@ def restore_backup(
     if os.name != "posix":
         raise BackupRestoreError(
             "Run this helper on a POSIX host with restrictive file permissions."
+        )
+    if not sys.platform.startswith("linux"):
+        raise BackupRestoreError(
+            "Run this helper on Linux; native ACL inspection is required for safe restoration."
         )
     try:
         expected = _normalize_digest(expected_sha256)

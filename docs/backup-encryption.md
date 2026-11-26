@@ -106,6 +106,11 @@ python scripts/restore_backup_age.py \
   backup.sqlite3.age /secure/staging/backup.sqlite3
 ```
 
+The restore helper currently runs on Linux only. Native ACL inspection is part of
+its trust boundary; other POSIX platforms are rejected before the encrypted input
+is opened or the `age` process is started. Do not bypass this guard. Add and test
+a native ACL inspection implementation before enabling restoration elsewhere.
+
 The restore helper:
 - accepts only a regular, non-symlink identity file owned by root or the current
   user, readable by its owner only; opens every canonical ancestor directory
@@ -163,11 +168,11 @@ optional for backward compatibility; when enabled, its expected digest must
 come from an independently trusted release record. The pin is not a signature
 verifier or a kernel-enforced immutable executable handle, so protected
 ownership/permissions and a trusted host remain required. The restore helper
-checks POSIX mode bits and, on Linux, rejects extended access ACLs on the
-identity descriptor plus access/default ACLs on every opened destination
-directory. It does not implement non-Linux ACL APIs; administrators must verify
-platform-specific ACL policies separately. Directory-
-descriptor anchoring prevents a pathname swap from redirecting publication,
+checks POSIX mode bits and rejects extended access ACLs on the identity
+descriptor plus access/default ACLs on every opened destination directory. It
+refuses to run outside Linux until native ACL inspection for that platform is
+implemented and tested; there is no manual override. Directory-descriptor
+anchoring prevents a pathname swap from redirecting publication,
 but it does not defend against
 root or hostile same-UID processes, malicious mount changes, or filesystem
 implementations with weaker-than-expected descriptor semantics.
