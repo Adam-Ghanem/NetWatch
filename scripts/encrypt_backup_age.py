@@ -22,6 +22,8 @@ _CHUNK_BYTES = 1024 * 1024
 _MAX_RECIPIENTS = 8
 _AGE_INPUT_STALL_TIMEOUT_SECONDS = 30.0
 _AGE_EXIT_TIMEOUT_SECONDS = 30.0
+_AGE_OUTPUT_OVERHEAD_BYTES = 1024 * 1024
+_AGE_OUTPUT_OVERHEAD_RATIO_DIVISOR = 16
 _AGE_RECIPIENT = re.compile(r"^age1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]{58}$")
 
 
@@ -121,11 +123,12 @@ def _child_environment() -> dict[str, str]:
 
 
 def _terminate(process: subprocess.Popen[bytes]) -> None:
-    if process.stdin is not None and not process.stdin.closed:
-        try:
-            process.stdin.close()
-        except OSError:
-            pass
+    for stream in (process.stdin, process.stdout):
+        if stream is not None and not stream.closed:
+            try:
+                stream.close()
+            except OSError:
+                pass
     if process.poll() is None:
         try:
             process.kill()
@@ -194,13 +197,17 @@ def encrypt_backup(
 
         digest = hashlib.sha256()
         copied = 0
+        max_ciphertext_bytes = original_state.st_size + max(
+            _AGE_OUTPUT_OVERHEAD_BYTES,
+            original_state.st_size // _AGE_OUTPUT_OVERHEAD_RATIO_DIVISOR,
+        )
         try:
             with os.fdopen(temporary_fd, "wb") as encrypted_stream:
                 try:
                     process = subprocess.Popen(
                         command,
                         stdin=subprocess.PIPE,
-                        stdout=encrypted_stream,
+                        stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,
                         env=_child_environment(),
                         close_fds=True,
@@ -209,15 +216,41 @@ def encrypt_backup(
                     raise BackupEncryptionError("The age executable could not be started.") from exc
 
                 process_stdin = process.stdin
-                if process_stdin is None:
+                process_stdout = process.stdout
+                if process_stdin is None or process_stdout is None:
                     _terminate(process)
-                    raise BackupEncryptionError("The age process did not accept input.")
+                    raise BackupEncryptionError("The age process pipes could not be created.")
 
                 try:
                     process_stdin_fd = process_stdin.fileno()
+                    process_stdout_fd = process_stdout.fileno()
                     os.set_blocking(process_stdin_fd, False)
+                    os.set_blocking(process_stdout_fd, False)
+                    ciphertext_bytes = 0
+                    stdout_open = True
+
                     with selectors.DefaultSelector() as writer:
-                        writer.register(process_stdin_fd, selectors.EVENT_WRITE)
+                        writer.register(process_stdin_fd, selectors.EVENT_WRITE, "stdin")
+                        writer.register(process_stdout_fd, selectors.EVENT_READ, "stdout")
+
+                        def read_ciphertext() -> None:
+                            nonlocal ciphertext_bytes, stdout_open
+                            try:
+                                output_chunk = os.read(process_stdout_fd, _CHUNK_BYTES)
+                            except BlockingIOError:
+                                return
+                            if not output_chunk:
+                                writer.unregister(process_stdout_fd)
+                                process_stdout.close()
+                                stdout_open = False
+                                return
+                            ciphertext_bytes += len(output_chunk)
+                            if ciphertext_bytes > max_ciphertext_bytes:
+                                raise BackupEncryptionError(
+                                    "age output exceeded the safe ciphertext size limit."
+                                )
+                            encrypted_stream.write(output_chunk)
+
                         with os.fdopen(os.dup(source_fd), "rb") as source_stream:
                             for chunk in iter(lambda: source_stream.read(_CHUNK_BYTES), b""):
                                 digest.update(chunk)
@@ -228,31 +261,61 @@ def encrypt_backup(
                                     remaining = _AGE_INPUT_STALL_TIMEOUT_SECONDS - (
                                         time.monotonic() - last_progress
                                     )
-                                    if remaining <= 0 or not writer.select(remaining):
+                                    if remaining <= 0:
                                         raise BackupEncryptionError(
                                             "age stopped accepting input; encryption timed out."
                                         )
-                                    try:
-                                        written = os.write(process_stdin_fd, pending)
-                                    except BlockingIOError:
-                                        continue
-                                    except BrokenPipeError as exc:
-                                        raise BackupEncryptionError(
-                                            "age exited before consuming the complete backup."
-                                        ) from exc
-                                    if written <= 0:
+                                    events = writer.select(remaining)
+                                    if not events:
                                         raise BackupEncryptionError(
                                             "age stopped accepting input; encryption timed out."
                                         )
-                                    pending = pending[written:]
-                                    last_progress = time.monotonic()
-                    process_stdin.close()
-                    try:
-                        return_code = process.wait(timeout=_AGE_EXIT_TIMEOUT_SECONDS)
-                    except subprocess.TimeoutExpired as exc:
-                        raise BackupEncryptionError(
-                            "age did not finish after input closed; encryption timed out."
-                        ) from exc
+                                    for key, _ in events:
+                                        if key.data == "stdout":
+                                            read_ciphertext()
+                                            continue
+                                        try:
+                                            written = os.write(process_stdin_fd, pending)
+                                        except BlockingIOError:
+                                            continue
+                                        except InterruptedError:
+                                            continue
+                                        except BrokenPipeError as exc:
+                                            raise BackupEncryptionError(
+                                                "age exited before consuming the complete backup."
+                                            ) from exc
+                                        if written <= 0:
+                                            raise BackupEncryptionError(
+                                                "age stopped accepting input; encryption timed out."
+                                            )
+                                        pending = pending[written:]
+                                        last_progress = time.monotonic()
+
+                        writer.unregister(process_stdin_fd)
+                        process_stdin.close()
+                        exit_deadline = time.monotonic() + _AGE_EXIT_TIMEOUT_SECONDS
+                        while stdout_open:
+                            remaining = exit_deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise BackupEncryptionError(
+                                    "age did not finish after input closed; encryption timed out."
+                                )
+                            events = writer.select(remaining)
+                            if not events:
+                                raise BackupEncryptionError(
+                                    "age did not finish after input closed; encryption timed out."
+                                )
+                            for key, _ in events:
+                                if key.data == "stdout":
+                                    read_ciphertext()
+                        try:
+                            return_code = process.wait(
+                                timeout=max(0.0, exit_deadline - time.monotonic())
+                            )
+                        except subprocess.TimeoutExpired as exc:
+                            raise BackupEncryptionError(
+                                "age did not finish after input closed; encryption timed out."
+                            ) from exc
                 except BaseException:
                     _terminate(process)
                     raise
