@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -45,7 +46,7 @@ def _table_summary(
 def retention_status(*, now: datetime | None = None) -> dict[str, Any]:
     _, connect = _database_modules()
     current = now or _utc_now()
-    with connect() as conn:
+    with closing(connect()) as conn:
         tables = [
             _table_summary(
                 conn,
@@ -179,7 +180,7 @@ def cleanup_retention(
         "deleted": {},
         "total": 0,
     }
-    with connect() as conn:
+    with closing(connect()) as conn, conn:
         for table, (query, parameters) in candidates.items():
             count = int(
                 conn.execute(
