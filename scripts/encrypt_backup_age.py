@@ -123,6 +123,50 @@ def _child_environment() -> dict[str, str]:
     return environment
 
 
+def _resolve_age_binary() -> str:
+    candidate = shutil.which("age")
+    if candidate is None:
+        raise BackupEncryptionError("The age executable is not installed or not on PATH.")
+
+    try:
+        resolved = Path(candidate).resolve(strict=True)
+        executable_state = resolved.lstat()
+    except OSError as exc:
+        raise BackupEncryptionError("The age executable cannot be resolved safely.") from exc
+
+    if not stat.S_ISREG(executable_state.st_mode) or not os.access(resolved, os.X_OK):
+        raise BackupEncryptionError("The age executable must be a regular executable file.")
+    if executable_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise BackupEncryptionError("The age executable must not be group- or world-writable.")
+
+    effective_uid = os.geteuid()
+    if executable_state.st_uid not in {0, effective_uid}:
+        raise BackupEncryptionError("The age executable must be owned by root or the current user.")
+
+    directory = resolved.parent
+    while True:
+        try:
+            directory_state = directory.lstat()
+        except OSError as exc:
+            raise BackupEncryptionError("The age executable path cannot be verified safely.") from exc
+        if not stat.S_ISDIR(directory_state.st_mode):
+            raise BackupEncryptionError("The age executable path contains a non-directory component.")
+        if directory_state.st_uid not in {0, effective_uid}:
+            raise BackupEncryptionError("The age executable path has an untrusted directory owner.")
+        writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        sticky = directory_state.st_mode & stat.S_ISVTX
+        if writable and not sticky:
+            raise BackupEncryptionError(
+                "The age executable path contains a group- or world-writable directory."
+            )
+        parent = directory.parent
+        if parent == directory:
+            break
+        directory = parent
+
+    return str(resolved)
+
+
 def _terminate(process: subprocess.Popen[bytes]) -> None:
     for stream in (process.stdin, process.stdout):
         if stream is not None and not stream.closed:
@@ -182,9 +226,7 @@ def encrypt_backup(
         if os.path.lexists(target):
             raise BackupEncryptionError("Encrypted output already exists; refusing to overwrite.")
 
-        age_binary = shutil.which("age")
-        if age_binary is None:
-            raise BackupEncryptionError("The age executable is not installed or not on PATH.")
+        age_binary = _resolve_age_binary()
 
         try:
             temporary_fd, temporary_name = tempfile.mkstemp(
