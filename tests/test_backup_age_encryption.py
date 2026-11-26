@@ -79,6 +79,7 @@ def test_reports_unconfirmed_directory_fsync_without_claiming_durability(
     assert output.stat().st_size > 0
     assert list(tmp_path.glob(".netwatch-age-*")) == []
 
+
 def test_encrypts_digest_pinned_input_for_multiple_recipients(tmp_path, monkeypatch):
     recipients = [_recipient("q"), _recipient("p")]
     _fake_age(tmp_path, monkeypatch, recipients=recipients)
