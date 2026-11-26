@@ -15,7 +15,10 @@ from scripts.encrypt_backup_age import encrypt_backup
 from scripts.restore_backup_age import restore_backup
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the restore helper currently requires Linux ACL checks")
+@pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="the restore helper currently requires Linux ACL checks",
+)
 def test_real_age_cli_encrypts_and_restores_a_sqlite_snapshot(tmp_path):
     age_binary = shutil.which("age")
     age_keygen = shutil.which("age-keygen")
