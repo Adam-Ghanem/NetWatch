@@ -143,7 +143,10 @@ def test_outbox_failure_does_not_persist_exception_message():
         payload={"severity": "High"},
     )
     conn.commit()
-    sensitive_message = "https://hooks.example.test/private-token target=10.23.4.5 host=private.example"
+    sensitive_message = (
+        "https://hooks.example.test/private-token "
+        "target=10.23.4.5 host=private.example"
+    )
 
     def fail_publish(_event):
         raise TimeoutError(sensitive_message)
