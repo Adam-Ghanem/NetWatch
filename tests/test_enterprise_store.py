@@ -12,6 +12,7 @@ from enterprise_store import (
     enterprise_queue_status,
     fail_job,
     mark_outbox_delivered,
+    mark_outbox_failed,
 )
 
 
@@ -116,3 +117,37 @@ def test_completed_jobs_are_not_claimed_again():
     assert complete_job(conn, job_id=job_id, worker_id="worker-a") is True
     assert claim_jobs(conn, worker_id="worker-b") == []
     assert enterprise_queue_status(conn)["jobs_succeeded"] == 1
+
+
+
+def test_failure_persistence_accepts_only_allowlisted_error_codes():
+    conn = _connection()
+    event_id = enqueue_outbox_event(
+        conn,
+        topic="alerts",
+        event_type="created",
+        aggregate_id="alert-private",
+        dedupe_key="event-private",
+        payload={"severity": "High"},
+    )
+    assert claim_outbox_events(conn, consumer_id="consumer-a")
+    assert mark_outbox_failed(
+        conn,
+        event_id=event_id,
+        consumer_id="consumer-a",
+        error="Authorization: Bearer synthetic-token 10.23.4.5 private.example",
+    )
+
+    job_id = enqueue_job(conn, job_type="approved", dedupe_key="job-timeout", payload={})
+    assert claim_jobs(conn, worker_id="worker-a")
+    assert fail_job(conn, job_id=job_id, worker_id="worker-a", error="timeout")
+    conn.commit()
+
+    event_error = conn.execute(
+        "SELECT last_error FROM enterprise_outbox WHERE id = ?", (event_id,)
+    ).fetchone()["last_error"]
+    job_error = conn.execute(
+        "SELECT last_error FROM enterprise_jobs WHERE id = ?", (job_id,)
+    ).fetchone()["last_error"]
+    assert event_error == "worker_error"
+    assert job_error == "timeout"

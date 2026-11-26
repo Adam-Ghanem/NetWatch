@@ -116,3 +116,19 @@ True multi-replica HA requires a future architecture with a transactional shared
  Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
 
 `enterprise_worker.py` provides the next bounded execution seam: workers claim jobs or outbox events, dispatch only to an explicit handler/publisher allowlist, persist success/failure, and preserve retry/dead-letter semantics. `run_poll_loop` clamps the polling interval and cycle count. The module is safe to run as a separate process, but shared-service approval still requires external coordination, PostgreSQL/Redis integration, failure injection, and staging evidence.
+
+
+## Worker failure privacy
+
+Enterprise job and outbox failure records store only a small allowlist of
+coarse error codes (timeout, connection_error, permission_error,
+resource_missing, invalid_input, runtime_error, io_error, or worker_error).
+The worker never stringifies exception messages, and the SQLite persistence
+functions enforce the allowlist again so future callers cannot accidentally
+store arbitrary error text.
+
+This is intentional: exception messages can contain API tokens, webhook URLs,
+private IP addresses, hostnames, filesystem paths, or fragments of event
+payloads. Use approved, access-controlled operational logging and correlation
+IDs for deeper diagnostics; do not add raw exception text to queue rows,
+status APIs, exports, or support bundles.

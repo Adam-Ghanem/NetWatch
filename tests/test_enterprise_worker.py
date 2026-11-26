@@ -52,7 +52,7 @@ def test_process_jobs_once_records_unknown_handler_failure_and_retries():
     assert result.dead_lettered == 0
     assert row["status"] == "pending"
     assert row["attempts"] == 1
-    assert "approved handler" in row["last_error"]
+    assert row["last_error"] == "runtime_error"
 
 
 def test_process_jobs_once_marks_last_failure_dead_letter():
@@ -107,3 +107,57 @@ def test_run_poll_loop_is_bounded():
 
     assert calls == 2
     assert result == [None, None]
+
+
+
+def test_job_failure_does_not_persist_exception_message():
+    conn = _connection()
+    enqueue_job(conn, job_type="approved", dedupe_key="job-private", payload={})
+    conn.commit()
+    sensitive_message = (
+        "Authorization: Bearer synthetic-token-123 "
+        "target=10.23.4.5 host=private.example path=/srv/netwatch/private.db"
+    )
+
+    def fail_with_sensitive_message(_payload):
+        raise RuntimeError(sensitive_message)
+
+    result = process_jobs_once(
+        conn,
+        worker_id="worker-a",
+        handlers={"approved": fail_with_sensitive_message},
+    )
+    row = conn.execute("SELECT last_error FROM enterprise_jobs").fetchone()
+    assert result.failed == 1
+    assert row["last_error"] == "runtime_error"
+    assert sensitive_message not in row["last_error"]
+
+
+def test_outbox_failure_does_not_persist_exception_message():
+    conn = _connection()
+    enqueue_outbox_event(
+        conn,
+        topic="alerts",
+        event_type="created",
+        aggregate_id="alert-private",
+        dedupe_key="event-private",
+        payload={"severity": "High"},
+    )
+    conn.commit()
+    sensitive_message = (
+        "https://hooks.example.test/private-token "
+        "target=10.23.4.5 host=private.example"
+    )
+
+    def fail_publish(_event):
+        raise TimeoutError(sensitive_message)
+
+    result = publish_outbox_once(
+        conn,
+        consumer_id="consumer-a",
+        publisher=fail_publish,
+    )
+    row = conn.execute("SELECT last_error FROM enterprise_outbox").fetchone()
+    assert result.failed == 1
+    assert row["last_error"] == "timeout"
+    assert sensitive_message not in row["last_error"]
