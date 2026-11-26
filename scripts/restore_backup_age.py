@@ -252,7 +252,9 @@ def restore_backup(
                                 )
                             events = reader.select(remaining)
                             if not events:
-                                raise BackupRestoreError("age stopped producing plaintext; restore timed out.")
+                                raise BackupRestoreError(
+                                    "age stopped producing plaintext; restore timed out."
+                                )
                             try:
                                 chunk = os.read(stdout_fd, _CHUNK_BYTES)
                             except BlockingIOError:
