@@ -230,7 +230,12 @@ def test_rejects_age_executable_in_untrusted_writable_directory(tmp_path, monkey
     binary_dir.mkdir()
     executable = binary_dir / "age"
     executable.write_text(
-        f"#!{sys.executable}\\nimport sys\\nsys.stdout.buffer.write(b'ciphertext')\\nsys.stdin.buffer.read()\\n",
+        f"""#!{sys.executable}
+import sys
+
+sys.stdin.buffer.read()
+sys.stdout.buffer.write(b"ciphertext")
+""",
         encoding="utf-8",
     )
     executable.chmod(0o755)
