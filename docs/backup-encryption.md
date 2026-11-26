@@ -70,17 +70,21 @@ command. The helper:
   size plus the larger of 1 MiB or 6.25% of the input size; an over-producing
   child is killed and its partial ciphertext is removed;
 - writes ciphertext to a mode-`0600` temporary file in the destination
-  directory, fsyncs it, and publishes it atomically without overwriting an
-  existing destination.
+  directory, fsyncs the file, and publishes it atomically without overwriting
+  an existing destination; it then attempts to fsync the destination directory.
+  The JSON report records `directory_fsync` as `confirmed`, `unsupported`, or
+  `failed`, plus `durability_confirmed`. If directory fsync is not confirmed,
+  the ciphertext is still valid and published, but crash durability of the
+  directory entry is not guaranteed; do not record the backup as crash-durable.
 
 A nonzero exit means no final output was published. Run the helper on a POSIX
 host. The destination filesystem must support same-directory hard links for
 atomic no-overwrite publication. Windows ACL semantics are not implemented
 by this helper.
 The JSON success report contains only input/output basenames, byte count,
-backup SHA-256, recipient count, and output mode; when a binary pin is supplied,
-it also reports the verified age executable SHA-256. It never prints recipient
-values or private material.
+backup SHA-256, recipient count, output mode, and directory-durability status;
+when a binary pin is supplied, it also reports the verified age executable
+SHA-256. It never prints recipient values or private material.
 
 ## Transfer and restore
 

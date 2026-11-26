@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import stat
@@ -39,6 +40,44 @@ sys.stdout.buffer.write(b"AGE-TEST" + bytes([0]) + hashlib.sha256(payload).diges
     )
     executable.chmod(0o755)
     monkeypatch.setenv("PATH", str(binary_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+
+
+@pytest.mark.parametrize(
+    ("error_number", "expected_status"),
+    [(errno.EINVAL, "unsupported"), (errno.EIO, "failed")],
+)
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX directory descriptors")
+def test_reports_unconfirmed_directory_fsync_without_claiming_durability(
+    tmp_path, monkeypatch, error_number, expected_status
+):
+    recipients = [_recipient()]
+    _fake_age(tmp_path, monkeypatch, recipients=recipients)
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"synthetic verified SQLite snapshot")
+    output = tmp_path / "backup.sqlite3.age"
+    real_fsync = encryptor.os.fsync
+
+    def fail_directory_fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise OSError(error_number, "simulated directory fsync failure")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(encryptor.os, "fsync", fail_directory_fsync)
+    report = encryptor.encrypt_backup(
+        source,
+        output,
+        recipients=recipients,
+        expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+    )
+
+    assert report["encrypted"] is True
+    assert report["directory_fsync"] == expected_status
+    assert report["durability_confirmed"] is False
+    assert "durability_warning" in report
+    assert output.is_file()
+    assert output.stat().st_size > 0
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
 
 
 def test_encrypts_digest_pinned_input_for_multiple_recipients(tmp_path, monkeypatch):
