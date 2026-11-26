@@ -705,3 +705,120 @@ def test_service_findings_without_scan_id_are_not_persisted(monkeypatch, tmp_pat
         exposure_level="Low",
     )
     assert inventory_store.recent_service_findings() == []
+
+
+def _assert_inventory_connections_closed(connections: list[sqlite3.Connection]) -> None:
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
+
+
+def test_inventory_store_closes_handles_across_reads_and_writes(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "independent-audit-integrity-key-with-at-least-32-characters",
+    )
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+
+    inventory_store.init_db()
+    assert inventory_store.database_is_ready()
+    key = inventory_store._audit_hmac_key()
+    assert key is not None
+    assert inventory_store._check_audit_integrity(key)
+
+    scan_run_id = inventory_store.add_scan_run(
+        "host_profile", "192.168.1.2", "Host profile completed"
+    )
+    inventory_store.upsert_hosts(
+        [{"IP Address": "192.168.1.2", "Status": "Online", "Details": "reply"}],
+        scan_run_id=scan_run_id,
+    )
+    inventory_store.record_network_scan(
+        "192.168.1.0/29",
+        [{"IP Address": "192.168.1.2", "Status": "Online", "Details": "reply"}],
+    )
+    inventory_store.update_asset_ports(
+        "192.168.1.2",
+        [{"Port": 443, "Protocol": "TCP", "Service": "HTTPS", "Status": "Open"}],
+        exposure_score=1,
+        exposure_level="Low",
+        scan_run_id=scan_run_id,
+    )
+    inventory_store.update_asset_context(
+        "192.168.1.2",
+        owner="Synthetic owner",
+        department="Testing",
+        location="Isolated fixture",
+        criticality="Medium",
+        notes="Connection lifecycle regression fixture.",
+        actor_role="admin",
+    )
+    inventory_store.record_audit_event(
+        "admin",
+        "inventory_test",
+        "192.168.1.2",
+        "completed",
+        "Synthetic connection lifecycle fixture.",
+    )
+
+    assert inventory_store._check_audit_integrity(key)
+    assert inventory_store.audit_integrity_is_ready(use_cache=False)
+    assert inventory_store.verify_audit_integrity()["valid"] is True
+    inventory_store.recent_service_findings(scan_run_id=scan_run_id)
+    inventory_store.recent_scan_runs()
+    inventory_store.recent_asset_events()
+    inventory_store.asset_timeline("192.168.1.2")
+    inventory_store.recent_network_observations()
+    inventory_store.recent_audit_log(include_identity=True)
+    inventory_store.asset_port_findings()
+    inventory_store.asset_inventory()
+
+    assert len(opened) >= 30
+    _assert_inventory_connections_closed(opened)
+
+
+def test_inventory_store_rolls_back_and_closes_after_write_failure(monkeypatch, tmp_path):
+    _use_temporary_database(monkeypatch, tmp_path)
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+    original_insert = inventory_store._insert_scan_run
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    def insert_then_fail(conn, *args, **kwargs) -> int:
+        original_insert(conn, *args, **kwargs)
+        raise RuntimeError("synthetic inventory write failure")
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+    monkeypatch.setattr(inventory_store, "_insert_scan_run", insert_then_fail)
+
+    with pytest.raises(RuntimeError, match="synthetic inventory write failure"):
+        inventory_store.add_scan_run(
+            "test", "synthetic-rollback-target", "This row must roll back"
+        )
+
+    assert len(opened) == 2
+    _assert_inventory_connections_closed(opened)
+
+    check = sqlite3.connect(inventory_store.DB_FILE)
+    try:
+        row = check.execute(
+            "SELECT COUNT(*) FROM scan_runs WHERE target = ?",
+            ("synthetic-rollback-target",),
+        ).fetchone()
+    finally:
+        check.close()
+    assert row[0] == 0
