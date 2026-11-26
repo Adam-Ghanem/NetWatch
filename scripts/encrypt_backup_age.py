@@ -241,6 +241,7 @@ def encrypt_backup(
                                 return
                             if not output_chunk:
                                 writer.unregister(process_stdout_fd)
+                                assert process_stdout is not None
                                 process_stdout.close()
                                 stdout_open = False
                                 return
