@@ -8,6 +8,8 @@ import os
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -99,6 +101,18 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def _managed_connection() -> Iterator[sqlite3.Connection]:
+    """Commit or roll back a store operation, then always close its SQLite handle."""
+    connection = _connect()
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
+
+
 def database_is_ready() -> bool:
     """Run a bounded local database readiness check without exposing internals."""
     try:
@@ -112,7 +126,7 @@ def database_is_ready() -> bool:
 
 
 def init_db() -> None:
-    with _connect() as conn:
+    with _managed_connection() as conn:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scan_runs (

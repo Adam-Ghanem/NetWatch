@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+
+import pytest
 
 import intelligence_store
 import inventory_store
@@ -136,3 +139,94 @@ def test_daily_budget_uses_a_new_counter_for_the_next_utc_day(monkeypatch, tmp_p
     assert not intelligence_store.reserve_intelligence_request(daily_limit=1, now=first_day)
     assert intelligence_store.reserve_intelligence_request(daily_limit=1, now=next_day)
     assert intelligence_store.daily_provider_request_count(now=next_day) == 1
+
+
+
+def _assert_sqlite_connections_closed(connections: list[sqlite3.Connection]) -> None:
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+            connection.execute("SELECT 1")
+
+
+def test_intelligence_store_closes_handles_for_reads_writes_and_schema_init(
+    monkeypatch, tmp_path
+):
+    _configure_database(monkeypatch, tmp_path)
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+    now = datetime(2026, 11, 26, 1, 0, tzinfo=timezone.utc)
+    completed_digest = "a" * 64
+    failed_digest = "b" * 64
+
+    assert intelligence_store.reserve_intelligence_request(daily_limit=5, now=now)
+    intelligence_store.save_intelligence_brief(
+        snapshot_hash=completed_digest,
+        model="gpt-test-model",
+        actor_role="viewer",
+        response={"risk_level": "Low"},
+        now=now,
+    )
+    intelligence_store.record_intelligence_failure(
+        snapshot_hash=failed_digest,
+        model="gpt-test-model",
+        actor_role="viewer",
+        error_code="provider_unavailable",
+        now=now,
+    )
+    assert intelligence_store.cached_intelligence_brief(completed_digest, now=now) is not None
+    assert intelligence_store.daily_provider_request_count(now=now) == 1
+    assert intelligence_store.recent_tls_service_history(limit=2) == []
+    assert intelligence_store.intelligence_metrics(now=now)["provider_requests"] == 2
+
+    # Each operation initializes the schema and opens its own connection.
+    # Both handles must be closed before the operation returns.
+    assert len(opened) == 14
+    _assert_sqlite_connections_closed(opened)
+
+
+def test_intelligence_store_rolls_back_and_closes_after_operation_failure(
+    monkeypatch, tmp_path
+):
+    _configure_database(monkeypatch, tmp_path)
+    opened: list[sqlite3.Connection] = []
+    original_connect = inventory_store._connect
+
+    def tracked_connect() -> sqlite3.Connection:
+        connection = original_connect()
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(inventory_store, "_connect", tracked_connect)
+
+    def fail_prune(_connection: sqlite3.Connection) -> None:
+        raise RuntimeError("synthetic intelligence-store failure")
+
+    monkeypatch.setattr(intelligence_store, "_prune", fail_prune)
+    with pytest.raises(RuntimeError, match="synthetic intelligence-store failure"):
+        intelligence_store.save_intelligence_brief(
+            snapshot_hash="c" * 64,
+            model="gpt-test-model",
+            actor_role="viewer",
+            response={"risk_level": "Low"},
+        )
+
+    assert len(opened) == 2
+    _assert_sqlite_connections_closed(opened)
+
+    check = original_connect()
+    try:
+        row = check.execute(
+            "SELECT COUNT(*) FROM intelligence_events WHERE snapshot_hash = ?",
+            ("c" * 64,),
+        ).fetchone()
+    finally:
+        check.close()
+    assert row[0] == 0
