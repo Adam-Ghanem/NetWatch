@@ -119,7 +119,6 @@ def test_completed_jobs_are_not_claimed_again():
     assert enterprise_queue_status(conn)["jobs_succeeded"] == 1
 
 
-
 def test_failure_persistence_accepts_only_allowlisted_error_codes():
     conn = _connection()
     event_id = enqueue_outbox_event(

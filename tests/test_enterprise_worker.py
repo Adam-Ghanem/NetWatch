@@ -109,7 +109,6 @@ def test_run_poll_loop_is_bounded():
     assert result == [None, None]
 
 
-
 def test_job_failure_does_not_persist_exception_message():
     conn = _connection()
     enqueue_job(conn, job_type="approved", dedupe_key="job-private", payload={})
