@@ -323,8 +323,18 @@ def test_rejects_age_output_above_bounded_ciphertext_envelope(tmp_path, monkeypa
         tmp_path, monkeypatch, output_bytes=output_limit + 1
     )
     output = tmp_path / "backup.age"
+    processes = []
+    real_popen = encryptor.subprocess.Popen
 
-    with pytest.raises(encryptor.BackupEncryptionError, match="safe ciphertext size limit"):
+    def capture_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(encryptor.subprocess, "Popen", capture_process)
+    with pytest.raises(
+        encryptor.BackupEncryptionError, match="safe ciphertext size limit"
+    ):
         encryptor.encrypt_backup(
             source,
             output,
@@ -332,5 +342,7 @@ def test_rejects_age_output_above_bounded_ciphertext_envelope(tmp_path, monkeypa
             expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
         )
 
+    assert len(processes) == 1
+    assert processes[0].poll() is not None
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-age-*")) == []
