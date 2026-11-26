@@ -149,6 +149,8 @@ def _open_identity(
         raise BackupRestoreError(
             "The recovery identity cannot be opened safely."
         ) from exc
+
+
 def _ensure_identity_unchanged(
     path: Path,
     descriptor: int,
@@ -258,7 +260,7 @@ def _open_output_directory(
             next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
-            _validate_output_directory_state(descriptor, os.fstat(descriptor))
+            _validate_output_directory_state(descriptor, os.fstat(descriptor), subject=subject)
         state = os.fstat(descriptor)
         return descriptor, state
     except BackupRestoreError:
@@ -338,6 +340,7 @@ def _fsync_output_directory_descriptor(descriptor: int) -> str:
             unsupported_errors.add(errno.EOPNOTSUPP)
         return "unsupported" if exc.errno in unsupported_errors else "failed"
     return "confirmed"
+
 
 def restore_backup(
     encrypted_path: str | Path,
