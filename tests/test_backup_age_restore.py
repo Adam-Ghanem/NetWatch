@@ -658,7 +658,6 @@ def test_restore_refuses_platform_without_native_acl_inspection(
     assert list(tmp_path.glob(".netwatch-restore-*")) == []
 
 
-
 def test_rejects_plaintext_above_operator_restore_limit(tmp_path, monkeypatch):
     encrypted, identity, plaintext = _inputs(tmp_path)
     _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
@@ -687,9 +686,7 @@ def test_rejects_invalid_operator_restore_size_limit(tmp_path, monkeypatch, limi
         pytest.fail("age must not start with an invalid restore size limit")
 
     monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
-    with pytest.raises(
-        restorer.BackupRestoreError, match="positive integer"
-    ):
+    with pytest.raises(restorer.BackupRestoreError, match="positive integer"):
         restorer.restore_backup(
             encrypted,
             output,
