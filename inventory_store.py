@@ -8,11 +8,11 @@ import os
 import sqlite3
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Iterable
 
 from config import (
@@ -99,6 +99,7 @@ def _connect() -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
+
 
 @contextmanager
 def _managed_connection() -> Iterator[sqlite3.Connection]:

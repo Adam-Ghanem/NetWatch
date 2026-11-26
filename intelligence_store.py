@@ -58,6 +58,7 @@ def _database_modules() -> tuple[Any, Any]:
     inventory_store.init_db()
     return inventory_store, inventory_store._connect
 
+
 @contextmanager
 def _database_connection() -> Iterator[sqlite3.Connection]:
     """Commit or roll back one intelligence-store operation and close its handle."""
