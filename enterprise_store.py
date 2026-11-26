@@ -14,7 +14,7 @@ CLAIM_STALE_SECONDS = 300
 # Only coarse, reviewed categories may be persisted in enterprise queue rows.
 # Exception messages can contain credentials, private targets, URLs, paths, or
 # payload fragments, so callers must never store their free-form text.
-_WORKER_ERROR_CODES = frozenset(
+SAFE_WORKER_ERROR_CODES = frozenset(
     {
         "connection_error",
         "io_error",
@@ -30,7 +30,7 @@ _WORKER_ERROR_CODES = frozenset(
 
 def _safe_worker_error_code(value: object) -> str:
     """Allow only fixed diagnostic codes at the SQLite persistence boundary."""
-    if isinstance(value, str) and value in _WORKER_ERROR_CODES:
+    if isinstance(value, str) and value in SAFE_WORKER_ERROR_CODES:
         return value
     return "worker_error"
 
