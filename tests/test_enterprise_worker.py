@@ -118,7 +118,7 @@ def test_job_failure_does_not_persist_exception_message():
     def fail(_payload):
         raise RuntimeError(sensitive)
 
-    result = process_jobs_once(conn, worker_id="w", handlers={"ok": fail})
+    result = process_jobs_once(conn, worker_id="w", handlers={"approved": fail})
     error = conn.execute("SELECT last_error FROM enterprise_jobs").fetchone()[0]
     assert result.failed == 1
     assert error == "runtime_error"
