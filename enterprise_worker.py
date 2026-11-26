@@ -25,7 +25,22 @@ class WorkerCycleResult:
 
 
 def _safe_error(error: BaseException) -> str:
-    return " ".join(str(error).split())[:500] or error.__class__.__name__
+    """Map failures to coarse codes; never stringify exception messages."""
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, ConnectionError):
+        return "connection_error"
+    if isinstance(error, PermissionError):
+        return "permission_error"
+    if isinstance(error, FileNotFoundError):
+        return "resource_missing"
+    if isinstance(error, ValueError):
+        return "invalid_input"
+    if isinstance(error, RuntimeError):
+        return "runtime_error"
+    if isinstance(error, OSError):
+        return "io_error"
+    return "worker_error"
 
 
 def process_jobs_once(

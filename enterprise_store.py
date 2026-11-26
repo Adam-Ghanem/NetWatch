@@ -11,6 +11,29 @@ OUTBOX_MAX_ATTEMPTS = 12
 JOB_MAX_ATTEMPTS = 8
 CLAIM_STALE_SECONDS = 300
 
+# Only coarse, reviewed categories may be persisted in enterprise queue rows.
+# Exception messages can contain credentials, private targets, URLs, paths, or
+# payload fragments, so callers must never store their free-form text.
+_WORKER_ERROR_CODES = frozenset(
+    {
+        "connection_error",
+        "io_error",
+        "invalid_input",
+        "permission_error",
+        "resource_missing",
+        "runtime_error",
+        "timeout",
+        "worker_error",
+    }
+)
+
+
+def _safe_worker_error_code(value: object) -> str:
+    """Allow only fixed diagnostic codes at the SQLite persistence boundary."""
+    if isinstance(value, str) and value in _WORKER_ERROR_CODES:
+        return value
+    return "worker_error"
+
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -206,7 +229,7 @@ def mark_outbox_failed(
         """,
         (
             retry_at or _utc_now(),
-            " ".join(str(error).split())[:500],
+            _safe_worker_error_code(error),
             event_id,
             str(consumer_id)[:120],
         ),
@@ -325,7 +348,7 @@ def fail_job(
         """,
         (
             retry_at or _utc_now(),
-            " ".join(str(error).split())[:500],
+            _safe_worker_error_code(error),
             job_id,
             str(worker_id)[:120],
         ),
