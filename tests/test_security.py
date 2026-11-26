@@ -30,6 +30,24 @@ def test_public_ipv6_target_blocked():
     assert "local IPv6" in (result.error or "")
 
 
+@pytest.mark.parametrize(
+    "target",
+    ["169.254.169.254", "fd00:ec2::254", "fd20:ce::254"],
+)
+def test_cloud_metadata_endpoints_are_not_scan_targets(target):
+    result = validate_target_ip(target)
+
+    assert not result.ok
+    assert "metadata" in (result.error or "").lower()
+
+
+def test_non_metadata_link_local_target_remains_allowed():
+    result = validate_target_ip("169.254.168.10")
+
+    assert result.ok
+    assert result.value == "169.254.168.10"
+
+
 def test_ipv6_scope_restricted_to_link_local_targets():
     result = validate_target_ip("fd00::1%eth0")
     assert not result.ok
@@ -39,6 +57,21 @@ def test_ipv6_scope_restricted_to_link_local_targets():
 def test_private_cidr_allowed():
     result = validate_cidr("192.168.1.0/24")
     assert result.ok
+
+
+@pytest.mark.parametrize("cidr", ["169.254.169.0/24", "169.254.169.254/32"])
+def test_cidr_containing_cloud_metadata_endpoint_is_blocked(cidr):
+    result = validate_cidr(cidr)
+
+    assert not result.ok
+    assert "metadata" in (result.error or "").lower()
+
+
+def test_non_metadata_link_local_cidr_remains_allowed():
+    result = validate_cidr("169.254.168.0/24")
+
+    assert result.ok
+    assert result.value == "169.254.168.0/24"
 
 
 def test_public_or_mixed_cidr_blocked():
