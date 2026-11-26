@@ -113,46 +113,29 @@ def test_job_failure_does_not_persist_exception_message():
     conn = _connection()
     enqueue_job(conn, job_type="approved", dedupe_key="job-private", payload={})
     conn.commit()
-    sensitive_message = (
-        "Authorization: Bearer synthetic-token-123 "
-        "target=10.23.4.5 host=private.example path=/srv/netwatch/private.db"
-    )
+    sensitive = "Bearer synthetic-token 10.23.4.5 private.example"
 
-    def fail_with_sensitive_message(_payload):
-        raise RuntimeError(sensitive_message)
+    def fail(_payload):
+        raise RuntimeError(sensitive)
 
-    result = process_jobs_once(
-        conn,
-        worker_id="worker-a",
-        handlers={"approved": fail_with_sensitive_message},
-    )
-    row = conn.execute("SELECT last_error FROM enterprise_jobs").fetchone()
+    result = process_jobs_once(conn, worker_id="w", handlers={"ok": fail})
+    error = conn.execute("SELECT last_error FROM enterprise_jobs").fetchone()[0]
     assert result.failed == 1
-    assert row["last_error"] == "runtime_error"
-    assert sensitive_message not in row["last_error"]
+    assert error == "runtime_error"
+    assert sensitive not in error
 
 
 def test_outbox_failure_does_not_persist_exception_message():
     conn = _connection()
-    enqueue_outbox_event(
-        conn,
-        topic="alerts",
-        event_type="created",
-        aggregate_id="alert-private",
-        dedupe_key="event-private",
-        payload={"severity": "High"},
-    )
+    enqueue_outbox_event(conn, topic="x", event_type="x", aggregate_id="x", dedupe_key="x", payload={})
     conn.commit()
-    sensitive_message = (
-        "https://hooks.example.test/private-token "
-        "target=10.23.4.5 host=private.example"
-    )
+    sensitive = "https://hooks.example.test/private-token 10.23.4.5"
 
-    def fail_publish(_event):
-        raise TimeoutError(sensitive_message)
+    def fail(_event):
+        raise TimeoutError(sensitive)
 
-    result = publish_outbox_once(conn, consumer_id="consumer-a", publisher=fail_publish)
-    row = conn.execute("SELECT last_error FROM enterprise_outbox").fetchone()
+    result = publish_outbox_once(conn, consumer_id="c", publisher=fail)
+    error = conn.execute("SELECT last_error FROM enterprise_outbox").fetchone()[0]
     assert result.failed == 1
-    assert row["last_error"] == "timeout"
-    assert sensitive_message not in row["last_error"]
+    assert error == "timeout"
+    assert sensitive not in error
