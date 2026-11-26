@@ -87,7 +87,10 @@ def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
             break
         directory = parent
 
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    nofollow_flag = getattr(os, "O_NOFOLLOW", None)
+    if nofollow_flag is None:
+        raise BackupRestoreError("This host cannot safely open the recovery identity without O_NOFOLLOW.")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | nofollow_flag
     try:
         descriptor = os.open(path, flags)
     except OSError as exc:
@@ -148,7 +151,8 @@ def restore_backup(
     identity_fd: int | None = None
     temporary_path: Path | None = None
     try:
-        identity, identity_fd, identity_state = _open_identity(identity_path)
+        identity, opened_identity_fd, identity_state = _open_identity(identity_path)
+        identity_fd = opened_identity_fd
         try:
             if os.path.samefile(identity, source_path):
                 raise BackupRestoreError("The encrypted input and recovery identity must differ.")
@@ -193,7 +197,7 @@ def restore_backup(
             os.close(temporary_fd)
             raise BackupRestoreError("Cannot restrict temporary restore permissions.") from exc
 
-        command = [age_binary, "-d", "-i", _identity_descriptor_path(identity_fd)]
+        command = [age_binary, "-d", "-i", _identity_descriptor_path(opened_identity_fd)]
         digest = hashlib.sha256()
         restored_bytes = 0
         max_plaintext_bytes = source_state.st_size
@@ -208,7 +212,7 @@ def restore_backup(
                         stderr=subprocess.DEVNULL,
                         env=_child_environment(),
                         close_fds=True,
-                        pass_fds=(identity_fd,),
+                        pass_fds=(opened_identity_fd,),
                         start_new_session=True,
                     )
                 except OSError as exc:
@@ -262,6 +266,7 @@ def restore_backup(
                     raise
 
                 if return_code != 0:
+                    _terminate(process)
                     raise BackupRestoreError("age decryption failed; no plaintext was published.")
                 restored_stream.flush()
                 os.fsync(restored_stream.fileno())
@@ -274,7 +279,7 @@ def restore_backup(
             _ensure_source_unchanged(source_path, source_fd, source_state)
         except BackupEncryptionError as exc:
             raise BackupRestoreError("Encrypted input changed during restoration.") from exc
-        _ensure_identity_unchanged(identity, identity_fd, identity_state)
+        _ensure_identity_unchanged(identity, opened_identity_fd, identity_state)
         actual_digest = digest.hexdigest()
         if restored_bytes <= 0 or not hmac.compare_digest(actual_digest, expected):
             raise BackupRestoreError("Restored plaintext does not match the trusted SHA-256 digest.")
