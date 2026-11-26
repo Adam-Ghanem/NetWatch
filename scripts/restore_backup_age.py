@@ -72,7 +72,9 @@ def _descriptor_has_no_extended_acl(
     return True
 
 
-def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
+def _open_identity(
+    path_value: str | Path,
+) -> tuple[Path, int, os.stat_result, int, os.stat_result]:
     requested = Path(path_value).expanduser().absolute()
     try:
         requested_state = requested.lstat()
@@ -101,69 +103,98 @@ def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
             "The recovery identity must be root- or user-owned and owner-readable only."
         )
 
-    directory = path.parent
-    while True:
-        try:
-            directory_state = directory.lstat()
-        except OSError as exc:
-            raise BackupRestoreError("The recovery identity path is not trusted.") from exc
-        if not stat.S_ISDIR(directory_state.st_mode):
-            raise BackupRestoreError("The recovery identity path contains a non-directory.")
-        if directory_state.st_uid not in {0, os.geteuid()}:
-            raise BackupRestoreError("The recovery identity path has an untrusted owner.")
-        writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
-        sticky = directory_state.st_mode & stat.S_ISVTX
-        if writable and not sticky:
+    parent_descriptor: int | None = None
+    descriptor: int | None = None
+    try:
+        # Reuse the no-follow directory walk so every canonical ancestor is
+        # checked for ownership, writable mode bits, and Linux access/default ACLs.
+        parent_descriptor, parent_state = _open_output_directory(
+            path.parent, subject="Recovery identity"
+        )
+        nofollow_flag = getattr(os, "O_NOFOLLOW", None)
+        if nofollow_flag is None:
             raise BackupRestoreError(
-                "The recovery identity path contains an untrusted writable directory."
+                "This host cannot safely open the recovery identity without O_NOFOLLOW."
             )
-        parent = directory.parent
-        if parent == directory:
-            break
-        directory = parent
-
-    nofollow_flag = getattr(os, "O_NOFOLLOW", None)
-    if nofollow_flag is None:
-        raise BackupRestoreError(
-            "This host cannot safely open the recovery identity without O_NOFOLLOW."
-        )
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | nofollow_flag
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise BackupRestoreError("The recovery identity cannot be opened safely.") from exc
-    try:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | nofollow_flag
+        descriptor = os.open(path.name, flags, dir_fd=parent_descriptor)
         opened = os.fstat(descriptor)
-    except OSError as exc:
-        os.close(descriptor)
-        raise BackupRestoreError("The recovery identity cannot be opened safely.") from exc
-    if not stat.S_ISREG(opened.st_mode) or not _same_file_state(path_state, opened):
-        os.close(descriptor)
-        raise BackupRestoreError("The recovery identity changed while it was opened.")
-    if not _descriptor_has_no_extended_acl(descriptor):
-        os.close(descriptor)
-        raise BackupRestoreError(
-            "The recovery identity has an extended ACL or ACL metadata cannot be verified."
+        anchored_state = os.stat(
+            path.name, dir_fd=parent_descriptor, follow_symlinks=False
         )
-    return path, descriptor, opened
-
-
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or not _same_file_state(path_state, opened)
+            or not _same_file_state(opened, anchored_state)
+        ):
+            raise BackupRestoreError(
+                "The recovery identity changed while it was opened."
+            )
+        if not _descriptor_has_no_extended_acl(descriptor):
+            raise BackupRestoreError(
+                "The recovery identity has an extended ACL or ACL metadata cannot be verified."
+            )
+        return path, descriptor, opened, parent_descriptor, parent_state
+    except BackupRestoreError:
+        if descriptor is not None:
+            os.close(descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+        raise
+    except OSError as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+        raise BackupRestoreError(
+            "The recovery identity cannot be opened safely."
+        ) from exc
 def _ensure_identity_unchanged(
-    path: Path, descriptor: int, original: os.stat_result
+    path: Path,
+    descriptor: int,
+    original: os.stat_result,
+    parent_descriptor: int,
+    original_parent: os.stat_result,
 ) -> None:
+    current_parent_descriptor: int | None = None
     try:
-        descriptor_state = os.fstat(descriptor)
-        path_state = path.lstat()
-    except OSError as exc:
-        raise BackupRestoreError("The recovery identity changed during restoration.") from exc
-    if not _same_file_state(original, descriptor_state) or not _same_file_state(
-        original, path_state
-    ):
-        raise BackupRestoreError("The recovery identity changed during restoration.")
-    if not _descriptor_has_no_extended_acl(descriptor):
-        raise BackupRestoreError(
-            "The recovery identity ACL changed or ACL metadata cannot be verified."
+        current_parent_descriptor, current_parent = _open_output_directory(
+            path.parent, subject="Recovery identity"
         )
+        descriptor_state = os.fstat(descriptor)
+        anchored_state = os.stat(
+            path.name, dir_fd=parent_descriptor, follow_symlinks=False
+        )
+        opened_parent = os.fstat(parent_descriptor)
+        _validate_output_directory_state(
+            parent_descriptor, opened_parent, subject="Recovery identity"
+        )
+    except BackupRestoreError as exc:
+        raise BackupRestoreError(
+            "The recovery identity path changed or became untrusted during restoration."
+        ) from exc
+    except OSError as exc:
+        raise BackupRestoreError(
+            "The recovery identity changed during restoration."
+        ) from exc
+    try:
+        original_parent_identity = (original_parent.st_dev, original_parent.st_ino)
+        if (
+            (opened_parent.st_dev, opened_parent.st_ino) != original_parent_identity
+            or (current_parent.st_dev, current_parent.st_ino) != original_parent_identity
+            or not _same_file_state(original, descriptor_state)
+            or not _same_file_state(original, anchored_state)
+        ):
+            raise BackupRestoreError(
+                "The recovery identity changed during restoration."
+            )
+        if not _descriptor_has_no_extended_acl(descriptor):
+            raise BackupRestoreError(
+                "The recovery identity ACL changed or ACL metadata cannot be verified."
+            )
+    finally:
+        if current_parent_descriptor is not None:
+            os.close(current_parent_descriptor)
 
 
 def _identity_descriptor_path(descriptor: int) -> str:
@@ -174,29 +205,31 @@ def _identity_descriptor_path(descriptor: int) -> str:
 
 
 def _validate_output_directory_state(
-    descriptor: int, directory_state: os.stat_result
+    descriptor: int, directory_state: os.stat_result, *, subject: str = "Restored output"
 ) -> None:
     if not stat.S_ISDIR(directory_state.st_mode):
         raise BackupRestoreError(
-            "Restored output directory path contains a non-directory component."
+            f"{subject} directory path contains a non-directory component."
         )
     if directory_state.st_uid not in {0, os.geteuid()}:
         raise BackupRestoreError(
-            "Restored output directory path has an untrusted owner."
+            f"{subject} directory path has an untrusted owner."
         )
     writable = directory_state.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
     sticky = directory_state.st_mode & stat.S_ISVTX
     if writable and not sticky:
         raise BackupRestoreError(
-            "Restored output directory path contains an untrusted writable directory."
+            f"{subject} directory path contains an untrusted writable directory."
         )
     if not _descriptor_has_no_extended_acl(descriptor, directory=True):
         raise BackupRestoreError(
-            "Restored output directory has an extended ACL or ACL metadata cannot be verified."
+            f"{subject} directory has an extended ACL or ACL metadata cannot be verified."
         )
 
 
-def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
+def _open_output_directory(
+    path: Path, *, subject: str = "Restored output"
+) -> tuple[int, os.stat_result]:
     """Open each trusted directory component without following symlinks."""
     nofollow_flag = getattr(os, "O_NOFOLLOW", None)
     directory_flag = getattr(os, "O_DIRECTORY", None)
@@ -217,10 +250,10 @@ def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
     descriptor: int | None = None
     try:
         descriptor = os.open(path.anchor, flags)
-        _validate_output_directory_state(descriptor, os.fstat(descriptor))
+        _validate_output_directory_state(descriptor, os.fstat(descriptor), subject=subject)
         for component in path.parts[1:]:
             if component in {"", ".", ".."}:
-                raise BackupRestoreError("Restored output directory path is invalid.")
+                raise BackupRestoreError(f"{subject} directory path is invalid.")
             next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
@@ -235,7 +268,7 @@ def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
         if descriptor is not None:
             os.close(descriptor)
         raise BackupRestoreError(
-            "Restored output directory path cannot be opened safely."
+            f"{subject} directory path cannot be opened safely."
         ) from exc
 
 
@@ -329,19 +362,25 @@ def restore_backup(
         raise BackupRestoreError("Encrypted input must be a non-empty regular file.") from exc
 
     identity_fd: int | None = None
+    identity_parent_fd: int | None = None
+    identity_parent_state: os.stat_result | None = None
     output_directory_fd: int | None = None
     output_directory_state: os.stat_result | None = None
     temporary_name: str | None = None
     try:
-        identity, opened_identity_fd, identity_state = _open_identity(identity_path)
+        (
+            identity,
+            opened_identity_fd,
+            identity_state,
+            identity_parent_fd,
+            identity_parent_state,
+        ) = _open_identity(identity_path)
         identity_fd = opened_identity_fd
-        try:
-            if os.path.samefile(identity, source_path):
-                raise BackupRestoreError("The encrypted input and recovery identity must differ.")
-        except OSError as exc:
-            raise BackupRestoreError(
-                "The encrypted input and identity cannot be compared."
-            ) from exc
+        if (identity_state.st_dev, identity_state.st_ino) == (
+            source_state.st_dev,
+            source_state.st_ino,
+        ):
+            raise BackupRestoreError("The encrypted input and recovery identity must differ.")
 
         output_value = Path(output_path).expanduser()
         output_name = output_value.name
@@ -473,7 +512,13 @@ def restore_backup(
             _ensure_source_unchanged(source_path, source_fd, source_state)
         except BackupEncryptionError as exc:
             raise BackupRestoreError("Encrypted input changed during restoration.") from exc
-        _ensure_identity_unchanged(identity, opened_identity_fd, identity_state)
+        _ensure_identity_unchanged(
+            identity,
+            opened_identity_fd,
+            identity_state,
+            identity_parent_fd,
+            identity_parent_state,
+        )
         actual_digest = digest.hexdigest()
         if restored_bytes <= 0 or not hmac.compare_digest(actual_digest, expected):
             raise BackupRestoreError(
@@ -544,6 +589,8 @@ def restore_backup(
         os.close(source_fd)
         if identity_fd is not None:
             os.close(identity_fd)
+        if identity_parent_fd is not None:
+            os.close(identity_parent_fd)
         if temporary_name is not None and output_directory_fd is not None:
             try:
                 os.unlink(temporary_name, dir_fd=output_directory_fd)
