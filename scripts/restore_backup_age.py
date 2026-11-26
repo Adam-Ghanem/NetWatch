@@ -162,7 +162,7 @@ def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
         or os.stat not in os.supports_follow_symlinks
     ):
         raise BackupRestoreError(
-            "This host cannot safely anchor restore publication to a directory descriptor."
+            "This host cannot safely anchor restore output to a directory descriptor."
         )
 
     flags = os.O_RDONLY | directory_flag | nofollow_flag | getattr(os, "O_CLOEXEC", 0)
@@ -301,7 +301,9 @@ def restore_backup(
             raise BackupRestoreError("Restored output path is invalid.")
         output_parent = Path(os.path.abspath(output_value.parent))
         try:
-            output_directory_fd, output_directory_state = _open_output_directory(output_parent)
+            output_directory_fd, output_directory_state = _open_output_directory(
+                output_parent
+            )
         except BackupRestoreError:
             raise
         target = output_parent / output_name
