@@ -151,11 +151,7 @@ def test_outbox_failure_does_not_persist_exception_message():
     def fail_publish(_event):
         raise TimeoutError(sensitive_message)
 
-    result = publish_outbox_once(
-        conn,
-        consumer_id="consumer-a",
-        publisher=fail_publish,
-    )
+    result = publish_outbox_once(conn, consumer_id="consumer-a", publisher=fail_publish)
     row = conn.execute("SELECT last_error FROM enterprise_outbox").fetchone()
     assert result.failed == 1
     assert row["last_error"] == "timeout"
