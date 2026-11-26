@@ -201,6 +201,82 @@ def test_rejects_dangling_output_symlink_without_replacing_it(tmp_path, monkeypa
     assert not output.resolve().exists()
 
 
+def test_rejects_group_or_world_writable_age_executable(tmp_path, monkeypatch):
+    recipients = [_recipient()]
+    _fake_age(tmp_path, monkeypatch, recipients=recipients)
+    executable = tmp_path / "bin" / "age"
+    executable.chmod(0o777)
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"backup bytes")
+    output = tmp_path / "backup.age"
+
+    with pytest.raises(
+        encryptor.BackupEncryptionError, match="must not be group- or world-writable"
+    ):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=recipients,
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
+
+
+def test_rejects_age_executable_in_untrusted_writable_directory(tmp_path, monkeypatch):
+    recipients = [_recipient()]
+    binary_dir = tmp_path / "unsafe-bin"
+    binary_dir.mkdir()
+    executable = binary_dir / "age"
+    executable.write_text(
+        f"#!{sys.executable}\\nimport sys\\nsys.stdout.buffer.write(b'ciphertext')\\nsys.stdin.buffer.read()\\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    binary_dir.chmod(0o777)
+    monkeypatch.setenv("PATH", str(binary_dir))
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"backup bytes")
+    output = tmp_path / "backup.age"
+
+    with pytest.raises(
+        encryptor.BackupEncryptionError, match="group- or world-writable directory"
+    ):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=recipients,
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
+
+
+def test_resolves_age_symlink_to_trusted_executable(tmp_path, monkeypatch):
+    recipients = [_recipient()]
+    _fake_age(tmp_path, monkeypatch, recipients=recipients)
+    real_executable = tmp_path / "bin" / "age"
+    alias_dir = tmp_path / "alias-bin"
+    alias_dir.mkdir()
+    (alias_dir / "age").symlink_to(real_executable)
+    monkeypatch.setenv("PATH", str(alias_dir))
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"backup bytes")
+    output = tmp_path / "backup.age"
+
+    report = encryptor.encrypt_backup(
+        source,
+        output,
+        recipients=recipients,
+        expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+    )
+
+    assert report["encrypted"] is True
+    assert output.exists()
+
+
 def test_requires_age_executable_before_creating_output(tmp_path, monkeypatch):
     source = tmp_path / "backup.sqlite3"
     source.write_bytes(b"backup bytes")
