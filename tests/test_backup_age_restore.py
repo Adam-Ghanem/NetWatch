@@ -162,6 +162,50 @@ def test_rejects_special_mode_bits_on_identity(tmp_path, monkeypatch):
     assert not output.exists()
 
 
+def test_rejects_untrusted_output_directory_before_launch(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output_directory = tmp_path / "shared-output"
+    output_directory.mkdir()
+    output_directory.chmod(0o777)
+    output = output_directory / "restored.sqlite3"
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start with an untrusted restore output directory")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="untrusted writable directory"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(output_directory.iterdir()) == []
+
+
+def test_allows_sticky_shared_output_directory(tmp_path, monkeypatch):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output_directory = tmp_path / "sticky-output"
+    output_directory.mkdir()
+    output_directory.chmod(0o1777)
+    output = output_directory / "restored.sqlite3"
+
+    report = restorer.restore_backup(
+        encrypted,
+        output,
+        identity_path=identity,
+        expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+    )
+
+    assert output.read_bytes() == plaintext
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert report["restored"] is True
+
+
 def test_rejects_symlink_identity(tmp_path, monkeypatch):
     encrypted, identity, _ = _inputs(tmp_path)
     _fake_age(tmp_path, monkeypatch)
