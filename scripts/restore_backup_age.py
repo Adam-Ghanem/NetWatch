@@ -13,6 +13,7 @@ import secrets
 import selectors
 import stat
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Sequence
@@ -37,6 +38,38 @@ _RESTORE_OUTPUT_STALL_TIMEOUT_SECONDS = 30.0
 
 class BackupRestoreError(ValueError):
     """Raised when an encrypted backup cannot be restored safely."""
+
+
+def _descriptor_has_no_extended_acl(
+    descriptor: int, *, directory: bool = False
+) -> bool:
+    """Reject Linux POSIX ACLs on recovery identities and restore directories."""
+    if not sys.platform.startswith("linux"):
+        # Other POSIX ACL implementations require platform-specific inspection.
+        return True
+
+    getxattr = getattr(os, "getxattr", None)
+    if getxattr is None:
+        return False
+
+    attributes = ["system.posix_acl_access"]
+    if directory:
+        attributes.append("system.posix_acl_default")
+    unsupported_errors = {errno.ENODATA, errno.ENOTSUP}
+    if hasattr(errno, "EOPNOTSUPP"):
+        unsupported_errors.add(errno.EOPNOTSUPP)
+
+    for attribute in attributes:
+        try:
+            getxattr(descriptor, attribute)
+        except OSError as exc:
+            if exc.errno in unsupported_errors:
+                continue
+            return False
+        except (AttributeError, TypeError):
+            return False
+        return False
+    return True
 
 
 def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
@@ -107,6 +140,11 @@ def _open_identity(path_value: str | Path) -> tuple[Path, int, os.stat_result]:
     if not stat.S_ISREG(opened.st_mode) or not _same_file_state(path_state, opened):
         os.close(descriptor)
         raise BackupRestoreError("The recovery identity changed while it was opened.")
+    if not _descriptor_has_no_extended_acl(descriptor):
+        os.close(descriptor)
+        raise BackupRestoreError(
+            "The recovery identity has an extended ACL or ACL metadata cannot be verified."
+        )
     return path, descriptor, opened
 
 
@@ -122,6 +160,10 @@ def _ensure_identity_unchanged(
         original, path_state
     ):
         raise BackupRestoreError("The recovery identity changed during restoration.")
+    if not _descriptor_has_no_extended_acl(descriptor):
+        raise BackupRestoreError(
+            "The recovery identity ACL changed or ACL metadata cannot be verified."
+        )
 
 
 def _identity_descriptor_path(descriptor: int) -> str:
@@ -131,7 +173,9 @@ def _identity_descriptor_path(descriptor: int) -> str:
     raise BackupRestoreError("This host does not expose inherited file descriptors to child tools.")
 
 
-def _validate_output_directory_state(directory_state: os.stat_result) -> None:
+def _validate_output_directory_state(
+    descriptor: int, directory_state: os.stat_result
+) -> None:
     if not stat.S_ISDIR(directory_state.st_mode):
         raise BackupRestoreError(
             "Restored output directory path contains a non-directory component."
@@ -145,6 +189,10 @@ def _validate_output_directory_state(directory_state: os.stat_result) -> None:
     if writable and not sticky:
         raise BackupRestoreError(
             "Restored output directory path contains an untrusted writable directory."
+        )
+    if not _descriptor_has_no_extended_acl(descriptor, directory=True):
+        raise BackupRestoreError(
+            "Restored output directory has an extended ACL or ACL metadata cannot be verified."
         )
 
 
@@ -169,14 +217,14 @@ def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
     descriptor: int | None = None
     try:
         descriptor = os.open(path.anchor, flags)
-        _validate_output_directory_state(os.fstat(descriptor))
+        _validate_output_directory_state(descriptor, os.fstat(descriptor))
         for component in path.parts[1:]:
             if component in {"", ".", ".."}:
                 raise BackupRestoreError("Restored output directory path is invalid.")
             next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
-            _validate_output_directory_state(os.fstat(descriptor))
+            _validate_output_directory_state(descriptor, os.fstat(descriptor))
         state = os.fstat(descriptor)
         return descriptor, state
     except BackupRestoreError:

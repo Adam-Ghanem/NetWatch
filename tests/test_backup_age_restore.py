@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import stat
@@ -118,6 +119,92 @@ def test_rejects_failed_or_unbounded_age_output(tmp_path, monkeypatch, behavior)
     assert list(tmp_path.glob(".netwatch-restore-*")) == []
 
 
+def test_rejects_extended_access_acl_on_identity_before_launch(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output = tmp_path / "restored.sqlite3"
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(
+        restorer.os, "getxattr", lambda descriptor, attribute: b"extended-acl"
+    )
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start with an ACL-accessible recovery identity")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="extended ACL"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+
+
+def test_fails_closed_when_identity_acl_metadata_cannot_be_checked(
+    tmp_path, monkeypatch
+):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output = tmp_path / "restored.sqlite3"
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", None)
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start when identity ACL metadata cannot be checked")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(
+        restorer.BackupRestoreError, match="ACL metadata cannot be verified"
+    ):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+
+
+def test_rejects_identity_acl_added_during_restore_before_publication(
+    tmp_path, monkeypatch
+):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output = tmp_path / "restored.sqlite3"
+    identity_state = identity.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+    identity_checks = 0
+
+    def fake_getxattr(descriptor, attribute):
+        nonlocal identity_checks
+        current = os.fstat(descriptor)
+        if (current.st_dev, current.st_ino) == (
+            identity_state.st_dev,
+            identity_state.st_ino,
+        ):
+            identity_checks += 1
+            if identity_checks > 1:
+                return b"extended-acl"
+        raise OSError(no_acl_error, "no ACL")
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+    with pytest.raises(restorer.BackupRestoreError, match="ACL changed"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-restore-*")) == []
+
+
 def test_rejects_group_or_world_accessible_identity_before_launch(tmp_path, monkeypatch):
     encrypted, identity, _ = _inputs(tmp_path)
     _fake_age(tmp_path, monkeypatch)
@@ -160,6 +247,50 @@ def test_rejects_special_mode_bits_on_identity(tmp_path, monkeypatch):
         )
 
     assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "acl_attribute",
+    ["system.posix_acl_access", "system.posix_acl_default"],
+)
+def test_rejects_extended_acl_on_restore_directory_before_launch(
+    tmp_path, monkeypatch, acl_attribute
+):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output_directory = tmp_path / "acl-output"
+    output_directory.mkdir()
+    output = output_directory / "restored.sqlite3"
+    directory_state = output_directory.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+
+    def fake_getxattr(descriptor, attribute):
+        current = os.fstat(descriptor)
+        if (
+            (current.st_dev, current.st_ino)
+            == (directory_state.st_dev, directory_state.st_ino)
+            and attribute == acl_attribute
+        ):
+            return b"extended-acl"
+        raise OSError(no_acl_error, "no ACL")
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start in a directory with an extended ACL")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="extended ACL"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(output_directory.iterdir()) == []
 
 
 def test_rejects_untrusted_output_directory_before_launch(tmp_path, monkeypatch):

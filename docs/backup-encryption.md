@@ -126,6 +126,9 @@ The restore helper:
   with directory descriptors and `O_NOFOLLOW`, requiring root/current-user
   ownership and rejecting group/world-writable directories unless the sticky
   bit protects shared-directory entry ownership (for example `/tmp`);
+- on Linux, rejects extended POSIX access ACLs on the opened recovery identity
+  and access/default ACLs on every opened destination directory; if ACL metadata
+  cannot be inspected, it fails closed;
 - creates the private temporary file, checks for an existing destination,
   publishes with a same-directory no-overwrite hard link, removes temporary
   entries, and fsyncs the directory through the same open descriptor; it
@@ -157,10 +160,13 @@ optional for backward compatibility; when enabled, its expected digest must
 come from an independently trusted release record. The pin is not a signature
 verifier or a kernel-enforced immutable executable handle, so protected
 ownership/permissions and a trusted host remain required. The restore helper
-checks POSIX mode bits for the identity file and destination directory but does
-not independently inspect extended filesystem ACLs; administrators must verify
-both effective access policies. Directory-descriptor anchoring prevents a
-pathname swap from redirecting publication, but it does not defend against
+checks POSIX mode bits and, on Linux, rejects extended access ACLs on the
+identity descriptor plus access/default ACLs on every opened destination
+directory. It does not inspect ACLs on the identity path's ancestor directories
+or implement non-Linux ACL APIs; administrators must verify those
+platform-specific and ancestor-directory policies separately. Directory-
+descriptor anchoring prevents a pathname swap from redirecting publication,
+but it does not defend against
 root or hostile same-UID processes, malicious mount changes, or filesystem
 implementations with weaker-than-expected descriptor semantics.
 
