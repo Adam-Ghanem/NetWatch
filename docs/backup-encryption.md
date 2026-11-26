@@ -49,8 +49,13 @@ command. The helper:
   whole backup into memory or creating a plaintext temporary copy;
 - checks the source descriptor/path identity before and after streaming;
 - requires the streamed bytes to match the separately trusted SHA-256;
-- invokes `age` without a shell, passes only a minimal environment, and
-  suppresses child stderr to avoid accidental path or environment disclosure;
+- resolves the selected `age` executable to its real path and requires
+  a regular executable owned by root or the current user; rejects group/world-
+  writable binaries and untrusted writable parent directories (sticky shared
+  directories such as `/tmp` are allowed);
+- invokes the resolved executable without a shell, passes only a minimal
+  environment, and suppresses child stderr to avoid accidental path or
+  environment disclosure;
 - enforces a 30-second no-progress deadline while streaming and a 30-second
   completion deadline after closing stdin; timeout cleanup kills the dedicated
   POSIX process group, including descendants that keep inherited pipes open;
