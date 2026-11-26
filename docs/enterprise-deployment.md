@@ -132,3 +132,10 @@ private IP addresses, hostnames, filesystem paths, or fragments of event
 payloads. Use approved, access-controlled operational logging and correlation
 IDs for deeper diagnostics; do not add raw exception text to queue rows,
 status APIs, exports, or support bundles.
+
+
+The privacy guard is forward-looking: existing queue rows written before this
+change may still contain free-form failure text. They are not rewritten
+automatically. Treat existing SQLite files and backups as sensitive, and
+handle any historical cleanup only through an approved, reviewed maintenance
+procedure that preserves required audit and operational retention.

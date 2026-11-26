@@ -139,7 +139,22 @@ def test_failure_persistence_accepts_only_allowlisted_error_codes():
 
     job_id = enqueue_job(conn, job_type="approved", dedupe_key="job-timeout", payload={})
     assert claim_jobs(conn, worker_id="worker-a")
-    assert fail_job(conn, job_id=job_id, worker_id="worker-a", error="timeout")
+    assert fail_job(
+        conn,
+        job_id=job_id,
+        worker_id="worker-a",
+        error="timeout",
+        retry_at="2099-01-01T00:00:00+00:00",
+    )
+
+    unsafe_job_id = enqueue_job(conn, job_type="approved", dedupe_key="job-private", payload={})
+    assert claim_jobs(conn, worker_id="worker-b")
+    assert fail_job(
+        conn,
+        job_id=unsafe_job_id,
+        worker_id="worker-b",
+        error="Authorization: Bearer another-synthetic-token 10.23.4.6 private.example",
+    )
     conn.commit()
 
     event_error = conn.execute(
@@ -148,5 +163,9 @@ def test_failure_persistence_accepts_only_allowlisted_error_codes():
     job_error = conn.execute(
         "SELECT last_error FROM enterprise_jobs WHERE id = ?", (job_id,)
     ).fetchone()["last_error"]
+    unsafe_job_error = conn.execute(
+        "SELECT last_error FROM enterprise_jobs WHERE id = ?", (unsafe_job_id,)
+    ).fetchone()["last_error"]
     assert event_error == "worker_error"
     assert job_error == "timeout"
+    assert unsafe_job_error == "worker_error"
