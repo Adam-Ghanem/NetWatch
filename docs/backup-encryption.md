@@ -7,8 +7,9 @@ receives a private identity key and does not add `age` to the NetWatch image.
 ## Trust and prerequisites
 
 - Install the `age` command-line tool from its official release channel.
-  Verify the release signature/checksum and record the exact version in the
-  deployment change record. NetWatch does not download or update the binary.
+  Verify the release signature/checksum and record the exact version and
+  independently trusted SHA-256 in the deployment change record. NetWatch does
+  not download or update the binary.
 - Create one or more age X25519 recipient identities using the organization's
   approved key-management procedure. Keep each private identity outside the
   application host, repository, container image, `.env`, and backup destination.
@@ -35,6 +36,7 @@ while streaming the exact bytes to `age`.
 ```bash
 python scripts/encrypt_backup_age.py \
   --expected-sha256 "$TRUSTED_BACKUP_SHA256" \
+  --age-binary-sha256 "$TRUSTED_AGE_BINARY_SHA256" \
   --recipient age1REPLACE_WITH_RECOVERY_RECIPIENT \
   --recipient age1REPLACE_WITH_INDEPENDENT_RECIPIENT \
   backup.sqlite3 backup.sqlite3.age
@@ -53,6 +55,9 @@ command. The helper:
   a regular executable owned by root or the current user; rejects group/world-
   writable binaries and untrusted writable parent directories (sticky shared
   directories such as `/tmp` are allowed);
+- when `--age-binary-sha256` is supplied, hashes the executable through a
+  no-follow file descriptor immediately before launch, verifies its file
+  identity remained stable while hashing, and fails closed on a mismatch;
 - invokes the resolved executable without a shell, passes only a minimal
   environment, and suppresses child stderr to avoid accidental path or
   environment disclosure;
@@ -73,7 +78,8 @@ host. The destination filesystem must support same-directory hard links for
 atomic no-overwrite publication. Windows ACL semantics are not implemented
 by this helper.
 The JSON success report contains only input/output basenames, byte count,
-SHA-256, recipient count, and the output mode; it never prints the recipient
+backup SHA-256, recipient count, and output mode; when a binary pin is supplied,
+it also reports the verified age executable SHA-256. It never prints recipient
 values or private material.
 
 ## Transfer and restore
@@ -104,8 +110,12 @@ re-sign the audit chain to make a restore appear successful.
 
 ## Limits
 
-This helper provides local recipient-based encryption and a digest match. It
-does **not** provide key escrow, key rotation, off-host upload, retention
+This helper provides local recipient-based encryption and digest checks. The
+age executable pin is optional for backward compatibility; when enabled, its
+expected digest must come from an independently trusted release record. The
+check is not a signature verifier or a kernel-enforced immutable executable
+handle, so protected ownership/permissions and a trusted host remain required.
+It does **not** provide key escrow, key rotation, off-host upload, retention
 automation, a production restore drill, audit-HMAC validation, or RTO/RPO
 guarantees. A successful encryption command is not proof that a private key is
 recoverable or that the application can restore. Complete an independently

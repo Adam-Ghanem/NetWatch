@@ -67,6 +67,87 @@ def test_encrypts_digest_pinned_input_for_multiple_recipients(tmp_path, monkeypa
     assert list(tmp_path.glob(".netwatch-age-*")) == []
 
 
+def test_verifies_optional_age_binary_digest_and_reports_it(tmp_path, monkeypatch):
+    recipients = [_recipient()]
+    _fake_age(tmp_path, monkeypatch, recipients=recipients)
+    executable = tmp_path / "bin" / "age"
+    executable_digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+    source = tmp_path / "backup.sqlite3"
+    original = b"synthetic verified SQLite snapshot"
+    source.write_bytes(original)
+    output = tmp_path / "backup.sqlite3.age"
+
+    report = encryptor.encrypt_backup(
+        source,
+        output,
+        recipients=recipients,
+        expected_sha256=hashlib.sha256(original).hexdigest(),
+        expected_age_sha256=executable_digest,
+    )
+
+    assert output.exists()
+    assert report["age_binary_sha256"] == executable_digest
+
+
+def test_rejects_age_binary_digest_mismatch_before_starting_process(tmp_path, monkeypatch):
+    recipients = [_recipient()]
+    _fake_age(tmp_path, monkeypatch, recipients=recipients)
+    source = tmp_path / "backup.sqlite3"
+    source.write_bytes(b"synthetic verified SQLite snapshot")
+    output = tmp_path / "backup.sqlite3.age"
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start when its pinned digest does not match")
+
+    monkeypatch.setattr(encryptor.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(
+        encryptor.BackupEncryptionError, match="does not match the trusted digest"
+    ):
+        encryptor.encrypt_backup(
+            source,
+            output,
+            recipients=recipients,
+            expected_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            expected_age_sha256="0" * 64,
+        )
+
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-age-*")) == []
+
+
+def test_cli_forwards_optional_age_binary_sha256(monkeypatch, capsys):
+    captured = {}
+
+    def fake_encrypt_backup(
+        input_path,
+        output_path,
+        *,
+        recipients,
+        expected_sha256,
+        expected_age_sha256=None,
+    ):
+        captured["expected_age_sha256"] = expected_age_sha256
+        return {"encrypted": True, "sha256": expected_sha256}
+
+    monkeypatch.setattr(encryptor, "encrypt_backup", fake_encrypt_backup)
+    result = encryptor.main(
+        [
+            "backup.sqlite3",
+            "backup.sqlite3.age",
+            "--recipient",
+            _recipient(),
+            "--expected-sha256",
+            "a" * 64,
+            "--age-binary-sha256",
+            "b" * 64,
+        ]
+    )
+
+    assert result == 0
+    assert captured["expected_age_sha256"] == "b" * 64
+    assert '"ok": true' in capsys.readouterr().out
+
+
 def test_rejects_digest_mismatch_and_removes_partial_ciphertext(tmp_path, monkeypatch):
     recipients = [_recipient()]
     _fake_age(tmp_path, monkeypatch, recipients=recipients)
