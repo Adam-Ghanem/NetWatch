@@ -93,34 +93,70 @@ object store using the organization's separately managed uploader. Enforce
 access control, immutable/versioned retention, monitoring, and deletion policy
 there. This helper does not perform any network transfer.
 
-For an isolated restore, use a private staging directory and an independently
-retrieved identity:
+For an isolated restore, use the operator-side helper. It requires a private
+identity file outside NetWatch and the plaintext digest from the independently
+authenticated recovery record:
 
 ```bash
 umask 077
-age -d -i /secure/recovery/identity.txt \
-  -o /secure/staging/backup.sqlite3 \
-  backup.sqlite3.age
+python scripts/restore_backup_age.py \
+  --identity /secure/recovery/identity.txt \
+  --expected-sha256 "$TRUSTED_BACKUP_SHA256" \
+  --age-binary-sha256 "$TRUSTED_AGE_BINARY_SHA256" \
+  backup.sqlite3.age /secure/staging/backup.sqlite3
 ```
 
-Then run the offline SQLite verifier against the decrypted file using the
-trusted schema version and original plaintext SHA-256. Boot a fresh staging
-instance with the separately recovered audit HMAC key, verify readiness,
-authenticated inventory/operational records and the audit chain, and record
-the observed restore time and backup age.
+The restore helper:
+- accepts only a regular, non-symlink identity file owned by root or the current
+  user, readable by its owner only, with trusted parent-directory ownership and
+  write permissions;
+- opens the identity once and passes only an inherited file-descriptor path to
+  `age`; private identity contents are never loaded into Python or placed in
+  the child command line;
+- opens the encrypted input as a regular non-symlink file and supplies it
+  directly as the child's stdin;
+- uses the same trusted-binary ownership/permission checks as the encryption
+  helper, and supports the optional independently trusted executable SHA-256;
+- suppresses child stderr and uses a minimal environment;
+- enforces a 30-second no-output deadline and a 30-second process-exit deadline;
+  failure cleanup terminates the dedicated POSIX process group;
+- caps plaintext output at the encrypted input size, writes to a mode-`0600`
+  temporary file, and verifies the complete plaintext SHA-256 before publication;
+- refuses to overwrite an existing destination, publishes by same-directory
+  hard link, fsyncs the plaintext file, and reports whether destination-directory
+  fsync was confirmed.
+
+A nonzero exit, timeout, output-limit violation, identity/input mutation, or
+digest mismatch leaves no final restored file. If directory fsync is unsupported
+or fails, the restored file is valid and atomically published but its crash
+durability is not confirmed. The JSON report contains only basenames, byte
+count, plaintext SHA-256, output mode, and durability status; it never includes
+the identity path or private material.
+
+Then run the offline SQLite verifier against the restored file using the trusted
+schema version and original plaintext SHA-256. Boot a fresh staging instance
+with the separately recovered audit HMAC key, verify readiness, authenticated
+inventory/operational records and the audit chain, and record the observed
+restore time and backup age.
 
 Never place the private identity beside the encrypted backup. Do not reset or
 re-sign the audit chain to make a restore appear successful.
 
 ## Limits
 
-This helper provides local recipient-based encryption and digest checks. The
-age executable pin is optional for backward compatibility; when enabled, its
-expected digest must come from an independently trusted release record. The
-check is not a signature verifier or a kernel-enforced immutable executable
-handle, so protected ownership/permissions and a trusted host remain required.
-It does **not** provide key escrow, key rotation, off-host upload, retention
-automation, a production restore drill, audit-HMAC validation, or RTO/RPO
-guarantees. A successful encryption command is not proof that a private key is
-recoverable or that the application can restore. Complete an independently
-reviewed staging drill before making disaster-recovery claims.
+The encryption and restore helpers provide local recipient-based encryption,
+digest verification, and safe plaintext publication. The age executable pin is
+optional for backward compatibility; when enabled, its expected digest must
+come from an independently trusted release record. The pin is not a signature
+verifier or a kernel-enforced immutable executable handle, so protected
+ownership/permissions and a trusted host remain required. The restore helper
+checks POSIX mode bits but does not independently inspect extended filesystem
+ACLs; administrators must verify the identity file's effective access policy.
+
+These helpers do **not** provide key escrow, key rotation, off-host upload,
+retention automation, a production restore drill, audit-HMAC validation, or
+RTO/RPO guarantees. Synthetic tests do not prove interoperability with a real
+age release. A successful encryption or restore command is not proof that the
+application can recover. Complete an independently reviewed staging drill
+with the actual approved age release and separately recovered audit HMAC key
+before making disaster-recovery claims.
