@@ -171,30 +171,31 @@ def _ensure_identity_unchanged(
         )
     except BackupRestoreError as exc:
         raise BackupRestoreError(
-            "The recovery identity path changed or became untrusted during restoration."
+            "The recovery identity path changed or became untrusted during restoration: "
+            f"{exc}"
         ) from exc
     except OSError as exc:
         raise BackupRestoreError(
             "The recovery identity changed during restoration."
         ) from exc
-    try:
-        original_parent_identity = (original_parent.st_dev, original_parent.st_ino)
-        if (
-            (opened_parent.st_dev, opened_parent.st_ino) != original_parent_identity
-            or (current_parent.st_dev, current_parent.st_ino) != original_parent_identity
-            or not _same_file_state(original, descriptor_state)
-            or not _same_file_state(original, anchored_state)
-        ):
-            raise BackupRestoreError(
-                "The recovery identity changed during restoration."
-            )
-        if not _descriptor_has_no_extended_acl(descriptor):
-            raise BackupRestoreError(
-                "The recovery identity ACL changed or ACL metadata cannot be verified."
-            )
     finally:
         if current_parent_descriptor is not None:
             os.close(current_parent_descriptor)
+
+    original_parent_identity = (original_parent.st_dev, original_parent.st_ino)
+    if (
+        (opened_parent.st_dev, opened_parent.st_ino) != original_parent_identity
+        or (current_parent.st_dev, current_parent.st_ino) != original_parent_identity
+        or not _same_file_state(original, descriptor_state)
+        or not _same_file_state(original, anchored_state)
+    ):
+        raise BackupRestoreError(
+            "The recovery identity changed during restoration."
+        )
+    if not _descriptor_has_no_extended_acl(descriptor):
+        raise BackupRestoreError(
+            "The recovery identity ACL changed or ACL metadata cannot be verified."
+        )
 
 
 def _identity_descriptor_path(descriptor: int) -> str:
@@ -376,6 +377,8 @@ def restore_backup(
             identity_parent_state,
         ) = _open_identity(identity_path)
         identity_fd = opened_identity_fd
+        if identity_parent_fd is None or identity_parent_state is None:
+            raise BackupRestoreError("The recovery identity parent could not be verified.")
         if (identity_state.st_dev, identity_state.st_ino) == (
             source_state.st_dev,
             source_state.st_ino,
