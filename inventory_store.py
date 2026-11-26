@@ -116,7 +116,7 @@ def _managed_connection() -> Iterator[sqlite3.Connection]:
 def database_is_ready() -> bool:
     """Run a bounded local database readiness check without exposing internals."""
     try:
-        with _connect() as conn:
+        with _managed_connection() as conn:
             row = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'assets'"
             ).fetchone()
@@ -516,7 +516,7 @@ def _audit_readiness_identity(key: bytes) -> bytes:
 
 def _check_audit_integrity(key: bytes) -> bool:
     try:
-        with _connect() as conn:
+        with _managed_connection() as conn:
             valid, _, _ = _audit_chain_is_valid(conn, key)
             return valid
     except (OSError, sqlite3.Error):
@@ -804,7 +804,7 @@ def _upsert_observed_asset(
 
 def add_scan_run(scan_type: str, target: str, summary: str, status: str = "completed") -> int:
     init_db()
-    with _connect() as conn:
+    with _managed_connection() as conn:
         return _insert_scan_run(conn, scan_type, target, summary, status)
 
 
@@ -814,7 +814,7 @@ def upsert_hosts(
     scan_run_id: int | None = None,
 ) -> None:
     init_db()
-    with _connect() as conn:
+    with _managed_connection() as conn:
         seen: set[str] = set()
         for row in host_rows:
             ip = _normalize_ip(row.get("IP Address", ""))
@@ -854,7 +854,7 @@ def record_network_scan(cidr: str, host_rows: Iterable[dict]) -> NetworkChangeSu
     returned_assets: list[str] = []
     not_observed_assets: list[str] = []
 
-    with _connect() as conn:
+    with _managed_connection() as conn:
         scan_run_id = _insert_scan_run(conn, "network", str(network), "Saving scan snapshot")
         existing_rows = conn.execute("SELECT ip_address, status FROM assets").fetchall()
         in_scope: dict[str, str] = {}
@@ -1017,7 +1017,7 @@ def update_asset_ports(
     normalized_rows = [dict(row) for row in port_rows if isinstance(row, dict)]
     open_ports = [row for row in normalized_rows if row.get("Status") == "Open"]
     encoded = json.dumps(open_ports, ensure_ascii=False)
-    with _connect() as conn:
+    with _managed_connection() as conn:
         previous = conn.execute(
             "SELECT status FROM assets WHERE ip_address = ?", (normalized_ip,)
         ).fetchone()
@@ -1081,7 +1081,7 @@ def record_audit_event(
     request_id: str = "",
 ) -> None:
     init_db()
-    with _connect() as conn:
+    with _managed_connection() as conn:
         _insert_audit_event(
             conn,
             actor_role,
@@ -1125,7 +1125,7 @@ def update_asset_context(
         "criticality": normalized_criticality,
         "notes": _audit_value(notes, 1_000),
     }
-    with _connect() as conn:
+    with _managed_connection() as conn:
         existing = conn.execute(
             "SELECT ip_address FROM assets WHERE ip_address = ?", (normalized_ip,)
         ).fetchone()
@@ -1195,7 +1195,7 @@ def recent_service_findings(
             raise ValueError("A valid IPv4 or IPv6 asset address is required.")
     if scan_run_id is not None and int(scan_run_id) < 1:
         raise ValueError("scan_run_id must be a positive integer.")
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT scan_run_id, observed_at, ip_address, port, protocol,
@@ -1215,7 +1215,7 @@ def recent_service_findings(
 def recent_scan_runs(limit: int = 30) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 200))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT created_at, scan_type, target, summary, status
@@ -1231,7 +1231,7 @@ def recent_scan_runs(limit: int = 30) -> list[dict]:
 def recent_asset_events(limit: int = 30) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 200))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT created_at, ip_address, event_type, details, scan_run_id
@@ -1257,7 +1257,7 @@ def asset_timeline(ip_address: str, limit: int = 100) -> list[dict]:
 
     init_db()
     safe_limit = max(1, min(int(limit), 200))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         event_rows = conn.execute(
             """
             SELECT
@@ -1335,7 +1335,7 @@ def asset_timeline(ip_address: str, limit: int = 100) -> list[dict]:
 def recent_network_observations(limit: int = 100) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 1_000))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT
@@ -1359,7 +1359,7 @@ def recent_network_observations(limit: int = 100) -> list[dict]:
 def recent_audit_log(limit: int = 100, *, include_identity: bool = False) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), 1_000))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT
@@ -1394,7 +1394,7 @@ def verify_audit_integrity() -> dict[str, object]:
             "checked_at": _utc_now(),
         }
 
-    with _connect() as conn:
+    with _managed_connection() as conn:
         valid, protected_entries, legacy_entries = _audit_chain_is_valid(conn, key)
 
     if not valid:
@@ -1448,7 +1448,7 @@ def asset_port_findings(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
     """Return saved open-port findings in report/advisor-ready form."""
     init_db()
     safe_limit = max(1, min(int(limit), MAX_INVENTORY_ROWS))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT ip_address, open_ports
@@ -1470,7 +1470,7 @@ def asset_port_findings(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
 def asset_inventory(limit: int = MAX_INVENTORY_ROWS) -> list[dict]:
     init_db()
     safe_limit = max(1, min(int(limit), MAX_INVENTORY_ROWS))
-    with _connect() as conn:
+    with _managed_connection() as conn:
         rows = conn.execute(
             """
             SELECT

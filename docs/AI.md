@@ -102,6 +102,8 @@ short-lived SQLite connections. Successful transactions commit, exceptions
 roll back, and each handle is closed before the operation returns. The schema
 initializer used by these operations closes its own connection as well.
 
+The general inventory store follows the same lifecycle for readiness and audit checks, scan and asset writes, service-finding operations, and bounded history/report reads. Each operation commits on success, rolls back on exceptions, and closes its SQLite handle before returning.
+
 Every actual provider request still passes the existing key separation,
 audit-integrity gate, bounded concurrency, rate limits, daily request
 budget, redacted fixed prompt, schema validation, and cached brief storage.
