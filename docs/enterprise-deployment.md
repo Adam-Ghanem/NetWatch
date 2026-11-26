@@ -139,3 +139,30 @@ change may still contain free-form failure text. They are not rewritten
 automatically. Treat existing SQLite files and backups as sensitive, and
 handle any historical cleanup only through an approved, reviewed maintenance
 procedure that preserves required audit and operational retention.
+
+
+## Audit historical enterprise queue error fields
+
+PR #322 prevents new worker exception messages from entering queue error fields.
+Older SQLite files may still contain free-form values in
+`enterprise_jobs.last_error` or `enterprise_outbox.last_error`. The following
+command audits a **standalone offline copy** without printing those values or
+modifying the database:
+
+```bash
+python3 -m scripts.audit_enterprise_queue_errors /protected/offline-copy.sqlite3
+```
+
+The report contains row counts only. Exit code `0` means every non-empty value
+is in the reviewed error-code allowlist; `1` means legacy free-form values
+remain; `2` means the file or queue schema could not be safely inspected.
+The tool opens SQLite read-only with `immutable=1`, refuses symlinked database
+files and SQLite WAL/SHM/journal sidecars, and emits fixed error codes rather
+than filesystem or SQLite exception text.
+
+Stop NetWatch and create a standalone backup copy before running the audit.
+Because immutable SQLite reads intentionally ignore WAL state, do not use this
+tool against a live database or a copy that still depends on sidecars. The tool
+does not scrub or rewrite history. If legacy rows are found, continue treating
+the database and its backups as sensitive and use a separately reviewed,
+approved maintenance procedure that preserves retention and audit requirements.
