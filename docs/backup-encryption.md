@@ -108,8 +108,9 @@ python scripts/restore_backup_age.py \
 
 The restore helper:
 - accepts only a regular, non-symlink identity file owned by root or the current
-  user, readable by its owner only, with trusted parent-directory ownership and
-  write permissions;
+  user, readable by its owner only; opens every canonical ancestor directory
+  from the filesystem root without following symlinks and validates ownership,
+  writable mode bits, and Linux access/default ACLs on each opened descriptor;
 - opens the identity once and passes only an inherited file-descriptor path to
   `age`; private identity contents are never loaded into Python or placed in
   the child command line;
@@ -162,9 +163,8 @@ verifier or a kernel-enforced immutable executable handle, so protected
 ownership/permissions and a trusted host remain required. The restore helper
 checks POSIX mode bits and, on Linux, rejects extended access ACLs on the
 identity descriptor plus access/default ACLs on every opened destination
-directory. It does not inspect ACLs on the identity path's ancestor directories
-or implement non-Linux ACL APIs; administrators must verify those
-platform-specific and ancestor-directory policies separately. Directory-
+directory. It does not implement non-Linux ACL APIs; administrators must verify
+platform-specific ACL policies separately. Directory-
 descriptor anchoring prevents a pathname swap from redirecting publication,
 but it does not defend against
 root or hostile same-UID processes, malicious mount changes, or filesystem

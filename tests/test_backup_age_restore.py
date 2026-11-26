@@ -459,3 +459,87 @@ def test_directory_swap_during_decryption_never_publishes_to_replacement(
 
     assert list(moved_directory.iterdir()) == []
     assert list(output_directory.iterdir()) == []
+
+
+
+def test_rejects_extended_acl_on_identity_ancestor_directory_before_launch(
+    tmp_path, monkeypatch
+):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output = tmp_path / "restored.sqlite3"
+    ancestor_state = identity.parent.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+
+    def fake_getxattr(descriptor, attribute):
+        current = os.fstat(descriptor)
+        if (
+            (current.st_dev, current.st_ino)
+            == (ancestor_state.st_dev, ancestor_state.st_ino)
+            and attribute == "system.posix_acl_access"
+        ):
+            return b"extended-acl"
+        raise OSError(no_acl_error, "no ACL")
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start when an identity ancestor has an extended ACL")
+
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    with pytest.raises(restorer.BackupRestoreError, match="Recovery identity directory"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+
+
+def test_rejects_identity_ancestor_acl_added_during_restore_before_publication(
+    tmp_path, monkeypatch
+):
+    encrypted, identity, plaintext = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch, plaintext=plaintext)
+    output = tmp_path / "restored.sqlite3"
+    ancestor_state = identity.parent.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+    process_started = False
+    original_popen = restorer.subprocess.Popen
+
+    def fake_getxattr(descriptor, attribute):
+        current = os.fstat(descriptor)
+        if (
+            process_started
+            and (current.st_dev, current.st_ino)
+            == (ancestor_state.st_dev, ancestor_state.st_ino)
+            and attribute == "system.posix_acl_access"
+        ):
+            return b"extended-acl"
+        raise OSError(no_acl_error, "no ACL")
+
+    def tracked_popen(*args, **kwargs):
+        nonlocal process_started
+        process = original_popen(*args, **kwargs)
+        process_started = True
+        return process
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+    monkeypatch.setattr(restorer.subprocess, "Popen", tracked_popen)
+    with pytest.raises(
+        restorer.BackupRestoreError, match="Recovery identity directory"
+    ):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(plaintext).hexdigest(),
+        )
+
+    assert process_started
+    assert not output.exists()
+    assert list(tmp_path.glob(".netwatch-restore-*")) == []
