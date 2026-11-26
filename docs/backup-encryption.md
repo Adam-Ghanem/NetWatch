@@ -167,6 +167,24 @@ restore time and backup age.
 Never place the private identity beside the encrypted backup. Do not reset or
 re-sign the audit chain to make a restore appear successful.
 
+## Real age interoperability coverage
+
+Security CI installs the Ubuntu runner's `age` package and requires both
+`age` and `age-keygen` to be present before running pytest. The
+`tests/test_backup_age_interop.py` integration test generates a temporary
+X25519 identity, encrypts a small SQLite snapshot with the real CLI, restores
+it through the operator helper, and verifies the restored bytes, SHA-256,
+permissions, and a read-only SQLite query. The identity and test database live
+only in pytest's temporary directory; no production key or network target is
+used.
+
+This validates CLI interoperability on the CI runner. It does not pin or
+authenticate the deployment binary: production operators must still verify the
+approved release through its official trust channel and supply an independently
+trusted digest when using `--age-binary-sha256`. It also does not prove
+off-host retention, independent key escrow, or a cross-host disaster-recovery
+drill.
+
 ## Limits
 
 The encryption and restore helpers provide local recipient-based encryption,
