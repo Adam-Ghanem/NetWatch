@@ -543,3 +543,77 @@ def test_rejects_identity_ancestor_acl_added_during_restore_before_publication(
     assert process_started
     assert not output.exists()
     assert list(tmp_path.glob(".netwatch-restore-*")) == []
+
+
+def test_fails_closed_when_identity_acl_xattr_is_unsupported(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    identity_state = identity.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+    unsupported_error = getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)
+
+    def fake_getxattr(descriptor, attribute):
+        current = os.fstat(descriptor)
+        if (
+            (current.st_dev, current.st_ino) == (identity_state.st_dev, identity_state.st_ino)
+            and attribute == "system.posix_acl_access"
+        ):
+            raise OSError(unsupported_error, "ACL xattrs unsupported")
+        raise OSError(no_acl_error, "no ACL")
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start when identity ACL metadata is unverifiable")
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    output = tmp_path / "restored.sqlite3"
+
+    with pytest.raises(restorer.BackupRestoreError, match="ACL metadata cannot be verified"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+
+
+def test_fails_closed_when_destination_acl_xattr_is_unsupported(tmp_path, monkeypatch):
+    encrypted, identity, _ = _inputs(tmp_path)
+    _fake_age(tmp_path, monkeypatch)
+    output_directory = tmp_path / "restore-output"
+    output_directory.mkdir()
+    output_directory_state = output_directory.stat()
+    no_acl_error = getattr(errno, "ENODATA", errno.EIO)
+    unsupported_error = getattr(errno, "EOPNOTSUPP", errno.ENOTSUP)
+
+    def fake_getxattr(descriptor, attribute):
+        current = os.fstat(descriptor)
+        if (
+            (current.st_dev, current.st_ino)
+            == (output_directory_state.st_dev, output_directory_state.st_ino)
+            and attribute == "system.posix_acl_default"
+        ):
+            raise OSError(unsupported_error, "ACL xattrs unsupported")
+        raise OSError(no_acl_error, "no ACL")
+
+    def unexpected_popen(*args, **kwargs):
+        pytest.fail("age must not start when destination ACL metadata is unverifiable")
+
+    monkeypatch.setattr(restorer.sys, "platform", "linux")
+    monkeypatch.setattr(restorer.os, "getxattr", fake_getxattr)
+    monkeypatch.setattr(restorer.subprocess, "Popen", unexpected_popen)
+    output = output_directory / "restored.sqlite3"
+
+    with pytest.raises(restorer.BackupRestoreError, match="ACL metadata cannot be verified"):
+        restorer.restore_backup(
+            encrypted,
+            output,
+            identity_path=identity,
+            expected_sha256=hashlib.sha256(b"restored synthetic backup").hexdigest(),
+        )
+
+    assert not output.exists()
+    assert list(output_directory.iterdir()) == []

@@ -128,8 +128,10 @@ The restore helper:
   ownership and rejecting group/world-writable directories unless the sticky
   bit protects shared-directory entry ownership (for example `/tmp`);
 - on Linux, rejects extended POSIX access ACLs on the opened recovery identity
-  and access/default ACLs on every opened destination directory; if ACL metadata
-  cannot be inspected, it fails closed;
+  and access/default ACLs on every opened destination directory; only ENODATA
+  (or ENOATTR where provided) is treated as an absent ACL. Filesystems returning
+  ENOTSUP/EOPNOTSUPP or another inspection error are unverifiable, so restoration
+  fails closed rather than treating missing ACL support as proof of no ACL;
 - creates the private temporary file, checks for an existing destination,
   publishes with a same-directory no-overwrite hard link, removes temporary
   entries, and fsyncs the directory through the same open descriptor; it

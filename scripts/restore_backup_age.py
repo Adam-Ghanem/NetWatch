@@ -55,15 +55,18 @@ def _descriptor_has_no_extended_acl(
     attributes = ["system.posix_acl_access"]
     if directory:
         attributes.append("system.posix_acl_default")
-    unsupported_errors = {errno.ENODATA, errno.ENOTSUP}
-    if hasattr(errno, "EOPNOTSUPP"):
-        unsupported_errors.add(errno.EOPNOTSUPP)
+    # ENODATA (and ENOATTR where provided) means the ACL is absent.
+    # ENOTSUP/EOPNOTSUPP means the filesystem cannot prove that no ACL exists,
+    # so treat it as unverifiable and fail closed.
+    absent_acl_errors = {errno.ENODATA}
+    if hasattr(errno, "ENOATTR"):
+        absent_acl_errors.add(errno.ENOATTR)
 
     for attribute in attributes:
         try:
             getxattr(descriptor, attribute)
         except OSError as exc:
-            if exc.errno in unsupported_errors:
+            if exc.errno in absent_acl_errors:
                 continue
             return False
         except (AttributeError, TypeError):
