@@ -156,8 +156,10 @@ def _open_output_directory(path: Path) -> tuple[int, os.stat_result]:
         nofollow_flag is None
         or directory_flag is None
         or os.open not in os.supports_dir_fd
+        or os.stat not in os.supports_dir_fd
         or os.link not in os.supports_dir_fd
         or os.unlink not in os.supports_dir_fd
+        or os.stat not in os.supports_follow_symlinks
     ):
         raise BackupRestoreError(
             "This host cannot safely anchor restore publication to a directory descriptor."
@@ -329,9 +331,6 @@ def restore_backup(
         identity_fd_reference = _identity_descriptor_path(opened_identity_fd)
 
         temporary_fd, temporary_name = _create_private_temporary(output_directory_fd)
-        _ensure_output_directory_unchanged(
-            output_parent, output_directory_fd, output_directory_state
-        )
 
         command = [age_binary, "-d", "-i", identity_fd_reference]
         digest = hashlib.sha256()
@@ -340,6 +339,9 @@ def restore_backup(
 
         try:
             with os.fdopen(temporary_fd, "wb") as restored_stream:
+                _ensure_output_directory_unchanged(
+                    output_parent, output_directory_fd, output_directory_state
+                )
                 try:
                     process = subprocess.Popen(
                         command,
