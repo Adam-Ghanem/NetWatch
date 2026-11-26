@@ -103,6 +103,7 @@ python scripts/restore_backup_age.py \
   --identity /secure/recovery/identity.txt \
   --expected-sha256 "$TRUSTED_BACKUP_SHA256" \
   --age-binary-sha256 "$TRUSTED_AGE_BINARY_SHA256" \
+  --max-plaintext-bytes "$MAX_RESTORE_BYTES" \
   backup.sqlite3.age /secure/staging/backup.sqlite3
 ```
 
@@ -110,6 +111,11 @@ The restore helper currently runs on Linux only. Native ACL inspection is part o
 its trust boundary; other POSIX platforms are rejected before the encrypted input
 is opened or the `age` process is started. Do not bypass this guard. Add and test
 a native ACL inspection implementation before enabling restoration elsewhere.
+
+Set `MAX_RESTORE_BYTES` to a positive integer chosen from the backup-size and
+staging-capacity plan. The optional limit is enforced while streaming, before
+plaintext publication; when omitted, the existing encrypted-input-size ceiling
+is retained. This is an output-byte ceiling, not a free-space reservation.
 
 The restore helper:
 - accepts only a regular, non-symlink identity file owned by root or the current
@@ -126,8 +132,9 @@ The restore helper:
 - suppresses child stderr and uses a minimal environment;
 - enforces a 30-second no-output deadline and a 30-second process-exit deadline;
   failure cleanup terminates the dedicated POSIX process group;
-- caps plaintext output at the encrypted input size, writes to a mode-`0600`
-  temporary file, and verifies the complete plaintext SHA-256 before publication;
+- caps plaintext output at the encrypted input size and, when supplied, the
+  lower operator-selected `--max-plaintext-bytes` limit; writes to a mode-`0600`
+  temporary file and verifies the complete plaintext SHA-256 before publication;
 - opens every destination directory component from the filesystem root
   with directory descriptors and `O_NOFOLLOW`, requiring root/current-user
   ownership and rejecting group/world-writable directories unless the sticky
