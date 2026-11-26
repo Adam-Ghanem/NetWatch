@@ -115,6 +115,39 @@ def test_rejects_age_binary_digest_mismatch_before_starting_process(tmp_path, mo
     assert list(tmp_path.glob(".netwatch-age-*")) == []
 
 
+def test_cli_forwards_optional_age_binary_sha256(monkeypatch, capsys):
+    captured = {}
+
+    def fake_encrypt_backup(
+        input_path,
+        output_path,
+        *,
+        recipients,
+        expected_sha256,
+        expected_age_sha256=None,
+    ):
+        captured["expected_age_sha256"] = expected_age_sha256
+        return {"encrypted": True, "sha256": expected_sha256}
+
+    monkeypatch.setattr(encryptor, "encrypt_backup", fake_encrypt_backup)
+    result = encryptor.main(
+        [
+            "backup.sqlite3",
+            "backup.sqlite3.age",
+            "--recipient",
+            _recipient(),
+            "--expected-sha256",
+            "a" * 64,
+            "--age-binary-sha256",
+            "b" * 64,
+        ]
+    )
+
+    assert result == 0
+    assert captured["expected_age_sha256"] == "b" * 64
+    assert '"ok": true' in capsys.readouterr().out
+
+
 def test_rejects_digest_mismatch_and_removes_partial_ciphertext(tmp_path, monkeypatch):
     recipients = [_recipient()]
     _fake_age(tmp_path, monkeypatch, recipients=recipients)

@@ -292,9 +292,6 @@ def encrypt_backup(
             raise BackupEncryptionError("Encrypted output already exists; refusing to overwrite.")
 
         age_binary = _resolve_age_binary()
-        age_binary_digest = _verify_age_binary_digest(
-            age_binary, expected_age_sha256
-        )
 
         try:
             temporary_fd, temporary_name = tempfile.mkstemp(
@@ -322,6 +319,9 @@ def encrypt_backup(
         try:
             with os.fdopen(temporary_fd, "wb") as encrypted_stream:
                 try:
+                    age_binary_digest = _verify_age_binary_digest(
+                        age_binary, expected_age_sha256
+                    )
                     process = subprocess.Popen(
                         command,
                         stdin=subprocess.PIPE,
