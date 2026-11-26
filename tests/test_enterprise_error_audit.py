@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 
 import pytest
@@ -141,3 +142,25 @@ def test_cli_reports_counts_without_printing_legacy_values(tmp_path, capsys):
     assert result == 1
     assert '"legacy_error_rows": 1' in output
     assert secret not in output
+
+
+
+def test_audit_rejects_database_metadata_change_during_read(tmp_path, monkeypatch):
+    database = tmp_path / "changing.sqlite3"
+    _database(database)
+    import scripts.audit_enterprise_queue_errors as audit_module
+
+    original_connect = audit_module.sqlite3.connect
+
+    def connect_then_touch(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        current = database.stat()
+        os.utime(database, ns=(current.st_atime_ns, current.st_mtime_ns + 1_000_000))
+        return connection
+
+    monkeypatch.setattr(audit_module.sqlite3, "connect", connect_then_touch)
+
+    with pytest.raises(AuditFailure) as caught:
+        audit_database(database)
+
+    assert caught.value.code == "database_changed_during_audit"
