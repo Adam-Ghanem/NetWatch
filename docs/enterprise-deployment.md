@@ -116,3 +116,12 @@ True multi-replica HA requires a future architecture with a transactional shared
  Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
 
 `enterprise_worker.py` provides the next bounded execution seam: workers claim jobs or outbox events, dispatch only to an explicit handler/publisher allowlist, persist success/failure, and preserve retry/dead-letter semantics. `run_poll_loop` clamps the polling interval and cycle count. The module is safe to run as a separate process, but shared-service approval still requires external coordination, PostgreSQL/Redis integration, failure injection, and staging evidence.
+
+## SQLite connection lifecycle
+
+Application-store operations use short-lived managed SQLite connections. Successful
+operations commit before closing; exceptions roll back before the connection is
+closed. Explicit backup/claim paths retain their own `try/finally` closure. This
+bounds connection lifetime for long-running dashboard and scheduler workloads,
+but it does **not** change the single-instance SQLite deployment boundary or
+provide multi-process coordination/high availability.
