@@ -52,6 +52,12 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
 - No provider has network scan, shell or remediation tools.
 - The app enforces rate/concurrency/time limits, daily AI budgets and
   provider/model-specific caching. Configure spend/rate caps at the provider.
+- `NETWATCH_AI_DAILY_REQUEST_LIMIT` defaults to 50 when unset and accepts
+  ASCII decimal values from 0 to 10,000. Setting it to `0` disables provider
+  requests. An explicitly configured malformed, negative, or over-limit value
+  also fails closed to `0` and disables AI instead of silently reverting to
+  the default budget. Core monitoring and the local Risk Advisor remain
+  available; an unexpired cached brief may still be served.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
