@@ -96,6 +96,22 @@ def test_agent_loop_prevalidates_batch_before_executing_any_tool():
     assert executed == []
 
 
+@pytest.mark.parametrize("arguments", [[], "", False, 0])
+def test_agent_loop_rejects_falsey_non_mapping_arguments_before_execution(arguments):
+    executed = []
+
+    with pytest.raises(ToolCallLimitExceeded, match="invalid tool arguments"):
+        run_agent_loop(
+            lambda messages, tools: {
+                "tool_calls": [{"name": "read", "arguments": arguments}]
+            },
+            {},
+            {"read": lambda args: _record_execution(executed, args)},
+        )
+
+    assert executed == []
+
+
 def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
     executed = []
 
