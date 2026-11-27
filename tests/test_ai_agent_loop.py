@@ -25,17 +25,11 @@ def test_agent_loop_executes_registered_tool_then_finishes():
     def model(messages, tools):
         calls.append((messages, tools))
         if len(calls) == 1:
-            return {
-                "tool_calls": [
-                    {"name": "asset_history", "arguments": {"id": "a1"}}
-                ]
-            }
+            return {"tool_calls": [{"name": "asset_history", "arguments": {"id": "a1"}}]}
         return {"answer": "history reviewed"}
 
     result = run_agent_loop(
-        model,
-        {"asset": "a1"},
-        {"asset_history": lambda args: {"id": args["id"], "events": []}},
+        model, {"asset": "a1"}, {"asset_history": lambda args: {"id": args["id"], "events": []}}
     )
     assert result["answer"] == "history reviewed"
     assert len(calls) == 2
@@ -73,10 +67,7 @@ def test_agent_loop_rejects_invalid_round_budget_before_model_call(max_rounds):
 
 def test_agent_loop_rejects_oversized_tool_batch_before_execution():
     executed = []
-    calls = [
-        {"name": "read", "arguments": {}}
-        for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)
-    ]
+    calls = [{"name": "read", "arguments": {}} for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
 
     with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
         run_agent_loop(
@@ -111,9 +102,7 @@ def test_agent_loop_rejects_falsey_non_mapping_arguments_before_execution(argume
 
     with pytest.raises(ToolCallLimitExceeded, match="invalid tool arguments"):
         run_agent_loop(
-            lambda messages, tools: {
-                "tool_calls": [{"name": "read", "arguments": arguments}]
-            },
+            lambda messages, tools: {"tool_calls": [{"name": "read", "arguments": arguments}]},
             {},
             {"read": lambda args: _record_execution(executed, args)},
         )
@@ -126,9 +115,7 @@ def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
 
     with pytest.raises(ToolCallLimitExceeded, match="maximum model rounds"):
         run_agent_loop(
-            lambda messages, tools: {
-                "tool_calls": [{"name": "read", "arguments": {}}]
-            },
+            lambda messages, tools: {"tool_calls": [{"name": "read", "arguments": {}}]},
             {},
             {"read": lambda args: _record_execution(executed, args)},
             max_rounds=1,
@@ -140,8 +127,7 @@ def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
 def test_agent_loop_caps_registered_tool_count_before_model_call():
     called = False
     tools: dict[str, Tool] = {
-        f"tool-{index}": lambda _: {}
-        for index in range(MAX_REGISTERED_TOOLS + 1)
+        f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)
     }
 
     def model(messages, registered):
