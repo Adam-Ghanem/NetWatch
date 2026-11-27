@@ -20,6 +20,7 @@ def test_network_scanner_clamps_non_positive_worker_count(monkeypatch):
     [
         "169.254.169.0/24",
         "169.254.170.0/24",
+        "169.254.170.23/32",
         "169.254.42.0/24",
         "169.254.0.0/24",
         "169.254.10.0/24",
@@ -41,6 +42,8 @@ def test_network_scan_blocks_metadata_cidr_before_any_probe(monkeypatch, cidr):
     [
         "fd20:ce::254",
         "169.254.170.2",
+        "169.254.170.23",
+        "fd00:ec2::23",
         "169.254.42.42",
         "fd00:42::42",
         "169.254.0.23",
