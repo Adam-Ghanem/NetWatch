@@ -12,7 +12,12 @@ from ai_responses_runner import run_responses_agent
 
 
 def _function_call(name, *, call_id="c1", arguments="{}"):
-    return SimpleNamespace(type="function_call", name=name, call_id=call_id, arguments=arguments)
+    return SimpleNamespace(
+        type="function_call",
+        name=name,
+        call_id=call_id,
+        arguments=arguments,
+    )
 
 
 class FakeResponses:
