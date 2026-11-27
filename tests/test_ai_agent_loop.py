@@ -84,10 +84,7 @@ def test_agent_loop_rejects_invalid_round_budget_before_model_call(max_rounds):
 
 def test_agent_loop_rejects_oversized_tool_batch_before_execution():
     executed = []
-    calls = [
-        {"name": "read", "arguments": {}}
-        for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)
-    ]
+    calls = [{"name": "read", "arguments": {}} for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
 
     with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
         run_agent_loop(
@@ -164,7 +161,6 @@ def test_agent_loop_caps_registered_tool_count_before_model_call():
     assert called is False
 
 
-
 def test_agent_loop_rejects_oversized_context_before_model_call():
     called = False
 
@@ -236,9 +232,7 @@ def test_agent_loop_rejects_aggregate_tool_arguments_before_execution():
 def test_agent_loop_rejects_oversized_tool_result():
     with pytest.raises(ToolCallLimitExceeded, match="tool result"):
         run_agent_loop(
-            lambda messages, tools: {
-                "tool_calls": [{"name": "read", "arguments": {}}]
-            },
+            lambda messages, tools: {"tool_calls": [{"name": "read", "arguments": {}}]},
             {},
             {"read": lambda _: {"evidence": "x" * MAX_TOOL_RESULT_BYTES}},
         )

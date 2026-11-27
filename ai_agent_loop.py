@@ -71,19 +71,13 @@ def parse_tool_arguments(value: object) -> tuple[dict[str, Any], int]:
         try:
             raw_size = len(value.encode("utf-8"))
         except UnicodeError as exc:
-            raise ToolCallLimitExceeded(
-                "agent returned invalid tool arguments"
-            ) from exc
+            raise ToolCallLimitExceeded("agent returned invalid tool arguments") from exc
         if raw_size > MAX_TOOL_ARGUMENT_BYTES:
-            raise ToolCallLimitExceeded(
-                f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES} bytes"
-            )
+            raise ToolCallLimitExceeded(f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES} bytes")
         try:
             parsed = json.loads(value)
         except (TypeError, ValueError, RecursionError) as exc:
-            raise ToolCallLimitExceeded(
-                "agent returned invalid tool arguments"
-            ) from exc
+            raise ToolCallLimitExceeded("agent returned invalid tool arguments") from exc
     elif isinstance(value, Mapping):
         parsed = dict(value)
     else:
@@ -120,9 +114,7 @@ def validate_max_rounds(max_rounds: int) -> int:
         or not isinstance(max_rounds, int)
         or not 1 <= max_rounds <= MAX_AGENT_ROUNDS
     ):
-        raise ValueError(
-            f"max_rounds must be an integer between 1 and {MAX_AGENT_ROUNDS}"
-        )
+        raise ValueError(f"max_rounds must be an integer between 1 and {MAX_AGENT_ROUNDS}")
     return max_rounds
 
 
@@ -153,17 +145,14 @@ def _prepare_tool_calls(
         argument_bytes += size
         if argument_bytes > MAX_TOOL_ARGUMENT_BYTES_PER_ROUND:
             raise ToolCallLimitExceeded(
-                f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES_PER_ROUND} "
-                "bytes per round"
+                f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES_PER_ROUND} " "bytes per round"
             )
         prepared.append((name, normalized))
     return prepared
 
 
 def run_agent_loop(
-    model_call: Callable[
-        [list[dict[str, Any]], list[dict[str, Any]]], Mapping[str, Any]
-    ],
+    model_call: Callable[[list[dict[str, Any]], list[dict[str, Any]]], Mapping[str, Any]],
     context: Mapping[str, Any],
     tools: Mapping[str, Callable[[dict[str, Any]], Mapping[str, Any]]],
     *,
@@ -195,8 +184,7 @@ def run_agent_loop(
         calls = _prepare_tool_calls(raw_calls, tools)
         if round_index == max_rounds - 1:
             raise ToolCallLimitExceeded(
-                "agent reached the maximum model rounds before "
-                "completing the tool batch"
+                "agent reached the maximum model rounds before " "completing the tool batch"
             )
 
         for name, arguments in calls:

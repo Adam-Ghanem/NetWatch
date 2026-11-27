@@ -89,10 +89,7 @@ def test_runner_rejects_round_budget_above_hard_limit_before_provider_call():
 
 def test_runner_rejects_oversized_tool_batch_before_execution():
     executed = []
-    calls = [
-        _function_call("read", call_id=f"c{index}")
-        for index in range(MAX_TOOL_CALLS_PER_ROUND + 1)
-    ]
+    calls = [_function_call("read", call_id=f"c{index}") for index in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
     client = FakeClient(calls)
 
     with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
@@ -139,8 +136,7 @@ def test_runner_does_not_execute_unconsumed_last_round_batch():
 def test_runner_caps_tool_definitions_before_provider_call():
     client = FakeClient()
     specs = [
-        {"type": "function", "name": f"tool-{index}"}
-        for index in range(MAX_REGISTERED_TOOLS + 1)
+        {"type": "function", "name": f"tool-{index}"} for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
     tools = dict.fromkeys(
         (f"tool-{index}" for index in range(MAX_REGISTERED_TOOLS + 1)),
@@ -150,7 +146,6 @@ def test_runner_caps_tool_definitions_before_provider_call():
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         _run(client, tool_specs=specs, tools=tools)
     assert client.responses.round == 0
-
 
 
 def test_runner_rejects_oversized_context_before_provider_call():
