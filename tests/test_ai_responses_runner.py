@@ -95,9 +95,7 @@ def test_runner_rejects_oversized_tool_batch_before_execution():
 
 def test_runner_prevalidates_batch_before_executing_any_tool():
     executed = []
-    client = FakeClient(
-        [_function_call("read"), _function_call("shell", call_id="c2")]
-    )
+    client = FakeClient([_function_call("read"), _function_call("shell", call_id="c2")])
 
     with pytest.raises(KeyError, match="shell"):
         _run(
@@ -128,10 +126,7 @@ def test_runner_caps_tool_definitions_before_provider_call():
         {"type": "function", "name": f"tool-{index}"}
         for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
-    tools = {
-        f"tool-{index}": lambda _: {}
-        for index in range(MAX_REGISTERED_TOOLS + 1)
-    }
+    tools = {f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)}
 
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         _run(client, tool_specs=specs, tools=tools)
