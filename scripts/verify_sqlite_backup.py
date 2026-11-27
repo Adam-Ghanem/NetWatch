@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Verify a NetWatch SQLite backup without modifying it."""
+"""Strict, read-only verification of an offline NetWatch SQLite backup.
+
+This checks backup structure and transport integrity, not encryption,
+off-host rotation, audit HMAC keys, or a successful application restore.
+"""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 TABLES = (
@@ -16,31 +23,86 @@ TABLES = (
     "operation_alerts",
     "service_findings",
 )
+_HASH_CHUNK_BYTES = 1024 * 1024
 
 
-def verify(path: Path, expected_schema: int | None = None) -> dict[str, object]:
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as backup:
+        for chunk in iter(lambda: backup.read(_HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _expected_digest(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if len(normalized) != 64 or any(char not in "0123456789abcdef" for char in normalized):
+        raise ValueError("Expected SHA-256 must be exactly 64 hexadecimal characters.")
+    return normalized
+
+
+def verify(
+    path: Path,
+    expected_schema: int | None = None,
+    expected_sha256: str | None = None,
+) -> dict[str, object]:
+    """Verify a *stopped, standalone* SQLite snapshot without changing it."""
     if not path.is_file() or path.stat().st_size == 0:
         raise ValueError("Backup file is missing or empty.")
-    uri = f"file:{path.resolve()}?mode=ro"
-    with sqlite3.connect(uri, uri=True) as connection:
-        integrity = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
-        schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    if expected_schema is not None and expected_schema < 1:
+        raise ValueError("Expected schema must be a positive integer.")
+
+    expected_hash = _expected_digest(expected_sha256)
+    before = path.stat()
+    digest = _file_sha256(path)
+    if expected_hash is not None and not hmac.compare_digest(digest, expected_hash):
+        raise ValueError("Backup SHA-256 does not match the expected value.")
+
+    # as_uri() percent-encodes filenames containing '?' and '#', unlike raw file: paths.
+    uri = f"{path.resolve().as_uri()}?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True)) as connection:
+        connection.execute("PRAGMA query_only = ON")
+        result = connection.execute("PRAGMA integrity_check").fetchone()
+        integrity = str(result[0]) if result else ""
         if integrity.lower() != "ok":
             raise ValueError(f"SQLite integrity check failed: {integrity}")
+
+        schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
+        if schema < 1:
+            raise ValueError("Backup has no NetWatch schema version.")
         if expected_schema is not None and schema != expected_schema:
             raise ValueError(f"Expected schema {expected_schema}, found {schema}.")
-        counts: dict[str, int] = {}
-        for table in TABLES:
-            try:
-                counts[table] = int(
-                    connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                )
-            except sqlite3.Error:
-                counts[table] = -1
+
+        present = {
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        missing = sorted(set(TABLES) - present)
+        if missing:
+            raise ValueError(f"Missing required NetWatch tables: {', '.join(missing)}.")
+
+        # Fetch one violation only; a damaged backup must not force an unbounded result.
+        violation = connection.execute("PRAGMA foreign_key_check").fetchone()
+        if violation is not None:
+            raise ValueError("Backup contains foreign key violations.")
+
+        counts = {
+            table: int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            for table in TABLES
+        }
+
+    after = path.stat()
+    if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
+        raise ValueError("Backup changed during verification; use an offline snapshot.")
+
     return {
         "path": str(path.resolve()),
-        "bytes": path.stat().st_size,
+        "bytes": after.st_size,
+        "sha256": digest,
         "integrity": integrity,
+        "foreign_key_violations": 0,
         "schema_version": schema,
         "counts": counts,
         "read_only": True,
@@ -51,9 +113,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("backup", type=Path)
     parser.add_argument("--expected-schema", type=int, default=None)
+    parser.add_argument(
+        "--expected-sha256",
+        help="SHA-256 received through a separately trusted channel.",
+        default=None,
+    )
     args = parser.parse_args()
     try:
-        report = verify(args.backup, args.expected_schema)
+        report = verify(args.backup, args.expected_schema, args.expected_sha256)
     except (OSError, ValueError, sqlite3.Error) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
         return 2
