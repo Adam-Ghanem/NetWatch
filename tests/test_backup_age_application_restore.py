@@ -98,7 +98,8 @@ def test_real_age_restore_preserves_netwatch_inventory_and_audit_chain(
 
     original_integrity = inventory_store.verify_audit_integrity()
     assert original_integrity["status"] == "valid"
-    expected_protected_entries = int(original_integrity["protected_entries"])
+    expected_protected_entries = original_integrity["protected_entries"]
+    assert isinstance(expected_protected_entries, int)
     assert expected_protected_entries >= 1
 
     snapshot = tmp_path / "netwatch-snapshot.sqlite3"
@@ -146,7 +147,9 @@ def test_real_age_restore_preserves_netwatch_inventory_and_audit_chain(
     restored_inventory = inventory_store.asset_inventory()
 
     assert restored_integrity["status"] == "valid"
-    assert restored_integrity["protected_entries"] == expected_protected_entries
+    restored_protected_entries = restored_integrity["protected_entries"]
+    assert isinstance(restored_protected_entries, int)
+    assert restored_protected_entries == expected_protected_entries
     assert len(restored_inventory) == 1
     assert restored_inventory[0]["ip_address"] == "192.168.50.10"
     assert restored_inventory[0]["status"] == "Online"
