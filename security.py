@@ -23,14 +23,17 @@ ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
 
 # Cloud metadata endpoints are link-local/ULA addresses and must never be scan targets.
 # AWS EC2 documents 169.254.169.254 and fd00:ec2::254; AWS ECS task metadata
-# v2 uses 169.254.170.2; Google Cloud documents 169.254.169.254 and fd20:ce::254.
+# v2 uses 169.254.170.2; Google Cloud uses fd20:ce::254; Scaleway uses
+# 169.254.42.42 and fd00:42::42.
 CLOUD_METADATA_IPV4_ADDRESSES = (
     ipaddress.IPv4Address("169.254.169.254"),
     ipaddress.IPv4Address("169.254.170.2"),
+    ipaddress.IPv4Address("169.254.42.42"),
 )
 CLOUD_METADATA_IPV6_ADDRESSES = (
     ipaddress.IPv6Address("fd00:ec2::254"),
     ipaddress.IPv6Address("fd20:ce::254"),
+    ipaddress.IPv6Address("fd00:42::42"),
 )
 
 
