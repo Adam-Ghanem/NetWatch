@@ -89,7 +89,9 @@ def test_runner_rejects_round_budget_above_hard_limit_before_provider_call():
 
 def test_runner_rejects_oversized_tool_batch_before_execution():
     executed = []
-    calls = [_function_call("read", call_id=f"c{index}") for index in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
+    calls = [
+        _function_call("read", call_id=f"c{index}") for index in range(MAX_TOOL_CALLS_PER_ROUND + 1)
+    ]
     client = FakeClient(calls)
 
     with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
