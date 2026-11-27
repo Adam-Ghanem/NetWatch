@@ -1,3 +1,6 @@
+from collections.abc import Callable, Mapping
+from typing import Any
+
 import pytest
 
 from ai_agent_loop import (
@@ -7,6 +10,13 @@ from ai_agent_loop import (
     ToolCallLimitExceeded,
     run_agent_loop,
 )
+
+Tool = Callable[[dict[str, Any]], Mapping[str, Any]]
+
+
+def _record_execution(executed: list[bool], _args: dict[str, Any]) -> dict[str, Any]:
+    executed.append(True)
+    return {}
 
 
 def test_agent_loop_executes_registered_tool_then_finishes():
@@ -63,7 +73,7 @@ def test_agent_loop_rejects_oversized_tool_batch_before_execution():
         run_agent_loop(
             lambda messages, tools: {"tool_calls": calls},
             {},
-            {"read": lambda _: executed.append(True) or {}},
+            {"read": lambda args: _record_execution(executed, args)},
         )
 
     assert executed == []
@@ -80,7 +90,7 @@ def test_agent_loop_prevalidates_batch_before_executing_any_tool():
         run_agent_loop(
             lambda messages, tools: {"tool_calls": calls},
             {},
-            {"read": lambda _: executed.append(True) or {}},
+            {"read": lambda args: _record_execution(executed, args)},
         )
 
     assert executed == []
@@ -93,7 +103,7 @@ def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
         run_agent_loop(
             lambda messages, tools: {"tool_calls": [{"name": "read", "arguments": {}}]},
             {},
-            {"read": lambda _: executed.append(True) or {}},
+            {"read": lambda args: _record_execution(executed, args)},
             max_rounds=1,
         )
 
@@ -102,7 +112,9 @@ def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
 
 def test_agent_loop_caps_registered_tool_count_before_model_call():
     called = False
-    tools = {f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)}
+    tools: dict[str, Tool] = {
+        f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)
+    }
 
     def model(messages, registered):
         nonlocal called
