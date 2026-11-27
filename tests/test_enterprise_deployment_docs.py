@@ -17,9 +17,8 @@ def test_enterprise_recovery_guide_matches_runtime_schema(tmp_path, monkeypatch)
     with sqlite3.connect(inventory_store.DB_FILE) as connection:
         runtime_schema = connection.execute("PRAGMA user_version").fetchone()[0]
 
-    guide = (
-        Path(__file__).resolve().parents[1] / "docs" / "enterprise-deployment.md"
-    ).read_text(encoding="utf-8")
+    guide_path = Path(__file__).resolve().parents[1] / "docs"
+    guide = (guide_path / "enterprise-deployment.md").read_text(encoding="utf-8")
 
     expected_schema = re.search(r"--expected-schema\s+(\d+)", guide)
     documented_migration = re.search(r"schema tracking to version\s+(\d+)", guide)
