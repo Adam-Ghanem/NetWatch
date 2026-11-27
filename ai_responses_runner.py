@@ -4,6 +4,13 @@ import json
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from ai_agent_loop import (
+    MAX_REGISTERED_TOOLS,
+    MAX_TOOL_CALLS_PER_ROUND,
+    ToolCallLimitExceeded,
+    validate_max_rounds,
+)
+
 
 def run_responses_agent(
     client: Any,
@@ -15,8 +22,11 @@ def run_responses_agent(
     max_rounds: int = 5,
 ) -> str:
     """Run a bounded OpenAI Responses tool-calling loop over NetWatch evidence."""
-    if max_rounds < 1:
-        raise ValueError("max_rounds must be >= 1")
+    max_rounds = validate_max_rounds(max_rounds)
+    if len(tools) > MAX_REGISTERED_TOOLS or len(tool_specs) > MAX_REGISTERED_TOOLS:
+        raise ToolCallLimitExceeded(
+            f"agent supports at most {MAX_REGISTERED_TOOLS} registered tools"
+        )
 
     response = client.responses.create(
         model=model,
@@ -29,7 +39,7 @@ def run_responses_agent(
         tools=tool_specs,
     )
 
-    for _ in range(max_rounds):
+    for round_index in range(max_rounds):
         calls = [
             item
             for item in getattr(response, "output", []) or []
@@ -38,17 +48,38 @@ def run_responses_agent(
         if not calls:
             return getattr(response, "output_text", "")
 
-        outputs: list[dict[str, Any]] = []
+        if len(calls) > MAX_TOOL_CALLS_PER_ROUND:
+            raise ToolCallLimitExceeded(
+                f"agent exceeded {MAX_TOOL_CALLS_PER_ROUND} tool calls in one round"
+            )
+
+        prepared: list[tuple[str, str, dict[str, Any]]] = []
         for call in calls:
             name = getattr(call, "name", "")
             if name not in tools:
                 raise KeyError(f"AI requested unregistered tool: {name}")
-            arguments = json.loads(getattr(call, "arguments", "{}"))
+            try:
+                arguments = json.loads(getattr(call, "arguments", "{}"))
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise ToolCallLimitExceeded("agent returned invalid tool arguments") from exc
+            if not isinstance(arguments, dict):
+                raise ToolCallLimitExceeded("agent returned invalid tool arguments")
+            prepared.append((name, getattr(call, "call_id", ""), arguments))
+
+        if round_index == max_rounds - 1:
+            raise ToolCallLimitExceeded(
+                "agent reached the maximum model rounds before completing the tool batch"
+            )
+
+        outputs: list[dict[str, Any]] = []
+        for name, call_id, arguments in prepared:
             result = tools[name](arguments)
+            if not isinstance(result, Mapping):
+                raise ToolCallLimitExceeded("registered tool returned an invalid result")
             outputs.append(
                 {
                     "type": "function_call_output",
-                    "call_id": getattr(call, "call_id", ""),
+                    "call_id": call_id,
                     "output": json.dumps(dict(result), ensure_ascii=False),
                 }
             )
@@ -63,4 +94,4 @@ def run_responses_agent(
             tools=tool_specs,
         )
 
-    raise RuntimeError(f"AI agent exceeded {max_rounds} rounds")
+    raise ToolCallLimitExceeded(f"agent exceeded {max_rounds} model rounds")

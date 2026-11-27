@@ -1,6 +1,12 @@
 import pytest
 
-from ai_agent_loop import ToolCallLimitExceeded, run_agent_loop
+from ai_agent_loop import (
+    MAX_AGENT_ROUNDS,
+    MAX_REGISTERED_TOOLS,
+    MAX_TOOL_CALLS_PER_ROUND,
+    ToolCallLimitExceeded,
+    run_agent_loop,
+)
 
 
 def test_agent_loop_executes_registered_tool_then_finishes():
@@ -33,3 +39,76 @@ def test_agent_loop_is_bounded():
 
     with pytest.raises(ToolCallLimitExceeded):
         run_agent_loop(model, {}, {"ping": lambda _: {}}, max_rounds=2)
+
+
+@pytest.mark.parametrize("max_rounds", [0, MAX_AGENT_ROUNDS + 1, True, 1.5, "2"])
+def test_agent_loop_rejects_invalid_round_budget_before_model_call(max_rounds):
+    called = False
+
+    def model(messages, tools):
+        nonlocal called
+        called = True
+        return {}
+
+    with pytest.raises(ValueError, match="max_rounds"):
+        run_agent_loop(model, {}, {}, max_rounds=max_rounds)
+    assert called is False
+
+
+def test_agent_loop_rejects_oversized_tool_batch_before_execution():
+    executed = []
+    calls = [{"name": "read", "arguments": {}} for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
+
+    with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
+        run_agent_loop(
+            lambda messages, tools: {"tool_calls": calls},
+            {},
+            {"read": lambda _: executed.append(True) or {}},
+        )
+
+    assert executed == []
+
+
+def test_agent_loop_prevalidates_batch_before_executing_any_tool():
+    executed = []
+    calls = [
+        {"name": "read", "arguments": {}},
+        {"name": "unregistered", "arguments": {}},
+    ]
+
+    with pytest.raises(KeyError, match="unregistered"):
+        run_agent_loop(
+            lambda messages, tools: {"tool_calls": calls},
+            {},
+            {"read": lambda _: executed.append(True) or {}},
+        )
+
+    assert executed == []
+
+
+def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
+    executed = []
+
+    with pytest.raises(ToolCallLimitExceeded, match="maximum model rounds"):
+        run_agent_loop(
+            lambda messages, tools: {"tool_calls": [{"name": "read", "arguments": {}}]},
+            {},
+            {"read": lambda _: executed.append(True) or {}},
+            max_rounds=1,
+        )
+
+    assert executed == []
+
+
+def test_agent_loop_caps_registered_tool_count_before_model_call():
+    called = False
+    tools = {f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)}
+
+    def model(messages, registered):
+        nonlocal called
+        called = True
+        return {}
+
+    with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
+        run_agent_loop(model, {}, tools)
+    assert called is False
