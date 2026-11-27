@@ -19,7 +19,7 @@ def _value(name: str, default: str) -> str:
 
 def enterprise_mode() -> str:
     raw_mode = os.getenv("NETWATCH_ENTERPRISE_MODE")
-    if raw_mode is None or not raw_mode.strip():
+    if raw_mode is None:
         return "single_tenant"
     mode = raw_mode.strip().lower()
     return mode if mode in ENTERPRISE_MODES else "invalid"
