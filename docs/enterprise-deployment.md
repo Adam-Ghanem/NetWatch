@@ -95,7 +95,7 @@ A supply-chain release workflow is a required follow-up control: it should produ
 
 ## Rollout and recovery
 
-1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging with `python3 scripts/verify_sqlite_backup.py <backup> --expected-schema 10`. This utility is read-only and does not restore over a live database.
+1. Back up SQLite through the Admin snapshot endpoint and validate the copy in staging with `python3 scripts/verify_sqlite_backup.py <backup> --expected-schema 11`. This utility is read-only and does not restore over a live database.
 2. For a shared-service trial, apply the PostgreSQL tenant foundation only through the approved migration process, set a transaction-local tenant context for every request/worker transaction, and run negative cross-tenant tests before any replica increase. The SQL file is a foundation, not an automatic migration of the existing SQLite tables.
 3. Create managed secrets and reviewed non-secret configuration.
 4. Configure IdP application/audience and least-privilege groups.
@@ -112,7 +112,7 @@ A supply-chain release workflow is a required follow-up control: it should produ
 
 The current release is appropriate for one active application instance per database. Do not run multiple replicas against copied or shared SQLite files. The scheduler, request rate limits, scan semaphore, and some metrics are process-local. Compatibility mode adds durable outbox/jobs and explicit readiness reporting, but does not make SQLite active-active.
 
-True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 10 and preserves existing data.
+True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 11 and preserves existing data.
  Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
 
 `enterprise_worker.py` provides the next bounded execution seam: workers claim jobs or outbox events, dispatch only to an explicit handler/publisher allowlist, persist success/failure, and preserve retry/dead-letter semantics. `run_poll_loop` clamps the polling interval and cycle count. The module is safe to run as a separate process, but shared-service approval still requires external coordination, PostgreSQL/Redis integration, failure injection, and staging evidence.
