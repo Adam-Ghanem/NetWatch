@@ -56,8 +56,9 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   ASCII decimal values from 0 to 10,000. Setting it to `0` disables provider
   requests. An explicitly configured malformed, negative, or over-limit value
   also fails closed to `0` and disables AI instead of silently reverting to
-  the default budget. Core monitoring and the local Risk Advisor remain
-  available; an unexpired cached brief may still be served.
+  the default budget. Very long decimal values are rejected safely without
+  interrupting application startup. Core monitoring and the local Risk Advisor
+  remain available; an unexpired cached brief may still be served.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
