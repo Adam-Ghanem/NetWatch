@@ -82,7 +82,7 @@ def test_agent_loop_rejects_invalid_round_budget_before_model_call(max_rounds):
 
 
 def test_agent_loop_rejects_oversized_tool_batch_before_execution():
-    executed = []
+    executed: list[bool] = []
     calls = [{"name": "read", "arguments": {}} for _ in range(MAX_TOOL_CALLS_PER_ROUND + 1)]
 
     with pytest.raises(ToolCallLimitExceeded, match="tool calls"):
@@ -96,7 +96,7 @@ def test_agent_loop_rejects_oversized_tool_batch_before_execution():
 
 
 def test_agent_loop_prevalidates_batch_before_executing_any_tool():
-    executed = []
+    executed: list[bool] = []
     calls = [
         {"name": "read", "arguments": {}},
         {"name": "unregistered", "arguments": {}},
@@ -114,7 +114,7 @@ def test_agent_loop_prevalidates_batch_before_executing_any_tool():
 
 @pytest.mark.parametrize("arguments", [[], "", False, 0])
 def test_agent_loop_rejects_falsey_non_mapping_arguments_before_execution(arguments):
-    executed = []
+    executed: list[bool] = []
 
     with pytest.raises(ToolCallLimitExceeded, match="invalid tool arguments"):
         run_agent_loop(
@@ -131,7 +131,7 @@ def test_agent_loop_rejects_falsey_non_mapping_arguments_before_execution(argume
 
 
 def test_agent_loop_does_not_execute_unconsumed_last_round_batch():
-    executed = []
+    executed: list[bool] = []
 
     with pytest.raises(ToolCallLimitExceeded, match="maximum model rounds"):
         run_agent_loop(
@@ -192,7 +192,7 @@ def test_agent_loop_rejects_oversized_tool_definitions_before_model_call():
 
 
 def test_agent_loop_rejects_oversized_tool_arguments_before_execution():
-    executed = []
+    executed: list[bool] = []
 
     with pytest.raises(ToolCallLimitExceeded, match="tool arguments"):
         run_agent_loop(
@@ -212,7 +212,7 @@ def test_agent_loop_rejects_oversized_tool_arguments_before_execution():
 
 
 def test_agent_loop_rejects_aggregate_tool_arguments_before_execution():
-    executed = []
+    executed: list[bool] = []
     calls = [
         {"name": "read", "arguments": {"query": "x" * (MAX_TOOL_ARGUMENT_BYTES // 2)}}
         for _ in range(9)
@@ -239,7 +239,7 @@ def test_agent_loop_rejects_oversized_tool_result():
 
 def test_agent_loop_caps_cumulative_tool_results_before_next_model_call():
     model_calls = 0
-    executed = []
+    executed: list[bool] = []
     calls = [{"name": "read", "arguments": {}} for _ in range(5)]
 
     def model(messages, tools):
