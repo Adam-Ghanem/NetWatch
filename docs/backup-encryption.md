@@ -178,12 +178,21 @@ permissions, and a read-only SQLite query. The identity and test database live
 only in pytest's temporary directory; no production key or network target is
 used.
 
+A separate `tests/test_backup_age_application_restore.py` test builds a real
+NetWatch SQLite database in pytest's temporary directory, records a synthetic
+asset and HMAC-protected audit event, creates a consistent SQLite online
+backup, and performs a real age encrypt/restore round trip. It then reopens
+the restored database with the same separately supplied test audit key and
+checks both the retained HMAC chain and inventory. This validates application
+storage compatibility on the CI runner without scanning a network or using
+production credentials; it does not recover a production key or prove
+off-host/cross-host retention.
+
 This validates CLI interoperability on the CI runner. It does not pin or
 authenticate the deployment binary: production operators must still verify the
 approved release through its official trust channel and supply an independently
-trusted digest when using `--age-binary-sha256`. It also does not prove
-off-host retention, independent key escrow, or a cross-host disaster-recovery
-drill.
+trusted digest when using `--age-binary-sha256`. It does not prove independent
+key escrow, a production cross-host restore, or measured RTO/RPO.
 
 ## Limits
 
