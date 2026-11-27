@@ -17,7 +17,12 @@ def test_network_scanner_clamps_non_positive_worker_count(monkeypatch):
 
 @pytest.mark.parametrize(
     "cidr",
-    ["169.254.169.0/24", "169.254.170.0/24", "169.254.42.0/24"],
+    [
+        "169.254.169.0/24",
+        "169.254.170.0/24",
+        "169.254.42.0/24",
+        "100.100.100.0/24",
+    ],
 )
 def test_network_scan_blocks_metadata_cidr_before_any_probe(monkeypatch, cidr):
     def unexpected_probe(ip):
@@ -31,7 +36,13 @@ def test_network_scan_blocks_metadata_cidr_before_any_probe(monkeypatch, cidr):
 
 @pytest.mark.parametrize(
     "target",
-    ["fd20:ce::254", "169.254.170.2", "169.254.42.42", "fd00:42::42"],
+    [
+        "fd20:ce::254",
+        "169.254.170.2",
+        "169.254.42.42",
+        "fd00:42::42",
+        "100.100.100.200",
+    ],
 )
 def test_port_scan_blocks_metadata_endpoint_before_worker_submission(monkeypatch, target):
     def unexpected_scan(*args, **kwargs):

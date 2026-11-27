@@ -36,6 +36,7 @@ def test_public_ipv6_target_blocked():
         "169.254.169.254",
         "169.254.170.2",
         "169.254.42.42",
+        "100.100.100.200",
         "fd00:ec2::254",
         "fd20:ce::254",
         "fd00:42::42",
@@ -75,6 +76,8 @@ def test_private_cidr_allowed():
         "169.254.170.2/32",
         "169.254.42.0/24",
         "169.254.42.42/32",
+        "100.100.100.0/24",
+        "100.100.100.200/32",
     ],
 )
 def test_cidr_containing_cloud_metadata_endpoint_is_blocked(cidr):
