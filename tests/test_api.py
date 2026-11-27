@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
@@ -1382,3 +1383,64 @@ def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path)
     assert status.json()["available"] is False
     assert brief.status_code == 503
     assert local.status_code == 200
+
+
+@pytest.mark.parametrize("mode", ["shared_service", "invalid"])
+def test_lifespan_does_not_start_local_workers_for_unsafe_enterprise_modes(
+    monkeypatch, mode
+):
+    started = []
+
+    class ThreadSpy:
+        def __init__(self, *, target, args, name, daemon):
+            self.name = name
+
+        def start(self):
+            started.append(self.name)
+
+        def join(self, timeout=None):
+            return None
+
+    monkeypatch.setattr(api, "init_db", lambda: None)
+    monkeypatch.setattr(api, "enterprise_mode", lambda: mode)
+    monkeypatch.setattr(api, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(api, "notifications_enabled", lambda: True)
+    monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
+    monkeypatch.setattr(api.threading, "Thread", ThreadSpy)
+
+    async def exercise_lifespan():
+        async with api.lifespan(api.app):
+            assert started == []
+
+    asyncio.run(exercise_lifespan())
+
+
+def test_lifespan_starts_local_workers_in_compatibility_mode(monkeypatch):
+    started = []
+
+    class ThreadSpy:
+        def __init__(self, *, target, args, name, daemon):
+            self.name = name
+
+        def start(self):
+            started.append(self.name)
+
+        def join(self, timeout=None):
+            return None
+
+    monkeypatch.setattr(api, "init_db", lambda: None)
+    monkeypatch.setattr(api, "enterprise_mode", lambda: "compatibility")
+    monkeypatch.setattr(api, "SCHEDULER_ENABLED", True)
+    monkeypatch.setattr(api, "notifications_enabled", lambda: True)
+    monkeypatch.setattr(api, "AI_AUTO_ANALYSIS_ENABLED", True)
+    monkeypatch.setattr(api.threading, "Thread", ThreadSpy)
+
+    async def exercise_lifespan():
+        async with api.lifespan(api.app):
+            assert set(started) == {
+                "netwatch-ai-scheduler",
+                "netwatch-scheduler",
+                "netwatch-notifications",
+            }
+
+    asyncio.run(exercise_lifespan())

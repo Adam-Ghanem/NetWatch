@@ -18,8 +18,11 @@ def _value(name: str, default: str) -> str:
 
 
 def enterprise_mode() -> str:
-    mode = _value("NETWATCH_ENTERPRISE_MODE", "single_tenant")
-    return mode if mode in ENTERPRISE_MODES else "single_tenant"
+    raw_mode = os.getenv("NETWATCH_ENTERPRISE_MODE")
+    if raw_mode is None or not raw_mode.strip():
+        return "single_tenant"
+    mode = raw_mode.strip().lower()
+    return mode if mode in ENTERPRISE_MODES else "invalid"
 
 
 def backend_configuration() -> dict[str, str]:
@@ -53,6 +56,8 @@ def capability_status() -> dict[str, Any]:
     backend_probes = probe_enterprise_backends()
     shared_service_ready = mode == "shared_service" and shared_backends_selected
     blockers: list[str] = []
+    if mode not in ENTERPRISE_MODES:
+        blockers.append("enterprise_mode_invalid")
     if not configured:
         blockers.append("backend_configuration_invalid")
     if mode == "shared_service" and not shared_backends_selected:
