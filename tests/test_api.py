@@ -1386,9 +1386,7 @@ def test_anthropic_without_key_never_uses_openai_fallback(monkeypatch, tmp_path)
 
 
 @pytest.mark.parametrize("mode", ["shared_service", "invalid"])
-def test_lifespan_does_not_start_local_workers_for_unsafe_enterprise_modes(
-    monkeypatch, mode
-):
+def test_lifespan_does_not_start_local_workers_for_unsafe_enterprise_modes(monkeypatch, mode):
     started = []
 
     class ThreadSpy:
