@@ -1,8 +1,20 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
 from typing import Any
+
+from ai_agent_loop import (
+    MAX_AGENT_TOOL_OUTPUT_BYTES,
+    MAX_REGISTERED_TOOLS,
+    MAX_TOOL_ARGUMENT_BYTES_PER_ROUND,
+    MAX_TOOL_CALLS_PER_ROUND,
+    ToolCallLimitExceeded,
+    parse_tool_arguments,
+    serialize_tool_result,
+    validate_agent_context,
+    validate_max_rounds,
+    validate_tool_specs,
+)
 
 
 def run_responses_agent(
@@ -15,8 +27,13 @@ def run_responses_agent(
     max_rounds: int = 5,
 ) -> str:
     """Run a bounded OpenAI Responses tool-calling loop over NetWatch evidence."""
-    if max_rounds < 1:
-        raise ValueError("max_rounds must be >= 1")
+    max_rounds = validate_max_rounds(max_rounds)
+    if len(tools) > MAX_REGISTERED_TOOLS:
+        raise ToolCallLimitExceeded(
+            f"agent supports at most {MAX_REGISTERED_TOOLS} registered tools"
+        )
+    validate_tool_specs(tool_specs)
+    _, context_json, _ = validate_agent_context(context)
 
     response = client.responses.create(
         model=model,
@@ -25,11 +42,12 @@ def run_responses_agent(
             "Use registered tools only when additional collected evidence is needed. "
             "Never invent observations or credentials and never perform offensive actions."
         ),
-        input=json.dumps(dict(context), ensure_ascii=False),
+        input=context_json,
         tools=tool_specs,
     )
 
-    for _ in range(max_rounds):
+    total_tool_output_bytes = 0
+    for round_index in range(max_rounds):
         calls = [
             item
             for item in getattr(response, "output", []) or []
@@ -38,18 +56,44 @@ def run_responses_agent(
         if not calls:
             return getattr(response, "output_text", "")
 
-        outputs: list[dict[str, Any]] = []
+        if len(calls) > MAX_TOOL_CALLS_PER_ROUND:
+            raise ToolCallLimitExceeded(
+                f"agent exceeded {MAX_TOOL_CALLS_PER_ROUND} tool calls in one round"
+            )
+
+        prepared: list[tuple[str, str, dict[str, Any]]] = []
+        argument_bytes = 0
         for call in calls:
             name = getattr(call, "name", "")
             if name not in tools:
                 raise KeyError(f"AI requested unregistered tool: {name}")
-            arguments = json.loads(getattr(call, "arguments", "{}"))
+            arguments, size = parse_tool_arguments(getattr(call, "arguments", "{}"))
+            argument_bytes += size
+            if argument_bytes > MAX_TOOL_ARGUMENT_BYTES_PER_ROUND:
+                raise ToolCallLimitExceeded(
+                    f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES_PER_ROUND} bytes per round"
+                )
+            prepared.append((name, getattr(call, "call_id", ""), arguments))
+
+        if round_index == max_rounds - 1:
+            raise ToolCallLimitExceeded(
+                "agent reached the maximum model rounds before completing the tool batch"
+            )
+
+        outputs: list[dict[str, Any]] = []
+        for name, call_id, arguments in prepared:
             result = tools[name](arguments)
+            _, encoded_result, result_bytes = serialize_tool_result(result)
+            total_tool_output_bytes += result_bytes
+            if total_tool_output_bytes > MAX_AGENT_TOOL_OUTPUT_BYTES:
+                raise ToolCallLimitExceeded(
+                    f"agent tool results exceed {MAX_AGENT_TOOL_OUTPUT_BYTES} bytes per invocation"
+                )
             outputs.append(
                 {
                     "type": "function_call_output",
-                    "call_id": getattr(call, "call_id", ""),
-                    "output": json.dumps(dict(result), ensure_ascii=False),
+                    "call_id": call_id,
+                    "output": encoded_result,
                 }
             )
 
@@ -63,4 +107,4 @@ def run_responses_agent(
             tools=tool_specs,
         )
 
-    raise RuntimeError(f"AI agent exceeded {max_rounds} rounds")
+    raise ToolCallLimitExceeded(f"agent exceeded {max_rounds} model rounds")

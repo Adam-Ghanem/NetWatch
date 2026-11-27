@@ -57,6 +57,21 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   enabling external AI on company networks.
 - Failed/disabled AI does not interrupt core monitoring and the local Risk Advisor.
 
+### Generic agent-loop guardrails
+
+The separate generic tool-loop helpers (`ai_agent_loop.py` and
+`ai_responses_runner.py`) are not exposed by the current Intelligence brief API.
+If used by a future integration, each invocation is capped at **5 model rounds**,
+**10 registered tool definitions**, and **10 tool calls per response**. The
+entire response batch is validated before any tool in that batch executes, and
+a tool batch returned on the final allowed model round is rejected rather than
+running work whose result cannot be consumed. Serialized payloads are also bounded:
+64 KiB for initial evidence context, 32 KiB for all tool definitions, 8 KiB per
+tool-argument object (32 KiB across one response batch), 16 KiB per tool result,
+and 64 KiB of tool results across one invocation. Limits count compact UTF-8 JSON
+bytes, not tokens, and callers cannot raise them through configuration. Tests use
+mocked model responses only.
+
 ## Continuous evidence-only analysis (opt-in)
 
 NetWatch can periodically use the selected GPT or Claude provider to analyze
