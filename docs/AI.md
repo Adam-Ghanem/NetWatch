@@ -6,31 +6,35 @@ analysis and the local Risk Advisor do not require any external AI key.
 ## Configure a provider
 
 Choose **one** AI provider for each NetWatch instance. Set variables in the
-server-side .env or a managed secret, **never** in frontend code or Git.
+server-side `.env` or a managed secret, **never** in frontend code or Git.
 
 | Setting | OpenAI / GPT | Anthropic / Claude |
 | --- | --- | --- |
-| NETWATCH_AI_PROVIDER | openai | anthropic |
-| Key | OPENAI_API_KEY | ANTHROPIC_API_KEY |
-| Default model | gpt-5-mini | claude-sonnet-5-5 |
+| `NETWATCH_AI_PROVIDER` | `openai` | `anthropic` |
+| Key | `OPENAI_API_KEY` | `ANTHROPIC_API_KEY` |
+| Default model | `gpt-5-mini` | `claude-sonnet-5-5` |
 
 OpenAI:
 
-    NETWATCH_AI_PROVIDER=openai
-    OPENAI_API_KEY=<real-openai-api-key>
-    NETWATCH_AI_MODEL=gpt-5-mini
+```dotenv
+NETWATCH_AI_PROVIDER=openai
+OPENAI_API_KEY=<real-openai-api-key>
+NETWATCH_AI_MODEL=gpt-5-mini
+```
 
 Claude:
 
-    NETWATCH_AI_PROVIDER=anthropic
-    ANTHROPIC_API_KEY=<real-anthropic-api-key>
-    NETWATCH_AI_MODEL=claude-sonnet-5-5
+```dotenv
+NETWATCH_AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=<real-anthropic-api-key>
+NETWATCH_AI_MODEL=claude-sonnet-5-5
+```
 
 Use your own valid provider-issued credentials. Paid chat subscriptions are not
 the same as API access. In Docker Compose restart with
-docker compose up -d --build netwatch. For Kubernetes use managed secrets.
+`docker compose up -d --build netwatch`. For Kubernetes use managed secrets.
 The selected provider and model are visible via authenticated
-/api/intelligence/status; the key is not.
+`/api/intelligence/status`; the key is not.
 
 **No implicit fallback.** Missing Claude credentials never cause a request to
 OpenAI, even if OpenAI credentials are available. Unknown provider values fail
@@ -48,15 +52,15 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
 - No provider has network scan, shell or remediation tools.
 - The app enforces rate/concurrency/time limits, daily AI budgets and
   provider/model-specific caching. Configure spend/rate caps at the provider.
-- OpenAI Responses uses store=false; Claude Messages uses structured output.
+- OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
 - Failed/disabled AI does not interrupt core monitoring and the local Risk Advisor.
 
 ### Generic agent-loop guardrails
 
-The separate generic tool-loop helpers (ai_agent_loop.py and
-ai_responses_runner.py) are not exposed by the current Intelligence brief API.
+The separate generic tool-loop helpers (`ai_agent_loop.py` and
+`ai_responses_runner.py`) are not exposed by the current Intelligence brief API.
 If used by a future integration, each invocation is capped at **5 model rounds**,
 **10 registered tool definitions**, and **10 tool calls per response**. The
 entire response batch is validated before any tool in that batch executes, and
@@ -73,11 +77,13 @@ data. Unlike the ChatGPT GitHub-upgrade automation, this scheduler runs only
 inside your deployed NetWatch server.
 
 The default is **disabled** and no provider calls occur without an explicit
-server-side opt-in. To enable, in server-side .env:
+server-side opt-in. To enable, in server-side `.env`:
 
-    NETWATCH_AI_ENABLED=true
-    NETWATCH_AI_AUTO_ANALYSIS_ENABLED=true
-    NETWATCH_AI_AUTO_INTERVAL_SECONDS=3600
+```dotenv
+NETWATCH_AI_ENABLED=true
+NETWATCH_AI_AUTO_ANALYSIS_ENABLED=true
+NETWATCH_AI_AUTO_INTERVAL_SECONDS=3600
+```
 
 Intervals are clamped between one and 24 hours. The scheduler runs only in
 the supported single-instance/compatibility deployment modes; it never
@@ -96,14 +102,14 @@ AI never chooses scan targets, runs commands, or remediates findings.
 If a provider is unavailable or rate limited, local monitoring continues.
 
 An Admin can inspect aggregate scheduler status (no evidence hashes or
-keys) through GET /api/intelligence/auto/status; look at
-last_attempt_at, last_success_at, and last_outcome.
+keys) through `GET /api/intelligence/auto/status`; look at
+`last_attempt_at`, `last_success_at`, and `last_outcome`.
 This is advisory automation, **not** an enterprise distributed scheduler.
 Before connecting real company evidence to external APIs, complete your
 organization's data-processing/privacy approval and provider spend controls.
 
 ## Verify
 
-Run pytest -q tests/test_ai_advisor.py tests/test_ai_anthropic.py
-tests/test_api.py for mocked provider, privacy, auth and cache checks.
+Run `pytest -q tests/test_ai_advisor.py tests/test_ai_anthropic.py
+tests/test_api.py` for mocked provider, privacy, auth and cache checks.
 A staging test with an actual key is still required for production approval.
