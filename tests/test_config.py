@@ -45,12 +45,9 @@ def test_env_nonnegative_int_fail_closed_handles_long_decimal_values(monkeypatch
 @pytest.mark.parametrize("raw", ["", "invalid", "-1", "10001", "1.5", "１２"])
 def test_env_nonnegative_int_fail_closed_disables_invalid_budgets(monkeypatch, raw):
     monkeypatch.setenv("NETWATCH_TEST_BUDGET", raw)
-    assert (
-        config._env_nonnegative_int_fail_closed(
-            "NETWATCH_TEST_BUDGET", 50, maximum=10_000
-        )
-        == 0
-    )
+    assert config._env_nonnegative_int_fail_closed(
+        "NETWATCH_TEST_BUDGET", 50, maximum=10_000
+    ) == 0
 
 
 @pytest.mark.parametrize("raw", ["invalid", "0", "10001", "9" * 5_000])
