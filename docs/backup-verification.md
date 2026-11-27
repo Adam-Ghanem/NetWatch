@@ -25,8 +25,11 @@ First download a **snapshot** through the Admin dashboard. Do not point this
 tool at a live database file or copy a running SQLite database with a normal
 filesystem copy; WAL state may be incomplete.
 
+The examples below use the current runtime schema version **11**. Keep both
+examples aligned with inventory_store.py when a future migration changes it.
+
 ~~~bash
-python scripts/verify_sqlite_backup.py --expected-schema 10 backup.sqlite3
+python scripts/verify_sqlite_backup.py --expected-schema 11 backup.sqlite3
 ~~~
 
 Record the SHA-256 in the JSON result in your recovery register. After
@@ -35,7 +38,7 @@ separately authenticated channel:
 
 ~~~bash
 python scripts/verify_sqlite_backup.py \
-  --expected-schema 10 \
+  --expected-schema 11 \
   --expected-sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
   backup.sqlite3
 ~~~
