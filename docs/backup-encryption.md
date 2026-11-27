@@ -182,11 +182,14 @@ A separate `tests/test_backup_age_application_restore.py` test builds a real
 NetWatch SQLite database in pytest's temporary directory, records a synthetic
 asset and HMAC-protected audit event, creates a consistent SQLite online
 backup, and performs a real age encrypt/restore round trip. It then reopens
-the restored database with the same separately supplied test audit key and
-checks both the retained HMAC chain and inventory. This validates application
-storage compatibility on the CI runner without scanning a network or using
-production credentials; it does not recover a production key or prove
-off-host/cross-host retention.
+the restored database with the separately supplied test audit key and checks
+the retained HMAC chain and inventory. After that successful check, it supplies
+a different test-only key and removes the key entirely; verification must
+report `invalid` and `unavailable` respectively, then return to `valid` only
+when the original test key is restored. This confirms that encrypted database
+recovery does not silently replace or embed the independent audit key. The test
+uses no network targets or production credentials and does not prove production
+key escrow or off-host/cross-host retention.
 
 This validates CLI interoperability on the CI runner. It does not pin or
 authenticate the deployment binary: production operators must still verify the

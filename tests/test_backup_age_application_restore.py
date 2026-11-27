@@ -154,6 +154,24 @@ def test_real_age_restore_preserves_netwatch_inventory_and_audit_chain(
     assert restored_inventory[0]["ip_address"] == "192.168.50.10"
     assert restored_inventory[0]["status"] == "Online"
 
+    monkeypatch.setenv(
+        "NETWATCH_AUDIT_HMAC_KEY",
+        "wrong-test-audit-hmac-key-with-at-least-32-characters",
+    )
+    wrong_key_integrity = inventory_store.verify_audit_integrity()
+    assert wrong_key_integrity["status"] == "invalid"
+    assert wrong_key_integrity["valid"] is False
+
+    monkeypatch.delenv("NETWATCH_AUDIT_HMAC_KEY")
+    missing_key_integrity = inventory_store.verify_audit_integrity()
+    assert missing_key_integrity["status"] == "unavailable"
+    assert missing_key_integrity["valid"] is False
+
+    monkeypatch.setenv("NETWATCH_AUDIT_HMAC_KEY", _AUDIT_HMAC_KEY)
+    recovered_integrity = inventory_store.verify_audit_integrity()
+    assert recovered_integrity["status"] == "valid"
+    assert recovered_integrity["valid"] is True
+
     restored_uri = f"{restored.as_uri()}?mode=ro"
     with closing(sqlite3.connect(restored_uri, uri=True)) as connection:
         restored_schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
