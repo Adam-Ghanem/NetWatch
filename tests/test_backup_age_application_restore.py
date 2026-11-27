@@ -25,7 +25,9 @@ def _create_age_identity(tmp_path: Path) -> tuple[Path, str]:
     if not age_binary or not age_keygen:
         if os.environ.get("NETWATCH_REQUIRE_AGE_INTEROP") == "1":
             pytest.fail("Security CI requires the real age and age-keygen executables.")
-        pytest.skip("install age and age-keygen to run the real application restore test")
+        pytest.skip(
+            "install age and age-keygen to run the real application restore test"
+        )
 
     identity = tmp_path / "ephemeral-application-recovery-identity.txt"
     generated = subprocess.run(
@@ -35,7 +37,9 @@ def _create_age_identity(tmp_path: Path) -> tuple[Path, str]:
         timeout=15,
         check=False,
     )
-    assert generated.returncode == 0, "age-keygen could not create an ephemeral test identity"
+    assert generated.returncode == 0, (
+        "age-keygen could not create an ephemeral test identity"
+    )
     identity.chmod(0o600)
 
     recipient_result = subprocess.run(
@@ -45,7 +49,9 @@ def _create_age_identity(tmp_path: Path) -> tuple[Path, str]:
         timeout=15,
         check=False,
     )
-    assert recipient_result.returncode == 0, "age-keygen could not derive the test recipient"
+    assert recipient_result.returncode == 0, (
+        "age-keygen could not derive the test recipient"
+    )
     recipient = recipient_result.stdout.strip()
     assert recipient.startswith("age1") and len(recipient) == 62
     return identity, recipient
@@ -100,7 +106,8 @@ def test_real_age_restore_preserves_netwatch_inventory_and_audit_chain(
             source.backup(destination)
     snapshot.chmod(0o600)
 
-    with closing(sqlite3.connect(f"{snapshot.as_uri()}?mode=ro", uri=True)) as connection:
+    snapshot_uri = f"{snapshot.as_uri()}?mode=ro"
+    with closing(sqlite3.connect(snapshot_uri, uri=True)) as connection:
         integrity = connection.execute("PRAGMA integrity_check").fetchone()
         source_schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
     assert integrity == ("ok",)
@@ -143,7 +150,8 @@ def test_real_age_restore_preserves_netwatch_inventory_and_audit_chain(
     assert restored_inventory[0]["ip_address"] == "192.168.50.10"
     assert restored_inventory[0]["status"] == "Online"
 
-    with closing(sqlite3.connect(f"{restored.as_uri()}?mode=ro", uri=True)) as connection:
+    restored_uri = f"{restored.as_uri()}?mode=ro"
+    with closing(sqlite3.connect(restored_uri, uri=True)) as connection:
         restored_schema = int(connection.execute("PRAGMA user_version").fetchone()[0])
     assert restored_schema == source_schema
     assert list(tmp_path.glob(".netwatch-age-*")) == []
