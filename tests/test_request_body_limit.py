@@ -25,6 +25,10 @@ def _app() -> FastAPI:
     async def echo(request: Request):
         return {"size": len(await request.body())}
 
+    @app.delete("/api/delete-echo")
+    async def delete_echo(request: Request):
+        return {"size": len(await request.body())}
+
     @app.post("/api/traffic/offline/analyze")
     @app.post("/api/traffic/offline/export.csv")
     @app.post("/api/traffic/offline/export.json")
@@ -62,6 +66,22 @@ def test_streaming_body_limit_rejects_chunked_requests_without_content_length():
     assert ok.json() == {"size": 16}
     assert over.status_code == 413
     assert over.headers["x-security-checked"] == "yes"
+
+
+def test_delete_request_body_limit_covers_declared_and_streamed_bodies():
+    with TestClient(_app()) as client:
+        ok = client.request("DELETE", "/api/delete-echo", content=b"a" * 16)
+        over = client.request("DELETE", "/api/delete-echo", content=b"a" * 17)
+        streamed_over = client.request(
+            "DELETE",
+            "/api/delete-echo",
+            content=iter([b"a" * 8, b"b" * 9]),
+        )
+
+    assert ok.json() == {"size": 16}
+    assert over.status_code == 413
+    assert over.json() == {"detail": "Request body exceeds the size limit."}
+    assert streamed_over.status_code == 413
 
 
 @pytest.mark.parametrize(
