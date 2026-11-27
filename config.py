@@ -54,8 +54,15 @@ def _env_nonnegative_int_fail_closed(name: str, default: int, *, maximum: int) -
     candidate = raw.strip()
     if not candidate or not candidate.isascii() or not candidate.isdecimal():
         return 0
-    value = int(candidate)
-    return value if value <= maximum else 0
+    if maximum < 0:
+        return 0
+    normalized = candidate.lstrip("0") or "0"
+    maximum_text = str(maximum)
+    if len(normalized) > len(maximum_text):
+        return 0
+    if len(normalized) == len(maximum_text) and normalized > maximum_text:
+        return 0
+    return int(normalized)
 
 
 def _env_csv(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
