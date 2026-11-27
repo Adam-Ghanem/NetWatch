@@ -29,7 +29,11 @@ class FakeResponses:
                     )
                 ],
             )
-        return SimpleNamespace(id="r2", output=[], output_text="final investigation")
+        return SimpleNamespace(
+            id="r2",
+            output=[],
+            output_text="final investigation",
+        )
 
 
 class FakeClient:
@@ -44,7 +48,12 @@ def test_runner_executes_tool_and_returns_final_text():
         model="test-model",
         context={"asset": "a1"},
         tool_specs=[{"type": "function", "name": "asset_snapshot"}],
-        tools={"asset_snapshot": lambda args: {"id": args["id"], "services": []}},
+        tools={
+            "asset_snapshot": lambda args: {
+                "id": args["id"],
+                "services": [],
+            },
+        },
     )
     assert result == "final investigation"
     assert client.responses.round == 2
@@ -57,14 +66,23 @@ def test_runner_rejects_unregistered_tool():
                 id="r1",
                 output=[
                     SimpleNamespace(
-                        type="function_call", name="shell", call_id="c1", arguments="{}"
+                        type="function_call",
+                        name="shell",
+                        call_id="c1",
+                        arguments="{}",
                     )
                 ],
             )
 
     client = SimpleNamespace(responses=BadResponses())
     with pytest.raises(KeyError):
-        run_responses_agent(client, model="test-model", context={}, tool_specs=[], tools={})
+        run_responses_agent(
+            client,
+            model="test-model",
+            context={},
+            tool_specs=[],
+            tools={},
+        )
 
 
 def test_runner_rejects_round_budget_above_hard_limit_before_provider_call():
@@ -113,10 +131,16 @@ def test_runner_prevalidates_batch_before_executing_any_tool():
     executed = []
     calls = [
         SimpleNamespace(
-            type="function_call", name="read", call_id="c1", arguments="{}"
+            type="function_call",
+            name="read",
+            call_id="c1",
+            arguments="{}",
         ),
         SimpleNamespace(
-            type="function_call", name="shell", call_id="c2", arguments="{}"
+            type="function_call",
+            name="shell",
+            call_id="c2",
+            arguments="{}",
         ),
     ]
 
@@ -172,7 +196,10 @@ def test_runner_caps_tool_definitions_before_provider_call():
         {"type": "function", "name": f"tool-{index}"}
         for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
-    tools = {f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)}
+    tools = {
+        f"tool-{index}": lambda _: {}
+        for index in range(MAX_REGISTERED_TOOLS + 1)
+    }
 
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         run_responses_agent(
