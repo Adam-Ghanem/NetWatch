@@ -70,3 +70,16 @@ def test_invalid_explicit_enterprise_mode_fails_closed(monkeypatch):
     assert status["safe_to_run_current_process"] is False
     assert status["capabilities"]["local_single_instance_safe"] is False
     assert "enterprise_mode_invalid" in status["capabilities"]["blockers"]
+
+
+def test_empty_explicit_enterprise_mode_fails_closed(monkeypatch):
+    for value in ("", "   "):
+        monkeypatch.setenv("NETWATCH_ENTERPRISE_MODE", value)
+
+        status = enterprise_runtime.enterprise_readiness()
+
+        assert enterprise_runtime.enterprise_mode() == "invalid"
+        assert status["status"] == "not_ready"
+        assert status["safe_to_run_current_process"] is False
+        assert status["capabilities"]["local_single_instance_safe"] is False
+        assert "enterprise_mode_invalid" in status["capabilities"]["blockers"]
