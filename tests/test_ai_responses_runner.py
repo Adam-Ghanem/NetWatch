@@ -1,4 +1,6 @@
+from collections.abc import Callable, Mapping
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -14,6 +16,13 @@ from ai_agent_loop import (
     ToolCallLimitExceeded,
 )
 from ai_responses_runner import run_responses_agent
+
+Tool = Callable[[dict[str, Any]], Mapping[str, Any]]
+
+
+def _record_execution(executed: list[bool], _args: dict[str, Any]) -> dict[str, Any]:
+    executed.append(True)
+    return {}
 
 
 def _function_call(name, *, call_id="c1", arguments="{}"):
@@ -87,7 +96,7 @@ def test_runner_rejects_round_budget_above_hard_limit_before_provider_call():
 
 
 def test_runner_rejects_oversized_tool_batch_before_execution():
-    executed = []
+    executed: list[bool] = []
     calls = [
         _function_call("read", call_id=f"c{index}") for index in range(MAX_TOOL_CALLS_PER_ROUND + 1)
     ]
@@ -97,13 +106,13 @@ def test_runner_rejects_oversized_tool_batch_before_execution():
         _run(
             client,
             tool_specs=[{"type": "function", "name": "read"}],
-            tools={"read": lambda _: executed.append(True) or {}},
+            tools={"read": lambda args: _record_execution(executed, args)},
         )
     assert executed == []
 
 
 def test_runner_prevalidates_batch_before_executing_any_tool():
-    executed = []
+    executed: list[bool] = []
     client = FakeClient(
         [
             _function_call("read"),
@@ -115,20 +124,20 @@ def test_runner_prevalidates_batch_before_executing_any_tool():
         _run(
             client,
             tool_specs=[{"type": "function", "name": "read"}],
-            tools={"read": lambda _: executed.append(True) or {}},
+            tools={"read": lambda args: _record_execution(executed, args)},
         )
     assert executed == []
 
 
 def test_runner_does_not_execute_unconsumed_last_round_batch():
-    executed = []
+    executed: list[bool] = []
     client = FakeClient([_function_call("read")])
 
     with pytest.raises(ToolCallLimitExceeded, match="maximum model rounds"):
         _run(
             client,
             tool_specs=[{"type": "function", "name": "read"}],
-            tools={"read": lambda _: executed.append(True) or {}},
+            tools={"read": lambda args: _record_execution(executed, args)},
             max_rounds=1,
         )
     assert executed == []
@@ -139,10 +148,10 @@ def test_runner_caps_tool_definitions_before_provider_call():
     specs = [
         {"type": "function", "name": f"tool-{index}"} for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
-    tools = dict.fromkeys(
-        (f"tool-{index}" for index in range(MAX_REGISTERED_TOOLS + 1)),
-        lambda _: {},
-    )
+    tools: dict[str, Tool] = {
+        f"tool-{index}": lambda _: {}
+        for index in range(MAX_REGISTERED_TOOLS + 1)
+    }
 
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         _run(client, tool_specs=specs, tools=tools)
@@ -175,14 +184,14 @@ def test_runner_rejects_oversized_tool_definitions_before_provider_call():
 
 
 def test_runner_rejects_oversized_tool_arguments_before_execution():
-    executed = []
+    executed: list[bool] = []
     arguments = '{"query":"' + ("x" * MAX_TOOL_ARGUMENT_BYTES) + '"}'
     client = FakeClient([_function_call("read", arguments=arguments)])
 
     with pytest.raises(ToolCallLimitExceeded, match="tool arguments"):
         _run(
             client,
-            tools={"read": lambda _: executed.append(True) or {}},
+            tools={"read": lambda args: _record_execution(executed, args)},
             tool_specs=[{"type": "function", "name": "read"}],
         )
 
@@ -191,7 +200,7 @@ def test_runner_rejects_oversized_tool_arguments_before_execution():
 
 
 def test_runner_rejects_aggregate_tool_arguments_before_execution():
-    executed = []
+    executed: list[bool] = []
     calls = [
         _function_call(
             "read",
@@ -205,7 +214,7 @@ def test_runner_rejects_aggregate_tool_arguments_before_execution():
     with pytest.raises(ToolCallLimitExceeded, match="per round"):
         _run(
             client,
-            tools={"read": lambda _: executed.append(True) or {}},
+            tools={"read": lambda args: _record_execution(executed, args)},
             tool_specs=[{"type": "function", "name": "read"}],
         )
 
@@ -227,7 +236,7 @@ def test_runner_rejects_oversized_tool_result_before_next_provider_call():
 
 
 def test_runner_caps_cumulative_tool_results_before_next_provider_call():
-    executed = []
+    executed: list[bool] = []
     calls = [_function_call("read", call_id=f"c{index}") for index in range(5)]
     client = FakeClient(calls)
 
