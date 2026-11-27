@@ -83,7 +83,7 @@ from enterprise_auth import (
     oidc_settings,
     verify_oidc_token,
 )
-from enterprise_runtime import enterprise_readiness
+from enterprise_runtime import enterprise_mode, enterprise_readiness
 from export_utils import safe_csv_bytes
 from flow_export import export_flows_csv, export_flows_json, export_flows_ndjson
 from flow_observability import (
@@ -184,10 +184,8 @@ async def lifespan(_: FastAPI):
     notification_thread: threading.Thread | None = None
     auto_stop = threading.Event()
     auto_thread: threading.Thread | None = None
-    if (
-        AI_AUTO_ANALYSIS_ENABLED
-        and enterprise_readiness()["capabilities"]["local_single_instance_safe"]
-    ):
+    local_background_workers_safe = enterprise_mode() in {"single_tenant", "compatibility"}
+    if AI_AUTO_ANALYSIS_ENABLED and local_background_workers_safe:
         auto_thread = threading.Thread(
             target=_auto_intelligence_loop,
             args=(auto_stop,),
@@ -195,7 +193,7 @@ async def lifespan(_: FastAPI):
             daemon=True,
         )
         auto_thread.start()
-    if SCHEDULER_ENABLED:
+    if SCHEDULER_ENABLED and local_background_workers_safe:
         scheduler_thread = threading.Thread(
             target=_scheduler_loop,
             args=(scheduler_stop,),
@@ -203,7 +201,11 @@ async def lifespan(_: FastAPI):
             daemon=True,
         )
         scheduler_thread.start()
-    if notifications_enabled():
+    elif SCHEDULER_ENABLED:
+        LOGGER.warning(
+            "local_scheduler_not_started reason=enterprise_mode_not_single_instance_safe"
+        )
+    if notifications_enabled() and local_background_workers_safe:
         notification_thread = threading.Thread(
             target=_notification_loop,
             args=(notification_stop,),
@@ -211,6 +213,11 @@ async def lifespan(_: FastAPI):
             daemon=True,
         )
         notification_thread.start()
+    elif notifications_enabled():
+        LOGGER.warning(
+            "local_notification_worker_not_started "
+            "reason=enterprise_mode_not_single_instance_safe"
+        )
     try:
         yield
     finally:

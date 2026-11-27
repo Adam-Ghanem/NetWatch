@@ -110,6 +110,8 @@ A supply-chain release workflow is a required follow-up control: it should produ
 
 ## Current scale boundary
 
+The API lifespan starts local scheduled-scan, notification-delivery, and automatic-analysis threads only when `NETWATCH_ENTERPRISE_MODE` is `single_tenant` or `compatibility`. In `shared_service`, or when an explicit mode value is invalid, those in-process workers stay stopped; invalid mode values also make readiness fail closed. Do not enable the local scheduler or webhook delivery as a substitute for the external worker/coordination deployment required by Track B.
+
 The current release is appropriate for one active application instance per database. Do not run multiple replicas against copied or shared SQLite files. The scheduler, request rate limits, scan semaphore, and some metrics are process-local. Compatibility mode adds durable outbox/jobs and explicit readiness reporting, but does not make SQLite active-active.
 
 True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 10 and preserves existing data.

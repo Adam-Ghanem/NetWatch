@@ -6,6 +6,7 @@ import enterprise_runtime
 
 def test_local_backends_are_ready_by_default(monkeypatch):
     for name in (
+        "NETWATCH_ENTERPRISE_MODE",
         "NETWATCH_DATABASE_BACKEND",
         "NETWATCH_COORDINATION_BACKEND",
         "NETWATCH_OBJECT_STORAGE_BACKEND",
@@ -57,3 +58,15 @@ def test_unknown_backend_selection_fails_configuration(monkeypatch):
     status = enterprise_runtime.enterprise_readiness()
     assert status["status"] == "not_ready"
     assert "backend_configuration_invalid" in status["capabilities"]["blockers"]
+
+
+def test_invalid_explicit_enterprise_mode_fails_closed(monkeypatch):
+    monkeypatch.setenv("NETWATCH_ENTERPRISE_MODE", "shared_servcie")
+
+    status = enterprise_runtime.enterprise_readiness()
+
+    assert enterprise_runtime.enterprise_mode() == "invalid"
+    assert status["status"] == "not_ready"
+    assert status["safe_to_run_current_process"] is False
+    assert status["capabilities"]["local_single_instance_safe"] is False
+    assert "enterprise_mode_invalid" in status["capabilities"]["blockers"]
