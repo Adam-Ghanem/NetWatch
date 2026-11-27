@@ -148,10 +148,9 @@ def test_runner_caps_tool_definitions_before_provider_call():
     specs = [
         {"type": "function", "name": f"tool-{index}"} for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
-    tools: dict[str, Tool] = {
-        f"tool-{index}": lambda _: {}
-        for index in range(MAX_REGISTERED_TOOLS + 1)
-    }
+    tools: dict[str, Tool] = {}
+    for index in range(MAX_REGISTERED_TOOLS + 1):
+        tools[f"tool-{index}"] = lambda _: {}
 
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         _run(client, tool_specs=specs, tools=tools)
