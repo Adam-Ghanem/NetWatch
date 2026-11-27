@@ -49,7 +49,7 @@ Inject secrets from the platform's managed secret store at runtime:
 
 The staged backend settings are explicit and fail closed:
 
-- `NETWATCH_ENTERPRISE_MODE`: `single_tenant` (safe default), `compatibility` (durable local outbox/jobs), or `shared_service` (not ready until external adapters and migrations are validated).
+- `NETWATCH_ENTERPRISE_MODE`: when unset, defaults to `single_tenant`; accepted explicit values are `single_tenant`, `compatibility`, and `shared_service`. An explicitly empty, whitespace-only, or unknown value is invalid and keeps readiness closed. `shared_service` remains not ready until external adapters and migrations are validated.
 - `NETWATCH_DATABASE_BACKEND`, `NETWATCH_COORDINATION_BACKEND`, `NETWATCH_OBJECT_STORAGE_BACKEND`, and `NETWATCH_EVENT_SINK`: backend selections; do not select shared-service values until the matching adapters are deployed and tested.
 
 Do not put these values in Git, a ConfigMap, image layer, frontend setting, ticket, report, or screenshot. Each enabled role key must be unique. The audit HMAC key must not equal a role key, provider key, or AI safety secret; NetWatch readiness fails when that separation is violated.
@@ -115,6 +115,6 @@ The API lifespan starts local scheduled-scan, notification-delivery, and automat
 The current release is appropriate for one active application instance per database. Do not run multiple replicas against copied or shared SQLite files. The scheduler, request rate limits, scan semaphore, and some metrics are process-local. Compatibility mode adds durable outbox/jobs and explicit readiness reporting, but does not make SQLite active-active.
 
 True multi-replica HA requires a future architecture with a transactional shared database such as PostgreSQL, distributed rate/quota state, external job workers with leader election, object storage or managed backup, centralized append-only audit export, tenant/resource policy enforcement, and tested zero/low-downtime migrations. The current migration advances SQLite schema tracking to version 10 and preserves existing data.
- Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
+Until then, use platform restart/recreate recovery, persistent storage, monitored readiness, encrypted off-host backups, and a documented recovery-time objective.
 
 `enterprise_worker.py` provides the next bounded execution seam: workers claim jobs or outbox events, dispatch only to an explicit handler/publisher allowlist, persist success/failure, and preserve retry/dead-letter semantics. `run_poll_loop` clamps the polling interval and cycle count. The module is safe to run as a separate process, but shared-service approval still requires external coordination, PostgreSQL/Redis integration, failure injection, and staging evidence.
