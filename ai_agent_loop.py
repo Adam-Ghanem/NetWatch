@@ -42,7 +42,9 @@ def _prepare_tool_calls(
         name = str(call.get("name", ""))
         if name not in tools:
             raise KeyError(f"AI requested unregistered tool: {name}")
-        arguments = call.get("arguments") or {}
+        arguments = call.get("arguments", {})
+        if arguments is None:
+            arguments = {}
         if not isinstance(arguments, Mapping):
             raise ToolCallLimitExceeded("agent returned invalid tool arguments")
         prepared.append((name, dict(arguments)))
