@@ -25,8 +25,21 @@ def _app() -> FastAPI:
     async def echo(request: Request):
         return {"size": len(await request.body())}
 
+    @app.delete("/api/delete-echo")
+    async def delete_echo(request: Request):
+        return {"size": len(await request.body())}
+
     @app.post("/api/traffic/offline/analyze")
+    @app.post("/api/traffic/offline/export.csv")
+    @app.post("/api/traffic/offline/export.json")
+    @app.post("/api/traffic/offline/export.ndjson")
+    @app.post("/api/traffic/offline/observability.json")
+    @app.post("/api/traffic/offline/observability.ndjson")
     async def upload(request: Request):
+        return {"size": len(await request.body())}
+
+    @app.post("/api/traffic/offline/metadata")
+    async def offline_metadata(request: Request):
         return {"size": len(await request.body())}
 
     @app.post("/outside-api")
@@ -55,13 +68,49 @@ def test_streaming_body_limit_rejects_chunked_requests_without_content_length():
     assert over.headers["x-security-checked"] == "yes"
 
 
-def test_capture_has_a_separate_bounded_budget():
+def test_delete_request_body_limit_covers_declared_and_streamed_bodies():
     with TestClient(_app()) as client:
-        ok = client.post("/api/traffic/offline/analyze", content=b"a" * 32)
-        over = client.post("/api/traffic/offline/analyze", content=b"a" * 33)
-        not_api = client.post("/outside-api", content=b"a" * 33)
+        ok = client.request("DELETE", "/api/delete-echo", content=b"a" * 16)
+        over = client.request("DELETE", "/api/delete-echo", content=b"a" * 17)
+        streamed_over = client.request(
+            "DELETE",
+            "/api/delete-echo",
+            content=iter([b"a" * 8, b"b" * 9]),
+        )
+
+    assert ok.json() == {"size": 16}
+    assert over.status_code == 413
+    assert over.json() == {"detail": "Request body exceeds the size limit."}
+    assert streamed_over.status_code == 413
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/traffic/offline/analyze",
+        "/api/traffic/offline/export.csv",
+        "/api/traffic/offline/export.json",
+        "/api/traffic/offline/export.ndjson",
+        "/api/traffic/offline/observability.json",
+        "/api/traffic/offline/observability.ndjson",
+    ],
+)
+def test_only_exact_capture_routes_receive_the_separate_bounded_budget(path):
+    with TestClient(_app()) as client:
+        ok = client.post(path, content=b"a" * 32)
+        over = client.post(path, content=b"a" * 33)
     assert ok.json() == {"size": 32}
     assert over.status_code == 413
+    assert over.json() == {"detail": "Capture input exceeds the safety limit."}
+
+
+def test_other_offline_namespace_routes_keep_the_smaller_json_budget():
+    with TestClient(_app()) as client:
+        over = client.post("/api/traffic/offline/metadata", content=b"a" * 17)
+        not_api = client.post("/outside-api", content=b"a" * 33)
+
+    assert over.status_code == 413
+    assert over.json() == {"detail": "Request body exceeds the size limit."}
     assert not_api.json() == {"size": 33}
 
 
