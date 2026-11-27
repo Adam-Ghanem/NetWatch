@@ -235,10 +235,14 @@ def test_runner_caps_cumulative_tool_results_before_next_provider_call():
     calls = [_function_call("read", call_id=f"c{index}") for index in range(5)]
     client = FakeClient(calls)
 
+    def read(_args):
+        executed.append(True)
+        return {"evidence": "x" * 15000}
+
     with pytest.raises(ToolCallLimitExceeded, match=str(MAX_AGENT_TOOL_OUTPUT_BYTES)):
         _run(
             client,
-            tools={"read": lambda _: executed.append(True) or {"evidence": "x" * 15000}},
+            tools={"read": read},
             tool_specs=[{"type": "function", "name": "read"}],
         )
 
