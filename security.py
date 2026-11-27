@@ -23,7 +23,8 @@ ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
 
 # Cloud metadata endpoints are link-local/ULA addresses and must never be scan targets.
 # AWS EC2 documents 169.254.169.254 and fd00:ec2::254; AWS ECS task metadata
-# v2 uses 169.254.170.2; Google Cloud uses fd20:ce::254; Scaleway uses
+# v2 uses 169.254.170.2; AWS EKS Pod Identity uses 169.254.170.23 and
+# fd00:ec2::23; Google Cloud uses fd20:ce::254; Scaleway uses
 # 169.254.42.42 and fd00:42::42. Tencent Cloud CVM metadata.tencentyun.com
 # resolves to 169.254.0.23 or 169.254.10.10. Alibaba Cloud ECS uses
 # 100.100.100.200 in shared address space; keep it reserved even though that
@@ -31,6 +32,7 @@ ALLOWED_IPV6_NETWORKS: tuple[ipaddress.IPv6Network, ...] = tuple(
 CLOUD_METADATA_IPV4_ADDRESSES = (
     ipaddress.IPv4Address("169.254.169.254"),
     ipaddress.IPv4Address("169.254.170.2"),
+    ipaddress.IPv4Address("169.254.170.23"),
     ipaddress.IPv4Address("169.254.42.42"),
     ipaddress.IPv4Address("169.254.0.23"),
     ipaddress.IPv4Address("169.254.10.10"),
@@ -38,6 +40,7 @@ CLOUD_METADATA_IPV4_ADDRESSES = (
 )
 CLOUD_METADATA_IPV6_ADDRESSES = (
     ipaddress.IPv6Address("fd00:ec2::254"),
+    ipaddress.IPv6Address("fd00:ec2::23"),
     ipaddress.IPv6Address("fd20:ce::254"),
     ipaddress.IPv6Address("fd00:42::42"),
 )
