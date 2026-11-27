@@ -153,7 +153,8 @@ def _prepare_tool_calls(
         argument_bytes += size
         if argument_bytes > MAX_TOOL_ARGUMENT_BYTES_PER_ROUND:
             raise ToolCallLimitExceeded(
-                f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES_PER_ROUND} bytes per round"
+                f"tool arguments exceed {MAX_TOOL_ARGUMENT_BYTES_PER_ROUND} "
+                "bytes per round"
             )
         prepared.append((name, normalized))
     return prepared
@@ -194,7 +195,8 @@ def run_agent_loop(
         calls = _prepare_tool_calls(raw_calls, tools)
         if round_index == max_rounds - 1:
             raise ToolCallLimitExceeded(
-                "agent reached the maximum model rounds before completing the tool batch"
+                "agent reached the maximum model rounds before "
+                "completing the tool batch"
             )
 
         for name, arguments in calls:
@@ -203,7 +205,8 @@ def run_agent_loop(
             total_tool_output_bytes += result_bytes
             if total_tool_output_bytes > MAX_AGENT_TOOL_OUTPUT_BYTES:
                 raise ToolCallLimitExceeded(
-                    f"agent tool results exceed {MAX_AGENT_TOOL_OUTPUT_BYTES} bytes per invocation"
+                    f"agent tool results exceed {MAX_AGENT_TOOL_OUTPUT_BYTES} bytes "
+                    "per invocation"
                 )
             messages.append({"role": "tool", "name": name, "content": normalized})
 
