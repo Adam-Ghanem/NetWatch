@@ -21,9 +21,9 @@ def test_enterprise_recovery_guide_matches_runtime_schema(tmp_path, monkeypatch)
         Path(__file__).resolve().parents[1] / "docs" / "enterprise-deployment.md"
     ).read_text(encoding="utf-8")
 
-    expected_schema = re.search(r"--expected-schema\\s+(\\d+)", guide)
+    expected_schema = re.search(r"--expected-schema\s+(\d+)", guide)
     documented_migration = re.search(
-        r"schema tracking to version\\s+(\\d+)", guide
+        r"schema tracking to version\s+(\d+)", guide
     )
 
     assert expected_schema is not None
