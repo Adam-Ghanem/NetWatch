@@ -22,9 +22,7 @@ def test_enterprise_recovery_guide_matches_runtime_schema(tmp_path, monkeypatch)
     ).read_text(encoding="utf-8")
 
     expected_schema = re.search(r"--expected-schema\s+(\d+)", guide)
-    documented_migration = re.search(
-        r"schema tracking to version\s+(\d+)", guide
-    )
+    documented_migration = re.search(r"schema tracking to version\s+(\d+)", guide)
 
     assert expected_schema is not None
     assert documented_migration is not None
