@@ -1,3 +1,10 @@
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
 import config
 
 
@@ -7,6 +14,65 @@ def test_env_int_applies_lower_and_upper_bounds(monkeypatch):
 
     monkeypatch.setenv("NETWATCH_TEST_INT", "999")
     assert config._env_int("NETWATCH_TEST_INT", 5, minimum=1, maximum=10) == 10
+
+
+def test_env_nonnegative_int_fail_closed_uses_default_and_accepts_zero(monkeypatch):
+    monkeypatch.delenv("NETWATCH_TEST_BUDGET", raising=False)
+    assert (
+        config._env_nonnegative_int_fail_closed(
+            "NETWATCH_TEST_BUDGET", 50, maximum=10_000
+        )
+        == 50
+    )
+
+    monkeypatch.setenv("NETWATCH_TEST_BUDGET", "0")
+    assert (
+        config._env_nonnegative_int_fail_closed(
+            "NETWATCH_TEST_BUDGET", 50, maximum=10_000
+        )
+        == 0
+    )
+
+    monkeypatch.setenv("NETWATCH_TEST_BUDGET", "250")
+    assert (
+        config._env_nonnegative_int_fail_closed(
+            "NETWATCH_TEST_BUDGET", 50, maximum=10_000
+        )
+        == 250
+    )
+
+
+@pytest.mark.parametrize("raw", ["", "invalid", "-1", "10001", "1.5", "１２"])
+def test_env_nonnegative_int_fail_closed_disables_invalid_budgets(monkeypatch, raw):
+    monkeypatch.setenv("NETWATCH_TEST_BUDGET", raw)
+    assert (
+        config._env_nonnegative_int_fail_closed(
+            "NETWATCH_TEST_BUDGET", 50, maximum=10_000
+        )
+        == 0
+    )
+
+
+@pytest.mark.parametrize("raw", ["invalid", "0", "10001"])
+def test_invalid_or_zero_ai_daily_budget_disables_ai_in_fresh_process(raw):
+    env = os.environ.copy()
+    env["NETWATCH_AI_ENABLED"] = "true"
+    env["NETWATCH_AI_DAILY_REQUEST_LIMIT"] = raw
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import config; print(config.AI_DAILY_REQUEST_LIMIT, config.AI_ENABLED)",
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=True,
+    )
+
+    assert completed.stdout.strip() == "0 False"
 
 
 def test_env_csv_ignores_a_global_wildcard(monkeypatch):
