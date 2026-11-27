@@ -3,9 +3,15 @@ from types import SimpleNamespace
 import pytest
 
 from ai_agent_loop import (
+    MAX_AGENT_CONTEXT_BYTES,
     MAX_AGENT_ROUNDS,
+    MAX_AGENT_TOOL_OUTPUT_BYTES,
     MAX_REGISTERED_TOOLS,
+    MAX_TOOL_ARGUMENT_BYTES,
+    MAX_TOOL_ARGUMENT_BYTES_PER_ROUND,
     MAX_TOOL_CALLS_PER_ROUND,
+    MAX_TOOL_RESULT_BYTES,
+    MAX_TOOL_SPEC_BYTES,
     ToolCallLimitExceeded,
 )
 from ai_responses_runner import run_responses_agent
@@ -39,11 +45,11 @@ class FakeClient:
         self.responses = FakeResponses(first_output)
 
 
-def _run(client, *, tools=None, tool_specs=None, max_rounds=5):
+def _run(client, *, context=None, tools=None, tool_specs=None, max_rounds=5):
     return run_responses_agent(
         client,
         model="test-model",
-        context={},
+        context=context or {},
         tool_specs=tool_specs or [],
         tools=tools or {},
         max_rounds=max_rounds,
@@ -57,7 +63,12 @@ def test_runner_executes_tool_and_returns_final_text():
         model="test-model",
         context={"asset": "a1"},
         tool_specs=[{"type": "function", "name": "asset_snapshot"}],
-        tools={"asset_snapshot": lambda args: {"id": args["id"], "services": []}},
+        tools={
+            "asset_snapshot": lambda args: {
+                "id": args["id"],
+                "services": [],
+            },
+        },
     )
     assert result == "final investigation"
     assert client.responses.round == 2
@@ -95,7 +106,12 @@ def test_runner_rejects_oversized_tool_batch_before_execution():
 
 def test_runner_prevalidates_batch_before_executing_any_tool():
     executed = []
-    client = FakeClient([_function_call("read"), _function_call("shell", call_id="c2")])
+    client = FakeClient(
+        [
+            _function_call("read"),
+            _function_call("shell", call_id="c2"),
+        ]
+    )
 
     with pytest.raises(KeyError, match="shell"):
         _run(
@@ -126,8 +142,105 @@ def test_runner_caps_tool_definitions_before_provider_call():
         {"type": "function", "name": f"tool-{index}"}
         for index in range(MAX_REGISTERED_TOOLS + 1)
     ]
-    tools = {f"tool-{index}": lambda _: {} for index in range(MAX_REGISTERED_TOOLS + 1)}
+    tools = dict.fromkeys(
+        (f"tool-{index}" for index in range(MAX_REGISTERED_TOOLS + 1)),
+        lambda _: {},
+    )
 
     with pytest.raises(ToolCallLimitExceeded, match="registered tools"):
         _run(client, tool_specs=specs, tools=tools)
     assert client.responses.round == 0
+
+
+
+def test_runner_rejects_oversized_context_before_provider_call():
+    client = FakeClient()
+
+    with pytest.raises(ToolCallLimitExceeded, match="agent context"):
+        _run(client, context={"evidence": "x" * MAX_AGENT_CONTEXT_BYTES})
+
+    assert client.responses.round == 0
+
+
+def test_runner_rejects_oversized_tool_definitions_before_provider_call():
+    client = FakeClient()
+    specs = [
+        {
+            "type": "function",
+            "name": "read",
+            "description": "x" * MAX_TOOL_SPEC_BYTES,
+        }
+    ]
+
+    with pytest.raises(ToolCallLimitExceeded, match="tool definitions"):
+        _run(client, tools={"read": lambda _: {}}, tool_specs=specs)
+
+    assert client.responses.round == 0
+
+
+def test_runner_rejects_oversized_tool_arguments_before_execution():
+    executed = []
+    arguments = '{"query":"' + ("x" * MAX_TOOL_ARGUMENT_BYTES) + '"}'
+    client = FakeClient([_function_call("read", arguments=arguments)])
+
+    with pytest.raises(ToolCallLimitExceeded, match="tool arguments"):
+        _run(
+            client,
+            tools={"read": lambda _: executed.append(True) or {}},
+            tool_specs=[{"type": "function", "name": "read"}],
+        )
+
+    assert executed == []
+    assert client.responses.round == 1
+
+
+def test_runner_rejects_aggregate_tool_arguments_before_execution():
+    executed = []
+    calls = [
+        _function_call(
+            "read",
+            call_id=f"c{index}",
+            arguments='{"query":"' + ("x" * (MAX_TOOL_ARGUMENT_BYTES // 2)) + '"}',
+        )
+        for index in range(9)
+    ]
+    client = FakeClient(calls)
+
+    with pytest.raises(ToolCallLimitExceeded, match="per round"):
+        _run(
+            client,
+            tools={"read": lambda _: executed.append(True) or {}},
+            tool_specs=[{"type": "function", "name": "read"}],
+        )
+
+    assert executed == []
+    assert client.responses.round == 1
+
+
+def test_runner_rejects_oversized_tool_result_before_next_provider_call():
+    client = FakeClient([_function_call("read")])
+
+    with pytest.raises(ToolCallLimitExceeded, match="tool result"):
+        _run(
+            client,
+            tools={"read": lambda _: {"evidence": "x" * MAX_TOOL_RESULT_BYTES}},
+            tool_specs=[{"type": "function", "name": "read"}],
+        )
+
+    assert client.responses.round == 1
+
+
+def test_runner_caps_cumulative_tool_results_before_next_provider_call():
+    executed = []
+    calls = [_function_call("read", call_id=f"c{index}") for index in range(5)]
+    client = FakeClient(calls)
+
+    with pytest.raises(ToolCallLimitExceeded, match=str(MAX_AGENT_TOOL_OUTPUT_BYTES)):
+        _run(
+            client,
+            tools={"read": lambda _: executed.append(True) or {"evidence": "x" * 15000}},
+            tool_specs=[{"type": "function", "name": "read"}],
+        )
+
+    assert len(executed) == 5
+    assert client.responses.round == 1

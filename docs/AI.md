@@ -65,8 +65,12 @@ If used by a future integration, each invocation is capped at **5 model rounds**
 **10 registered tool definitions**, and **10 tool calls per response**. The
 entire response batch is validated before any tool in that batch executes, and
 a tool batch returned on the final allowed model round is rejected rather than
-running work whose result cannot be consumed. These limits are hard-coded; callers
-cannot raise them through configuration. Tests use mocked model responses only.
+running work whose result cannot be consumed. Serialized payloads are also bounded:
+64 KiB for initial evidence context, 32 KiB for all tool definitions, 8 KiB per
+tool-argument object (32 KiB across one response batch), 16 KiB per tool result,
+and 64 KiB of tool results across one invocation. Limits count compact UTF-8 JSON
+bytes, not tokens, and callers cannot raise them through configuration. Tests use
+mocked model responses only.
 
 ## Continuous evidence-only analysis (opt-in)
 
