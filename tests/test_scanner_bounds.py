@@ -15,7 +15,10 @@ def test_network_scanner_clamps_non_positive_worker_count(monkeypatch):
     assert [row["IP Address"] for row in results] == ["192.168.1.1", "192.168.1.2"]
 
 
-@pytest.mark.parametrize("cidr", ["169.254.169.0/24", "169.254.170.0/24"])
+@pytest.mark.parametrize(
+    "cidr",
+    ["169.254.169.0/24", "169.254.170.0/24", "169.254.42.0/24"],
+)
 def test_network_scan_blocks_metadata_cidr_before_any_probe(monkeypatch, cidr):
     def unexpected_probe(ip):
         pytest.fail(f"Unexpected ping probe for {ip}")
@@ -26,7 +29,10 @@ def test_network_scan_blocks_metadata_cidr_before_any_probe(monkeypatch, cidr):
         network_scanner.scan_network(cidr)
 
 
-@pytest.mark.parametrize("target", ["fd20:ce::254", "169.254.170.2"])
+@pytest.mark.parametrize(
+    "target",
+    ["fd20:ce::254", "169.254.170.2", "169.254.42.42", "fd00:42::42"],
+)
 def test_port_scan_blocks_metadata_endpoint_before_worker_submission(monkeypatch, target):
     def unexpected_scan(*args, **kwargs):
         pytest.fail("Metadata endpoint reached a port-scan worker")
