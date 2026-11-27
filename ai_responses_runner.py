@@ -7,6 +7,7 @@ from ai_agent_loop import (
     MAX_AGENT_TOOL_OUTPUT_BYTES,
     MAX_REGISTERED_TOOLS,
     MAX_TOOL_ARGUMENT_BYTES_PER_ROUND,
+    MAX_TOOL_CALLS_PER_ROUND,
     ToolCallLimitExceeded,
     parse_tool_arguments,
     serialize_tool_result,
@@ -55,8 +56,10 @@ def run_responses_agent(
         if not calls:
             return getattr(response, "output_text", "")
 
-        if len(calls) > 10:
-            raise ToolCallLimitExceeded("agent exceeded 10 tool calls in one round")
+        if len(calls) > MAX_TOOL_CALLS_PER_ROUND:
+            raise ToolCallLimitExceeded(
+                f"agent exceeded {MAX_TOOL_CALLS_PER_ROUND} tool calls in one round"
+            )
 
         prepared: list[tuple[str, str, dict[str, Any]]] = []
         argument_bytes = 0
