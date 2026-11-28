@@ -186,3 +186,23 @@ def test_rejects_lied_content_length_by_counting_actual_bytes():
     messages = asyncio.run(invoke())
     assert len(received) == 1
     assert messages[0]["status"] == 413
+
+@pytest.mark.parametrize("method", ["PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/traffic/offline/analyze",
+        "/api/traffic/offline/export.csv",
+        "/api/traffic/offline/export.json",
+        "/api/traffic/offline/export.ndjson",
+        "/api/traffic/offline/observability.json",
+        "/api/traffic/offline/observability.ndjson",
+    ],
+)
+def test_non_post_methods_on_capture_paths_keep_the_json_budget(method, path):
+    with TestClient(_app()) as client:
+        response = client.request(method, path, content=b"a" * 17)
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body exceeds the size limit."}
+
