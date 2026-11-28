@@ -16,14 +16,14 @@ MAX_API_JSON_BYTES = 256 * 1024
 
 # Only these routes consume raw PCAP/PCAPNG bytes. Keep the larger upload
 # budget tied to concrete handlers, not the whole offline-traffic namespace.
-_CAPTURE_UPLOAD_PATHS = frozenset(
+_CAPTURE_UPLOAD_ROUTES = frozenset(
     {
-        "/api/traffic/offline/analyze",
-        "/api/traffic/offline/export.csv",
-        "/api/traffic/offline/export.json",
-        "/api/traffic/offline/export.ndjson",
-        "/api/traffic/offline/observability.json",
-        "/api/traffic/offline/observability.ndjson",
+        ("POST", "/api/traffic/offline/analyze"),
+        ("POST", "/api/traffic/offline/export.csv"),
+        ("POST", "/api/traffic/offline/export.json"),
+        ("POST", "/api/traffic/offline/export.ndjson"),
+        ("POST", "/api/traffic/offline/observability.json"),
+        ("POST", "/api/traffic/offline/observability.ndjson"),
     }
 )
 
@@ -57,7 +57,7 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        offline_capture = scope.get("path") in _CAPTURE_UPLOAD_PATHS
+        offline_capture = (scope.get("method"), scope.get("path")) in _CAPTURE_UPLOAD_ROUTES
         limit = self.max_capture_bytes if offline_capture else self.max_json_bytes
         too_large_detail = (
             "Capture input exceeds the safety limit."
