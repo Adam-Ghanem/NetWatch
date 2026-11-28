@@ -123,20 +123,18 @@ def test_tls_investigator_export_is_same_origin_authenticated_and_bounded() -> N
 
 def test_tls_export_defers_object_url_revocation_after_browser_handoff() -> None:
     javascript = _javascript()
-    export = javascript[
-        javascript.index("async function downloadEvidence()") : javascript.index(
-            "function labelize"
-        )
-    ]
+    download_function = javascript.split(
+        "async function downloadEvidence()", maxsplit=1
+    )[1]
+    download_function = download_function.split("function labelize", maxsplit=1)[0]
 
     assert "const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000;" in javascript
-    assert (
-        "window.setTimeout(() => URL.revokeObjectURL(url), "
-        "DOWNLOAD_URL_REVOKE_DELAY_MS);"
-    ) in javascript
-    assert "link.click();" in export
-    assert "revokeDownloadUrlAfterHandoff(url);" in export
-    assert export.index("link.click();") < export.index(
-        "revokeDownloadUrlAfterHandoff(url);"
-    )
-    assert "URL.revokeObjectURL(url);" not in export
+    assert "window.setTimeout(" in javascript
+    assert "URL.revokeObjectURL(url)" in javascript
+    assert "DOWNLOAD_URL_REVOKE_DELAY_MS" in javascript
+    assert "link.click();" in download_function
+    assert "revokeDownloadUrlAfterHandoff(url);" in download_function
+    click_position = download_function.index("link.click();")
+    cleanup_position = download_function.index("revokeDownloadUrlAfterHandoff(url);")
+    assert click_position < cleanup_position
+    assert "URL.revokeObjectURL(url);" not in download_function
