@@ -44,7 +44,9 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
 
 - Provider keys are server-side, included only in HTTPS authentication headers,
   and must never appear in generated logs, reports, browser URLs or UI.
-- Provider keys are trimmed at the edges, then must be a single printable ASCII token with no embedded whitespace or control characters. Invalid values disable the provider before an HTTP request is built.
+- Provider keys are trimmed at the edges, then must be a single printable ASCII
+  token with no embedded whitespace or control characters. Invalid values disable
+  the provider before an HTTP request is built.
 - Both models receive the same fixed defensive instructions with only an
   aggregated, de-identified operational snapshot (no raw IP, CIDR, hostname,
   owner, notes or packet content).
