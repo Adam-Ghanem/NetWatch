@@ -31,6 +31,7 @@ class AuthenticationFailureLimiter:
         self._lock = threading.Lock()
         self._failures: dict[str, deque[float]] = {}
         self._overflow: deque[float] = deque()
+        self._next_peer_expiry: float | None = None
         self._total_failures = 0
         self._total_blocked = 0
 
@@ -40,10 +41,21 @@ class AuthenticationFailureLimiter:
             events.popleft()
 
     def _reclaim_stale(self, now: float) -> None:
+        # A full peer-map sweep is O(max_peers). Until the earliest stored
+        # failure can expire, another sweep cannot free a slot.
+        if self._next_peer_expiry is not None and now < self._next_peer_expiry:
+            return
+
+        next_expiry: float | None = None
         for peer, events in list(self._failures.items()):
             self._expire(events, now)
             if not events:
                 del self._failures[peer]
+                continue
+            expiry = events[0] + self.window_seconds
+            if next_expiry is None or expiry < next_expiry:
+                next_expiry = expiry
+        self._next_peer_expiry = next_expiry
 
     def _bucket(self, peer: str, now: float, *, create: bool) -> deque[float]:
         bucket = self._failures.get(peer)
@@ -83,7 +95,16 @@ class AuthenticationFailureLimiter:
         now = time.monotonic()
         with self._lock:
             bucket = self._bucket(peer, now, create=True)
+            was_empty = not bucket
             bucket.append(now)
+            if was_empty:
+                expiry = now + self.window_seconds
+                # Keep an already-due value so the next capacity check performs
+                # one sweep and recomputes the global earliest expiry.
+                if self._next_peer_expiry is None or self._next_peer_expiry > now:
+                    self._next_peer_expiry = (
+                        expiry if self._next_peer_expiry is None else min(self._next_peer_expiry, expiry)
+                    )
             self._total_failures += 1
             # Keep storage bounded if a caller forgot to check before recording.
             while len(bucket) > self.max_failures:
@@ -103,5 +124,6 @@ class AuthenticationFailureLimiter:
         with self._lock:
             self._failures.clear()
             self._overflow.clear()
+            self._next_peer_expiry = None
             self._total_failures = 0
             self._total_blocked = 0
