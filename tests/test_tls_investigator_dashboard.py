@@ -120,6 +120,7 @@ def test_tls_investigator_export_is_same_origin_authenticated_and_bounded() -> N
     assert "['csv', 'json', 'ndjson'].includes(format)" in javascript
     assert "certificate SHA-256 fingerprints" in html
 
+
 def test_tls_export_defers_object_url_revocation_after_browser_handoff() -> None:
     javascript = _javascript()
     export = javascript[
