@@ -113,6 +113,7 @@ def test_full_peer_map_sweeps_only_when_a_peer_bucket_can_expire(monkeypatch):
 
     peer_a_bucket = limiter._failures["peer-a"]
     peer_b_bucket = limiter._failures["peer-b"]
+    peer_c_bucket = None
     swept_peers = []
     original_expire = limiter._expire
 
@@ -121,6 +122,8 @@ def test_full_peer_map_sweeps_only_when_a_peer_bucket_can_expire(monkeypatch):
             swept_peers.append("peer-a")
         elif events is peer_b_bucket:
             swept_peers.append("peer-b")
+        elif events is peer_c_bucket:
+            swept_peers.append("peer-c")
         original_expire(events, now)
 
     monkeypatch.setattr(limiter, "_expire", track_peer_expiry)
