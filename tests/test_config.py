@@ -69,10 +69,13 @@ def test_invalid_or_zero_ai_daily_budget_disables_ai_in_fresh_process(raw):
 def test_compose_preserves_explicit_empty_daily_ai_budget():
     compose_path = Path(__file__).resolve().parents[1] / "docker-compose.yml"
     compose = compose_path.read_text(encoding="utf-8")
-    budget_line = next(
-        line for line in compose.splitlines() if "NETWATCH_AI_DAILY_REQUEST_LIMIT:" in line
-    )
+    budget_line = ""
+    for line in compose.splitlines():
+        if "NETWATCH_AI_DAILY_REQUEST_LIMIT:" in line:
+            budget_line = line
+            break
 
+    assert budget_line
     assert "${NETWATCH_AI_DAILY_REQUEST_LIMIT-50}" in budget_line
     assert ":-" not in budget_line
 
