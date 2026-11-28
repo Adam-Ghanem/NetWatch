@@ -99,14 +99,10 @@ class AuthenticationFailureLimiter:
             bucket.append(now)
             if was_empty:
                 expiry = now + self.window_seconds
-                # Keep an already-due value so the next capacity check performs
-                # one sweep and recomputes the global earliest expiry.
-                if self._next_peer_expiry is None or self._next_peer_expiry > now:
-                    self._next_peer_expiry = (
-                        expiry
-                        if self._next_peer_expiry is None
-                        else min(self._next_peer_expiry, expiry)
-                    )
+                # Never advance an overdue watermark: another peer may already
+                # be stale. The next capacity check must sweep and recompute it.
+                if self._next_peer_expiry is None or expiry < self._next_peer_expiry:
+                    self._next_peer_expiry = expiry
             self._total_failures += 1
             # Keep storage bounded if a caller forgot to check before recording.
             while len(bucket) > self.max_failures:

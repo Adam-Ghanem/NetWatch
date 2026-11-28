@@ -160,6 +160,27 @@ def test_full_peer_map_sweeps_only_when_a_peer_bucket_can_expire(monkeypatch):
     assert limiter._failures["peer-c"] is peer_c_bucket
 
 
+def test_renewing_one_expired_peer_does_not_hide_another_stale_slot(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=2)
+    limiter.record_failure("peer-a")
+    limiter.record_failure("peer-b")
+
+    # Both buckets expire at 1010.0. Renewing peer-a must not postpone the
+    # already-due sweep needed to reclaim peer-b.
+    clock[0] = 1010.1
+    limiter.record_failure("peer-a")
+
+    clock[0] = 1010.2
+    limiter.record_failure("fresh-peer")
+
+    assert "peer-a" in limiter._failures
+    assert "peer-b" not in limiter._failures
+    assert "fresh-peer" in limiter._failures
+    assert not limiter._overflow
+
+
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
