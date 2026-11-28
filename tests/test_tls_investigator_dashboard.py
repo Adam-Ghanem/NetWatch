@@ -119,3 +119,20 @@ def test_tls_investigator_export_is_same_origin_authenticated_and_bounded() -> N
     assert "URL.revokeObjectURL" in javascript
     assert "['csv', 'json', 'ndjson'].includes(format)" in javascript
     assert "certificate SHA-256 fingerprints" in html
+
+
+def test_tls_export_defers_object_url_revocation_after_browser_handoff() -> None:
+    javascript = _javascript()
+    download_function = javascript.split("async function downloadEvidence()", maxsplit=1)[1]
+    download_function = download_function.split("function labelize", maxsplit=1)[0]
+
+    assert "const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000;" in javascript
+    assert "window.setTimeout(" in javascript
+    assert "URL.revokeObjectURL(url)" in javascript
+    assert "DOWNLOAD_URL_REVOKE_DELAY_MS" in javascript
+    assert "link.click();" in download_function
+    assert "revokeDownloadUrlAfterHandoff(url);" in download_function
+    click_position = download_function.index("link.click();")
+    cleanup_position = download_function.index("revokeDownloadUrlAfterHandoff(url);")
+    assert click_position < cleanup_position
+    assert "URL.revokeObjectURL(url);" not in download_function

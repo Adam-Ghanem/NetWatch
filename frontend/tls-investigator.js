@@ -88,6 +88,13 @@ function investigatorExportUrl(format) {
   );
 }
 
+const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000;
+
+function revokeDownloadUrlAfterHandoff(url) {
+  // Let the browser consume the object URL before releasing the Blob reference.
+  window.setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_REVOKE_DELAY_MS);
+}
+
 async function downloadEvidence() {
   const key = String(keyInput.value || '').trim();
   if (!key) return setStatus('A Viewer, Operator, or Admin API key is required.', 'error');
@@ -111,15 +118,19 @@ async function downloadEvidence() {
     }
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
+    let link;
     try {
-      const link = document.createElement('a');
+      link = document.createElement('a');
       link.href = url;
       link.download = `netwatch-tls-evidence.${format}`;
       document.body.appendChild(link);
       link.click();
-      link.remove();
     } finally {
-      URL.revokeObjectURL(url);
+      try {
+        if (link) link.remove();
+      } finally {
+        revokeDownloadUrlAfterHandoff(url);
+      }
     }
     setStatus(`Downloaded ${format.toUpperCase()} filtered TLS evidence.`, 'success');
   } catch (error) {
