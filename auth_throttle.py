@@ -103,7 +103,9 @@ class AuthenticationFailureLimiter:
                 # one sweep and recomputes the global earliest expiry.
                 if self._next_peer_expiry is None or self._next_peer_expiry > now:
                     self._next_peer_expiry = (
-                        expiry if self._next_peer_expiry is None else min(self._next_peer_expiry, expiry)
+                        expiry
+                        if self._next_peer_expiry is None
+                        else min(self._next_peer_expiry, expiry)
                     )
             self._total_failures += 1
             # Keep storage bounded if a caller forgot to check before recording.
