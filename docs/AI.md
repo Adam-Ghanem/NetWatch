@@ -59,6 +59,9 @@ closed. Existing OpenAI installations continue to use OpenAI by default.
   the default budget. Very long decimal values are rejected safely without
   interrupting application startup. Core monitoring and the local Risk Advisor
   remain available; an unexpired cached brief may still be served.
+  Docker Compose uses an unset-only default for this variable: an unset value
+  receives 50, while an explicitly empty value is preserved and reaches this
+  fail-closed validation instead of being replaced by the default.
 - OpenAI Responses uses `store=false`; Claude Messages uses structured output.
   Check the chosen provider's privacy and retention terms separately before
   enabling external AI on company networks.
