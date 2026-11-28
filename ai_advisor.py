@@ -78,8 +78,14 @@ class AIProviderError(RuntimeError):
 
 
 def api_key_is_usable(value: str | None) -> bool:
+    """Accept only a non-empty, printable ASCII header token from the provider."""
     candidate = (value or "").strip()
-    return len(candidate) >= 20 and candidate != "replace-with-an-openai-project-key"
+    return bool(
+        len(candidate) >= 20
+        and candidate != "replace-with-an-openai-project-key"
+        and candidate.isascii()
+        and all(33 <= ord(character) <= 126 for character in candidate)
+    )
 
 
 def safety_configuration_is_usable(
