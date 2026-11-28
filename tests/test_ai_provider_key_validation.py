@@ -22,6 +22,8 @@ SNAPSHOT = {"privacy": {"deidentified": True}, "assets": {"total": 1}}
     [
         "x" * 20 + "\r\nInjected: yes",
         "x" * 20 + "\n",
+        "\n" + "x" * 20,
+        "x" * 20 + "\t",
         "x" * 20 + "\t" + "y",
         "x" * 10 + " " + "y" * 10,
         "x" * 20 + "\x7f",
@@ -46,7 +48,15 @@ def test_provider_key_accepts_printable_ascii_token_punctuation():
     "provider_call",
     [request_intelligence_brief, request_anthropic_intelligence_brief],
 )
-@pytest.mark.parametrize("key", ["x" * 20 + "\r\nInjected: yes", "x" * 20 + "\t" + "y"])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "x" * 20 + "\r\nInjected: yes",
+        "x" * 20 + "\t" + "y",
+        "x" * 20 + "\n",
+        "x" * 20 + "\t",
+    ],
+)
 def test_both_provider_adapters_reject_invalid_key_before_transport(provider_call, key):
     transport_called = False
 

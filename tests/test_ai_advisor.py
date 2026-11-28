@@ -259,7 +259,7 @@ def test_provider_call_keeps_key_in_authorization_header_only():
     safety_id = safety_identifier(safety_secret=safety_secret, subject_id=subject)
     result = request_intelligence_brief(
         _snapshot(),
-        api_key=key,
+        api_key=f"  {key}  ",
         safety_id=safety_id,
         model="gpt-test-model",
         opener=opener,

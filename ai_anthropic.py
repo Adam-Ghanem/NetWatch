@@ -141,6 +141,7 @@ def request_anthropic_intelligence_brief(
         raise AIProviderError(
             "provider_not_configured", "The intelligence provider is not configured."
         )
+    normalized_api_key = api_key.strip(" ")
     body = json.dumps(
         build_anthropic_request_payload(snapshot, model=model, safety_id=safety_id),
         ensure_ascii=True,
@@ -150,7 +151,7 @@ def request_anthropic_intelligence_brief(
         ANTHROPIC_MESSAGES_URL,
         data=body,
         headers={
-            "x-api-key": api_key,
+            "x-api-key": normalized_api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
             "Content-Type": "application/json",
             "User-Agent": "NetWatch/1.7",
