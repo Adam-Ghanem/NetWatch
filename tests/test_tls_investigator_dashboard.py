@@ -123,9 +123,7 @@ def test_tls_investigator_export_is_same_origin_authenticated_and_bounded() -> N
 
 def test_tls_export_defers_object_url_revocation_after_browser_handoff() -> None:
     javascript = _javascript()
-    download_function = javascript.split(
-        "async function downloadEvidence()", maxsplit=1
-    )[1]
+    download_function = javascript.split("async function downloadEvidence()", maxsplit=1)[1]
     download_function = download_function.split("function labelize", maxsplit=1)[0]
 
     assert "const DOWNLOAD_URL_REVOKE_DELAY_MS = 60_000;" in javascript
