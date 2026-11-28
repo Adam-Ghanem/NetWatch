@@ -103,6 +103,60 @@ def test_active_peer_capacity_keeps_overflow_throttled(monkeypatch):
     assert limiter.retry_after("new-peer") is None
 
 
+def test_full_peer_map_sweeps_only_when_a_peer_bucket_can_expire(monkeypatch):
+    clock = [1000.0]
+    monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
+    limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=2)
+    limiter.record_failure("peer-a")
+    clock[0] = 1001.0
+    limiter.record_failure("peer-b")
+
+    peer_a_bucket = limiter._failures["peer-a"]
+    peer_b_bucket = limiter._failures["peer-b"]
+    swept_peers = []
+    original_expire = limiter._expire
+
+    def track_peer_expiry(events, now):
+        if events is peer_a_bucket:
+            swept_peers.append("peer-a")
+        elif events is peer_b_bucket:
+            swept_peers.append("peer-b")
+        original_expire(events, now)
+
+    monkeypatch.setattr(limiter, "_expire", track_peer_expiry)
+
+    # Unknown peers still share the overflow budget, but active peer buckets
+    # are not rescanned for every failed request before their first expiry.
+    for peer in ("overflow-a", "overflow-b", "overflow-c"):
+        limiter.record_failure(peer)
+    assert limiter.retry_after("fresh-peer") == 10
+    assert swept_peers == []
+    assert len(limiter._overflow) == 2
+
+    # At the earliest expiry, exactly one sweep reclaims the stale slot.
+    clock[0] = 1010.0
+    assert limiter.retry_after("fresh-peer") is None
+    assert swept_peers == ["peer-a", "peer-b"]
+    assert "peer-a" not in limiter._failures
+    assert "peer-b" in limiter._failures
+    assert len(limiter._overflow) == 2
+
+    # A new peer occupies the reclaimed slot. Neither the read nor write
+    # overflow path repeats the O(max_peers) sweep before peer-b can expire.
+    clock[0] = 1010.5
+    limiter.record_failure("peer-c")
+    peer_c_bucket = limiter._failures["peer-c"]
+    for peer in ("overflow-d", "overflow-e"):
+        limiter.record_failure(peer)
+    assert swept_peers == ["peer-a", "peer-b"]
+
+    clock[0] = 1011.0
+    assert limiter.retry_after("fresh-peer") is None
+    assert swept_peers == ["peer-a", "peer-b", "peer-b", "peer-c"]
+    assert "peer-b" not in limiter._failures
+    assert limiter._failures["peer-c"] is peer_c_bucket
+
+
 def test_failed_attempt_history_does_not_contain_credentials():
     limiter = AuthenticationFailureLimiter(max_failures=1)
     limiter.record_failure("127.0.0.1")
