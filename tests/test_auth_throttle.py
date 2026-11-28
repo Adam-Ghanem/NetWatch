@@ -160,7 +160,10 @@ def test_full_peer_map_sweeps_only_when_a_peer_bucket_can_expire(monkeypatch):
     assert limiter._failures["peer-c"] is peer_c_bucket
 
 
-def test_renewing_one_expired_peer_does_not_hide_another_stale_slot(monkeypatch):
+@pytest.mark.parametrize("use_read_path", [False, True])
+def test_renewing_one_expired_peer_does_not_hide_another_stale_slot(
+    monkeypatch, use_read_path
+):
     clock = [1000.0]
     monkeypatch.setattr(auth_throttle.time, "monotonic", lambda: clock[0])
     limiter = AuthenticationFailureLimiter(max_failures=2, window_seconds=10, max_peers=2)
@@ -173,6 +176,9 @@ def test_renewing_one_expired_peer_does_not_hide_another_stale_slot(monkeypatch)
     limiter.record_failure("peer-a")
 
     clock[0] = 1010.2
+    if use_read_path:
+        assert limiter.retry_after("fresh-peer") is None
+        assert "peer-b" not in limiter._failures
     limiter.record_failure("fresh-peer")
 
     assert "peer-a" in limiter._failures
