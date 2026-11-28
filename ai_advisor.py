@@ -78,8 +78,18 @@ class AIProviderError(RuntimeError):
 
 
 def api_key_is_usable(value: str | None) -> bool:
-    candidate = (value or "").strip()
-    return len(candidate) >= 20 and candidate != "replace-with-an-openai-project-key"
+    """Accept a printable ASCII token; reject control characters before trimming."""
+    if not isinstance(value, str) or any(
+        ord(character) < 32 or ord(character) == 127 for character in value
+    ):
+        return False
+    candidate = value.strip(" ")
+    return bool(
+        len(candidate) >= 20
+        and candidate != "replace-with-an-openai-project-key"
+        and candidate.isascii()
+        and all(33 <= ord(character) <= 126 for character in candidate)
+    )
 
 
 def safety_configuration_is_usable(
@@ -88,11 +98,11 @@ def safety_configuration_is_usable(
     safety_secret: str | None,
     subject_id: str | None,
 ) -> bool:
-    provider_key = (api_key or "").strip()
+    provider_key = api_key.strip(" ") if isinstance(api_key, str) else ""
     secret = (safety_secret or "").strip()
     subject = (subject_id or "").strip()
     return bool(
-        api_key_is_usable(provider_key)
+        api_key_is_usable(api_key)
         and len(secret) >= 32
         and secret not in _SECRET_PLACEHOLDERS
         and not hmac.compare_digest(secret, provider_key)
@@ -467,6 +477,7 @@ def request_intelligence_brief(
         raise AIProviderError(
             "provider_not_configured", "The intelligence provider is not configured."
         )
+    normalized_api_key = api_key.strip(" ")
     body = json.dumps(
         build_openai_request_payload(snapshot, model=model, safety_id=safety_id),
         ensure_ascii=True,
@@ -476,7 +487,7 @@ def request_intelligence_brief(
         OPENAI_RESPONSES_URL,
         data=body,
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {normalized_api_key}",
             "Content-Type": "application/json",
             "User-Agent": "NetWatch/1.5",
         },

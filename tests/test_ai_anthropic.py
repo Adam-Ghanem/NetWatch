@@ -137,7 +137,7 @@ def test_claude_key_is_header_only_and_never_in_payload():
     key = "test-anthropic-provider-key-long-enough"
     result = request_anthropic_intelligence_brief(
         {"assets": {"total": 1}},
-        api_key=key,
+        api_key=f"  {key}  ",
         safety_id="nw_opaque_123",
         model="claude-sonnet-5-5",
         opener=opener,
