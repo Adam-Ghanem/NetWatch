@@ -46,6 +46,25 @@ def _env_int(
     return min(value, maximum) if maximum is not None else value
 
 
+def _env_nonnegative_int_fail_closed(name: str, default: int, *, maximum: int) -> int:
+    """Parse an explicit non-negative decimal budget; invalid values disable the budget."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    candidate = raw.strip()
+    if not candidate or not candidate.isascii() or not candidate.isdecimal():
+        return 0
+    if maximum < 0:
+        return 0
+    normalized = candidate.lstrip("0") or "0"
+    maximum_text = str(maximum)
+    if len(normalized) > len(maximum_text):
+        return 0
+    if len(normalized) == len(maximum_text) and normalized > maximum_text:
+        return 0
+    return int(normalized)
+
+
 def _env_csv(name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
     values = tuple(
         value.strip()
@@ -95,7 +114,6 @@ RETENTION_MAX_DELETE_ROWS = _env_int(
 )
 SCHEDULER_ENABLED = _env_bool("NETWATCH_SCHEDULER_ENABLED", False)
 SCHEDULER_POLL_SECONDS = _env_int("NETWATCH_SCHEDULER_POLL_SECONDS", 30, minimum=5, maximum=300)
-AI_ENABLED = _env_bool("NETWATCH_AI_ENABLED", True)
 AI_AUTO_ANALYSIS_ENABLED = _env_bool("NETWATCH_AI_AUTO_ANALYSIS_ENABLED", False)
 AI_AUTO_INTERVAL_SECONDS = _env_int(
     "NETWATCH_AI_AUTO_INTERVAL_SECONDS", 3600, minimum=3600, maximum=86400
@@ -113,7 +131,10 @@ AI_RATE_LIMIT_REQUESTS = _env_int("NETWATCH_AI_RATE_LIMIT_REQUESTS", 5, minimum=
 AI_RATE_LIMIT_WINDOW_SECONDS = _env_int(
     "NETWATCH_AI_RATE_LIMIT_WINDOW_SECONDS", 600, minimum=60, maximum=86_400
 )
-AI_DAILY_REQUEST_LIMIT = _env_int("NETWATCH_AI_DAILY_REQUEST_LIMIT", 50, minimum=1, maximum=10_000)
+AI_DAILY_REQUEST_LIMIT = _env_nonnegative_int_fail_closed(
+    "NETWATCH_AI_DAILY_REQUEST_LIMIT", 50, maximum=10_000
+)
+AI_ENABLED = _env_bool("NETWATCH_AI_ENABLED", True) and AI_DAILY_REQUEST_LIMIT > 0
 AI_CACHE_TTL_SECONDS = _env_int("NETWATCH_AI_CACHE_TTL_SECONDS", 900, minimum=60, maximum=86_400)
 NETWATCH_WEBHOOK_URL = os.getenv("NETWATCH_WEBHOOK_URL", "").strip()
 NETWATCH_SLACK_WEBHOOK_URL = os.getenv("NETWATCH_SLACK_WEBHOOK_URL", "").strip()
